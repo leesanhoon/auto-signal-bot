@@ -8,6 +8,7 @@ const SCREENSHOT_DIR = join(process.cwd(), "screenshots");
 const VIEWPORT = { width: 1400, height: 900 };
 const CHART_LOAD_TIMEOUT = 30_000;
 const CHART_RENDER_DELAY = 8_000;
+const PARALLEL_TABS = 4;
 
 export async function captureAllCharts(): Promise<ScreenshotResult[]> {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
@@ -21,13 +22,19 @@ export async function captureAllCharts(): Promise<ScreenshotResult[]> {
   try {
     const context = await browser.newContext({ viewport: VIEWPORT });
 
-    for (const chart of CHARTS) {
-      try {
-        const result = await captureChart(context, chart);
-        results.push(result);
-        console.log(`✓ Captured: ${chart.name}`);
-      } catch (error) {
-        console.error(`✗ Failed to capture ${chart.name}:`, error);
+    for (let i = 0; i < CHARTS.length; i += PARALLEL_TABS) {
+      const batch = CHARTS.slice(i, i + PARALLEL_TABS);
+      const batchResults = await Promise.allSettled(
+        batch.map((chart) => captureChart(context, chart)),
+      );
+
+      for (const r of batchResults) {
+        if (r.status === "fulfilled") {
+          results.push(r.value);
+          console.log(`  ✓ Captured: ${r.value.chart.name}`);
+        } else {
+          console.error(`  ✗ Failed:`, r.reason);
+        }
       }
     }
   } finally {
@@ -47,7 +54,6 @@ async function captureChart(
   try {
     await page.setContent(html, { waitUntil: "networkidle", timeout: CHART_LOAD_TIMEOUT });
 
-    // Wait for TradingView widget iframe to load
     const frame = await page.waitForSelector("iframe", { timeout: CHART_LOAD_TIMEOUT });
     if (frame) {
       const contentFrame = await frame.contentFrame();
@@ -56,7 +62,6 @@ async function captureChart(
       }
     }
 
-    // Wait for chart + indicators to fully render
     await page.waitForTimeout(CHART_RENDER_DELAY);
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");

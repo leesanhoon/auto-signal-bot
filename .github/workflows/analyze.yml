@@ -2,9 +2,8 @@ name: TradingView Chart Analysis
 
 on:
   schedule:
-    # Chạy mỗi 4 giờ: 0h, 4h, 8h, 12h, 16h, 20h UTC
     - cron: "0 */4 * * *"
-  workflow_dispatch: # Cho phép chạy thủ công từ GitHub UI
+  workflow_dispatch:
 
 jobs:
   analyze:
@@ -22,11 +21,23 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
         run: npm ci
 
       - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Run analysis
         env:
