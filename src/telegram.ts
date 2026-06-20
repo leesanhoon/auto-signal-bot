@@ -81,13 +81,34 @@ function buildSummaryTable(summaries: PairSummary[]): string {
   return lines.join("\n");
 }
 
+function getPatternInfo(setup: string): string {
+  const s = setup.toUpperCase();
+  if (s.includes("RB") && !s.includes("ARB") && !s.includes("IRB"))
+    return "📦 _Range Break — Phá vỡ vùng tích lũy đi ngang, EMA 20 phẳng rồi dốc theo hướng break_";
+  if (s.includes("ARB"))
+    return "📦🔄 _Advanced Range Break — Range lớn, nhiều lần test biên + false break trước khi break thật_";
+  if (s.includes("IRB"))
+    return "📦📦 _Inside Range Break — Range nhỏ trong range lớn, breakout kéo phá luôn range lớn_";
+  if (s.includes("BB"))
+    return "🧱 _Block Break — Block nhỏ chặt sát EMA 20, break theo hướng trend chính_";
+  if (s.includes("FB"))
+    return "💥 _First Break — Breakout lần đầu từ range lớn, nến break thân dài_";
+  if (s.includes("SB"))
+    return "🔄 _Second Break — False break lần 1 → buildup → break lần 2 hướng thật_";
+  if (s.includes("DD"))
+    return "🎯 _Double Doji — 2-3 doji sát EMA 20 trong trend rõ, break theo trend_";
+  return "";
+}
+
 function buildCopyableSetup(setup: TradeSetup): string {
   const arrow = setup.direction === "LONG" ? "🟢" : "🔴";
   const confidence = setup.confidence ?? 0;
   const confBar = confidence >= 80 ? "🟢🟢🟢" : confidence >= 70 ? "🟡🟡" : "🔴";
+  const patternInfo = getPatternInfo(setup.setup);
   return [
     `${arrow} *${setup.pair} — ${setup.direction}* (${confidence}% ${confBar})`,
-    `📋 _${setup.setup}_`,
+    `📋 *${setup.setup}*`,
+    patternInfo,
     "",
     "```",
     `Direction : ${setup.direction}`,
