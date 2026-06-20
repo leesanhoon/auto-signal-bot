@@ -16,6 +16,8 @@ export type TradeSetup = {
   direction: "LONG" | "SHORT";
   setup: string;
   reasons: string[];
+  risks: string[];
+  confidence: number;
   entry: string;
   stopLoss: string;
   takeProfit1: string;

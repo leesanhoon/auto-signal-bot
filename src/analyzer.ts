@@ -2,70 +2,107 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ScreenshotResult, AnalysisResult, TradeSetup } from "./types.js";
 
-const ANALYSIS_PROMPT = `Bạn là một trader chuyên nghiệp áp dụng các nguyên lý Price Action của Bob Volman (buildup, squeeze, false break, tease, round number) trên khung H4 với EMA 20.
+const ANALYSIS_PROMPT = `Bạn là một price action trader chuyên nghiệp theo phương pháp Bob Volman (sách "Understanding Price Action" và "Forex Price Action Scalps"), áp dụng trên khung H4 với EMA 20.
 
-Tôi gửi bạn tất cả chart H4 của các cặp forex chính + XAU/USD.
+Tôi gửi bạn tất cả chart H4. Phân tích TỪNG cặp theo đúng framework dưới đây.
 
-## Nhiệm vụ:
-Phân tích từng cặp và CHỈ chọn ra những cặp có setup đạt ĐỘ TIN CẬY CAO.
+## FRAMEWORK PHÂN TÍCH (theo thứ tự bắt buộc):
 
-## Tiêu chí độ tin cậy cao — cần ít nhất 3/5:
-1. Buildup rõ ràng (nến nhỏ tích lũy trước breakout)
-2. Đúng hướng EMA 20 (trade theo hướng dốc của EMA)
-3. False break hoặc tease xác nhận
-4. Gần round number hoặc support/resistance quan trọng
-5. Nến xác nhận mạnh (thân dài, bấc ngắn)
+### Bước 1: Trend Context
+- Uptrend, downtrend, hay ranging?
+- Giá nằm ở đâu so với EMA 20? (trên/dưới/đang cắt)
+- Độ dốc EMA 20 cho thấy momentum gì?
 
-## Nguyên lý Bob Volman áp dụng cho H4:
-- Buildup + Break: tích lũy sát EMA 20 hoặc S/R → phá vỡ
-- False Break → Reversal: phá giả → đảo chiều mạnh
-- Squeeze vào EMA 20: giá bị ép sát EMA → breakout
-- Block Break: vùng đi ngang dày đặc → phá vỡ
-- R:R tối thiểu 1:2
+### Bước 2: Xác định vùng S/R quan trọng
+- Giá đang tiếp cận hay đã breakout vùng nào?
+- Round number gần nhất?
+- Có vùng tích lũy (block) rõ ràng không?
 
-## YÊU CẦU OUTPUT:
-Trả lời ĐÚNG format JSON sau, KHÔNG có text nào khác ngoài JSON:
+### Bước 3: Kiểm tra 6 setup của Volman
+Với MỖI setup, nêu rõ tiêu chí nào ĐẠT và tiêu chí nào CHƯA ĐẠT:
+- **FB (First Break)**: Break đầu tiên sau buildup sát EMA 20. Cần: buildup chặt + EMA đúng hướng + nến break có thân dài
+- **SB (Second Break)**: Break thứ hai sau false break nhỏ từ FB. Cần: FB thất bại nhẹ + buildup lại + break lần 2 quyết định hơn
+- **BB (Block Break)**: Phá vỡ block (vùng đi ngang dày đặc). Cần: block rõ ràng ≥3 nến + buildup sát biên + break dứt khoát
+- **RB (Range Break)**: Phá vỡ range. Cần: range rõ ràng + buildup ở biên + nến break đóng ngoài range
+- **IRB (Inside Range Break)**: Break từ range nhỏ trong range lớn. Cần: range lồng nhau rõ ràng + squeeze
+- **ARB (Advanced Range Break)**: Break phức tạp nhiều lần test biên. Cần: multiple tests + false breaks + buildup cuối cùng
+
+### Bước 4: TÌM ÍT NHẤT 3 LÝ DO KHÔNG NÊN VÀO LỆNH
+Đây là bước quan trọng nhất — phá vỡ confirmation bias:
+- False break risk: giá có thể đang tạo false break?
+- Selling/buying pressure ngược: có áp lực ngược chiều rõ ràng?
+- Thiếu buildup: nến trước break có quá lớn/hỗn loạn?
+- Gần S/R ngược chiều: TP có bị chặn bởi S/R gần?
+- EMA 20 phẳng: không có momentum rõ ràng?
+- Nến bấc dài: dấu hiệu rejection/exhaustion?
+- Thị trường choppy: nến lên xuống không có cấu trúc?
+- Spread/volatility bất thường?
+
+### Bước 5: Kết luận
+- TRADE hay NO TRADE
+- Mức độ tự tin (%)
+- Nếu <70% tự tin → NO TRADE
+- Nếu TRADE: nêu điều kiện xác nhận thêm nếu có
+
+## QUY TẮC VÀNG:
+- Khi nghi ngờ, LUÔN chọn NO TRADE
+- Capital preservation quan trọng hơn catching every move
+- Burden of proof nằm ở phía TRADE, không phải NO TRADE
+- Chỉ output setup khi tự tin ≥70%
+
+## YÊU CẦU OUTPUT — CHỈ JSON, không text khác:
 
 {
   "setups": [
     {
       "pair": "EUR/USD",
       "direction": "LONG",
-      "setup": "Buildup + Break tại EMA 20",
-      "reasons": ["Buildup 5 nến sát EMA 20", "EMA 20 dốc lên", "False break xuống trước đó"],
-      "entry": "1.0850",
-      "stopLoss": "1.0810",
-      "takeProfit1": "1.0910",
-      "takeProfit2": "1.0950",
-      "riskReward": "1:2.5",
-      "summary": "Buildup chặt sát EMA 20 dốc lên, false break xác nhận. Entry khi phá high buildup."
+      "setup": "FB — First Break tại EMA 20",
+      "reasons": [
+        "Buildup 5 nến nhỏ sát EMA 20 dốc lên",
+        "Nến break thân dài đóng trên resistance 1.0850",
+        "False break xuống EMA trước đó bị reject mạnh"
+      ],
+      "risks": [
+        "Resistance 1.0900 ở gần — có thể giới hạn upside",
+        "Volume giảm dần trong buildup",
+        "Round number 1.0900 có thể tạo selling pressure"
+      ],
+      "confidence": 75,
+      "entry": "1.0855",
+      "stopLoss": "1.0815",
+      "takeProfit1": "1.0895",
+      "takeProfit2": "1.0940",
+      "riskReward": "1:2.1",
+      "summary": "FB setup rõ ràng. Buildup chặt sát EMA 20 dốc lên, false break xác nhận. Rủi ro: resistance 1.0900 gần."
     }
   ],
   "noSetupReason": ""
 }
 
-Nếu KHÔNG có cặp nào đạt tiêu chuẩn:
+Nếu KHÔNG có cặp nào đạt ≥70% tự tin:
 {
   "setups": [],
-  "noSetupReason": "Thị trường choppy, không có buildup rõ ràng trên tất cả các cặp. Chờ đợi."
+  "noSetupReason": "Không có setup đạt tiêu chuẩn. EUR/USD thiếu buildup, GBP/USD choppy, XAU/USD EMA phẳng không có momentum. Chờ đợi."
 }
 
 QUAN TRỌNG:
-- Chỉ liệt kê setup có độ tin cậy CAO
-- Entry, SL, TP phải là mức giá CỤ THỂ
-- Không trade cũng là một quyết định đúng
-- CHỈ trả về JSON, không có markdown hay text khác`;
+- Mỗi setup PHẢI có trường "risks" (ít nhất 3 lý do không nên vào)
+- Mỗi setup PHẢI có trường "confidence" (% tự tin, chỉ output nếu ≥70%)
+- CHỈ trả về JSON hợp lệ, không markdown, không text khác
+- Entry, SL, TP phải là mức giá CỤ THỂ đọc từ chart`;
 
 function parseAnalysisResponse(text: string): { setups: TradeSetup[]; noSetupReason: string } {
   const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
   try {
     const parsed = JSON.parse(cleaned);
+    const setups = (parsed.setups || []).filter((s: TradeSetup) => (s.confidence ?? 0) >= 70);
     return {
-      setups: parsed.setups || [],
+      setups,
       noSetupReason: parsed.noSetupReason || "",
     };
   } catch {
-    return { setups: [], noSetupReason: "Lỗi parse response từ AI. Raw: " + text.slice(0, 200) };
+    return { setups: [], noSetupReason: "Lỗi parse AI response. Raw: " + text.slice(0, 300) };
   }
 }
 
@@ -74,7 +111,7 @@ async function analyzeWithGemini(screenshots: ScreenshotResult[]): Promise<strin
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
   const parts: Array<{ inlineData: { mimeType: "image/png"; data: string } } | { text: string }> = [];
   for (const screenshot of screenshots) {
@@ -129,20 +166,20 @@ export async function analyzeAllCharts(
   let provider: string;
 
   try {
-    console.log("  → Using Claude Sonnet 4.6...");
+    console.log("  → Using Gemini 2.5 Pro...");
+    rawResponse = await analyzeWithGemini(screenshots);
+    provider = "Gemini 2.5 Pro";
+  } catch (geminiError) {
+    console.warn(`  ⚠ Gemini failed: ${geminiError instanceof Error ? geminiError.message : geminiError}`);
+    console.log("  → Falling back to Claude Sonnet 4.6...");
     rawResponse = await analyzeWithClaude(screenshots);
     provider = "Claude Sonnet 4.6";
-  } catch (claudeError) {
-    console.warn(`  ⚠ Claude failed: ${claudeError instanceof Error ? claudeError.message : claudeError}`);
-    console.log("  → Falling back to Gemini 2.5 Flash...");
-    rawResponse = await analyzeWithGemini(screenshots);
-    provider = "Gemini 2.5 Flash";
   }
 
   console.log(`  ✓ Analyzed by ${provider}`);
 
   const { setups, noSetupReason } = parseAnalysisResponse(rawResponse);
-  console.log(`  ✓ Found ${setups.length} high-confidence setup(s)`);
+  console.log(`  ✓ Found ${setups.length} setup(s) with confidence ≥70%`);
 
   return { setups, noSetupReason, screenshots };
 }

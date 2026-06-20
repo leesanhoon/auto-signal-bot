@@ -60,8 +60,10 @@ async function sendMessage(text: string): Promise<void> {
 
 function buildCopyableSetup(setup: TradeSetup): string {
   const arrow = setup.direction === "LONG" ? "🟢" : "🔴";
+  const confidence = setup.confidence ?? 0;
+  const confBar = confidence >= 80 ? "🟢🟢🟢" : confidence >= 70 ? "🟡🟡" : "🔴";
   return [
-    `${arrow} *${setup.pair} — ${setup.direction}*`,
+    `${arrow} *${setup.pair} — ${setup.direction}* (${confidence}% ${confBar})`,
     `📋 _${setup.setup}_`,
     "",
     "```",
@@ -73,8 +75,11 @@ function buildCopyableSetup(setup: TradeSetup): string {
     `R:R       : ${setup.riskReward}`,
     "```",
     "",
-    `✅ *Lý do:*`,
+    `✅ *Lý do vào lệnh:*`,
     ...setup.reasons.map((r) => `  • ${r}`),
+    "",
+    `⚠️ *Rủi ro cần lưu ý:*`,
+    ...(setup.risks || []).map((r) => `  • ${r}`),
     "",
     `💡 ${setup.summary}`,
   ].join("\n");
