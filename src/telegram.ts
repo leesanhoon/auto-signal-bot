@@ -119,28 +119,19 @@ export async function sendAllAnalyses(result: AnalysisResult): Promise<void> {
     timeZone: "Asia/Ho_Chi_Minh",
   });
 
-  // Header
-  await sendMessage(
-    `🚀 *Bob Volman H4 Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp tiền`,
-  );
-
-  // Summary table for ALL pairs
-  if (result.summaries.length > 0) {
-    await sendMessage(buildSummaryTable(result.summaries));
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-
-  // No setups case
+  // No setups — just notify that scan completed
   if (result.setups.length === 0) {
     await sendMessage(
-      `⏸ *KHÔNG CÓ SETUP ĐỘ TIN CẬY CAO*\n\n${result.noSetupReason || "Chờ đợi setup rõ ràng hơn."}\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
+      `🚀 *Bob Volman H4 Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp tiền\n\n⏸ Không có setup đạt yêu cầu (≥70%)\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
     );
-    console.log("  → No high-confidence setups. Summary + wait message sent.");
+    console.log("  → No high-confidence setups. Notification sent.");
     return;
   }
 
-  // Separator before detailed setups
-  await sendMessage(`━━━━━━━━━━━━━━━━━━\n📈 *CHI TIẾT CÁC SETUP ≥70%*\n━━━━━━━━━━━━━━━━━━`);
+  // Header — only when there are setups
+  await sendMessage(
+    `🚀 *Bob Volman H4 Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp — tìm thấy *${result.setups.length}* setup`,
+  );
 
   // Detailed setups with annotated charts
   for (const setup of result.setups) {

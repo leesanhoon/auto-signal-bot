@@ -106,7 +106,7 @@ async function analyzeWithGemini(screenshots: ScreenshotResult[]): Promise<strin
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
   const parts: Array<{ inlineData: { mimeType: "image/png"; data: string } } | { text: string }> = [];
   for (const screenshot of screenshots) {
@@ -161,9 +161,9 @@ export async function analyzeAllCharts(
   let provider: string;
 
   try {
-    console.log("  → Trying Gemini 2.5 Flash...");
+    console.log("  → Trying Gemini 2.5 Pro...");
     rawResponse = await analyzeWithGemini(screenshots);
-    provider = "Gemini 2.5 Flash";
+    provider = "Gemini 2.5 Pro";
   } catch (geminiError) {
     console.warn(`  ⚠ Gemini failed: ${geminiError instanceof Error ? geminiError.message : geminiError}`);
     console.log("  → Falling back to Claude Sonnet 4.6...");
