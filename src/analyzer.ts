@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ScreenshotResult, AnalysisResult, TradeSetup, PairSummary } from "./types.js";
 
@@ -168,6 +168,7 @@ async function analyzeWithClaude(screenshots: ScreenshotResult[]): Promise<strin
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 16384,
+    thinking: { type: "enabled", budget_tokens: 8192 },
     messages: [{ role: "user", content }],
   });
 
@@ -197,6 +198,7 @@ async function analyzeWithGemini(screenshots: ScreenshotResult[]): Promise<strin
   const result = await ai.models.generateContent({
     model: "gemini-3.5-flash",
     contents: [{ role: "user", parts }],
+    config: { thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM } },
   });
 
   return result.text ?? "";
