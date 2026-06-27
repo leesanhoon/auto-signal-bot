@@ -1,22 +1,30 @@
-import { fetchGameZip } from "./betting-api.js";
-import type { MatchInfo, MatchOddsPayload, RawGameEntry } from "./betting-types.js";
+import { fetchEventMarketKeys, fetchEventFullOdds } from "./betting-api.js";
+import type { MatchInfo, MatchOddsPayload, OddsApiEvent } from "./betting-types.js";
 
-const PLACEHOLDER_TEAM = /^(1st|2nd)\s+teams?$/i;
-
-export function isPlaceholderTeam(name: string): boolean {
-  return PLACEHOLDER_TEAM.test(name.trim());
-}
+/**
+ * Market không cần thiết cho phân tích S1: h2h_3_way trùng hoàn toàn với h2h;
+ * các market player_* là kèo cầu thủ (ngoài phạm vi), trong đó player_shots/
+ * player_shots_on_target chiếm nhiều outcomes nhất (~295) nhưng không liên quan.
+ */
+const EXCLUDED_MARKETS = new Set([
+  "h2h_3_way",
+  "player_first_goal_scorer",
+  "player_last_goal_scorer",
+  "player_goal_scorer_anytime",
+  "player_goals_alternate",
+  "player_goalie_saves_alternate",
+  "player_shots",
+  "player_shots_on_target",
+]);
 
 export function extractMatches(raw: unknown): MatchInfo[] {
-  const games = (raw as { Value?: { G?: RawGameEntry[] } }).Value?.G ?? [];
-  return games
-    .filter((g) => !isPlaceholderTeam(g.O1) && !isPlaceholderTeam(g.O2))
-    .map((g) => ({
-      gameId: g.CI,
-      home: g.O1,
-      away: g.O2,
-      kickoffUnix: g.S,
-    }));
+  const events = (raw as OddsApiEvent[] | undefined) ?? [];
+  return events.map((e) => ({
+    gameId: e.id,
+    home: e.home_team,
+    away: e.away_team,
+    kickoffUnix: Math.floor(new Date(e.commence_time).getTime() / 1000),
+  }));
 }
 
 export function filterUpcomingWithin(
@@ -41,13 +49,18 @@ export async function buildOddsPayload(
 
   for (const match of matches) {
     try {
-      const zip = await fetchGameZip(String(match.gameId));
-      const odds = (zip as { Value?: { GE?: unknown } }).Value?.GE ?? [];
+      const allMarketKeys = await fetchEventMarketKeys(match.gameId);
+      const marketKeys = allMarketKeys.filter((key) => !EXCLUDED_MARKETS.has(key));
+      if (marketKeys.length === 0) {
+        throw new Error("Không dò được market nào từ bookmaker");
+      }
+
+      const odds = (await fetchEventFullOdds(match.gameId, marketKeys)) as OddsApiEvent;
       payload.push({ ...match, odds });
-      console.log(`  ✓ Lấy kèo: ${match.home} vs ${match.away} (id=${match.gameId})`);
+      console.log(`  ✓ Lấy kèo (${marketKeys.length} market): ${match.home} vs ${match.away}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn(`  ⚠ Lỗi lấy kèo cho ${match.home} vs ${match.away} (id=${match.gameId}): ${message}`);
+      console.warn(`  ⚠ Lỗi lấy kèo cho ${match.home} vs ${match.away}: ${message}`);
       failures.push({ match, message });
     }
   }

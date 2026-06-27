@@ -1,56 +1,54 @@
-function getBettingConfig() {
-  const xHd = process.env.BETTING_X_HD;
-  const baseUrl = process.env.BETTING_BASE_URL ?? "https://1xlite-859253.top";
-  const champId = process.env.BETTING_CHAMP_ID ?? "2708736";
-  if (!xHd) {
-    throw new Error("BETTING_X_HD environment variable is required");
+function getOddsApiConfig() {
+  const apiKey = process.env.ODDS_API_KEY;
+  const sport = process.env.ODDS_API_SPORT ?? "soccer_fifa_world_cup";
+  const region = process.env.ODDS_API_REGION ?? "eu";
+  const bookmaker = process.env.ODDS_API_BOOKMAKER ?? "onexbet";
+  if (!apiKey) {
+    throw new Error("ODDS_API_KEY environment variable is required");
   }
-  return { xHd, baseUrl, champId };
+  return { apiKey, sport, region, bookmaker };
 }
 
-function buildHeaders(xHd: string, referer: string): Record<string, string> {
-  return {
-    "x-hd": xHd,
-    "x-svc-source": "__BETTING_APP__",
-    "is-srv": "false",
-    Referer: referer,
-    "x-mobile-project-id": "0",
-    "x-app-n": "__BETTING_APP__",
-    "x-requested-with": "XMLHttpRequest",
-    accept: "application/json, text/plain, */*",
-    "content-type": "application/json",
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-  };
+export function getConfiguredBookmaker(): string {
+  return getOddsApiConfig().bookmaker;
 }
 
-async function fetchJson(url: string, referer: string): Promise<unknown> {
-  const { xHd } = getBettingConfig();
-  const response = await fetch(url, { headers: buildHeaders(xHd, referer) });
-
+async function fetchJson(url: string): Promise<unknown> {
+  const response = await fetch(url);
   const text = await response.text();
+
   if (!response.ok) {
-    throw new Error(`Betting API request failed (${response.status}): ${text.slice(0, 300)}`);
+    throw new Error(`The Odds API request failed (${response.status}): ${text.slice(0, 300)}`);
   }
 
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(
-      `Betting API returned non-JSON response — x-hd token có thể đã hết hạn, vui lòng cập nhật .env. Body: ${text.slice(0, 300)}`,
-    );
+    throw new Error(`The Odds API returned non-JSON response: ${text.slice(0, 300)}`);
   }
 }
 
-export async function fetchGamesByChamp(champId?: string): Promise<unknown> {
-  const { baseUrl, champId: defaultChampId } = getBettingConfig();
-  const id = champId ?? defaultChampId;
-  const url = `${baseUrl}/service-api/LineFeed/GamesByGlobalChamp?id=144&champ=${id}&gr=819&country=43&lng=vi`;
-  return fetchJson(url, `${baseUrl}/vi/line/football`);
+/** Danh sách trận đấu (không cần markets/regions, không tốn quota odds). */
+export async function fetchEvents(): Promise<unknown> {
+  const { apiKey, sport } = getOddsApiConfig();
+  const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/?apiKey=${apiKey}`;
+  return fetchJson(url);
 }
 
-export async function fetchGameZip(gameId: string): Promise<unknown> {
-  const { baseUrl } = getBettingConfig();
-  const url = `${baseUrl}/service-api/LineFeed/GetGameZip?id=${gameId}&lng=vi&isSubGames=true&GroupEvents=true&countevents=250&grMode=4&topGroups=&country=43&marketType=3&isNewBuilder=true`;
-  return fetchJson(url, `${baseUrl}/vi/line/football`);
+/** Dò toàn bộ market mà bookmaker đang cấu hình cung cấp cho 1 trận cụ thể. */
+export async function fetchEventMarketKeys(eventId: string): Promise<string[]> {
+  const { apiKey, sport, bookmaker } = getOddsApiConfig();
+  const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/markets/?bookmakers=${bookmaker}&apiKey=${apiKey}`;
+  const raw = (await fetchJson(url)) as {
+    bookmakers?: Array<{ key: string; markets?: Array<{ key: string }> }>;
+  };
+  const bm = raw.bookmakers?.find((b) => b.key === bookmaker);
+  return bm?.markets?.map((m) => m.key) ?? [];
+}
+
+/** Lấy nguyên response odds cho tất cả market đã dò được — không cắt/lọc field nào. */
+export async function fetchEventFullOdds(eventId: string, marketKeys: string[]): Promise<unknown> {
+  const { apiKey, sport, region, bookmaker } = getOddsApiConfig();
+  const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/odds/?regions=${region}&markets=${marketKeys.join(",")}&oddsFormat=decimal&bookmakers=${bookmaker}&apiKey=${apiKey}`;
+  return fetchJson(url);
 }
