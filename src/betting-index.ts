@@ -1,7 +1,7 @@
 import "./env.js";
 import { fetchEvents, getConfiguredBookmaker } from "./betting-api.js";
 import { extractMatches, filterUpcomingWithin, buildOddsPayload } from "./betting.js";
-import { sendMessage, sendDocument, notifyError } from "./telegram.js";
+import { sendMessage, notifyError } from "./telegram.js";
 import {
   loadDailyMatchesCache,
   saveDailyMatchesCache,
@@ -78,36 +78,6 @@ async function main(): Promise<void> {
       minute: "2-digit",
     });
 
-  const formatMatchFilename = (home: string, away: string, kickoffUnix: number): string => {
-    const date = new Date(kickoffUnix * 1000);
-    const formatter = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const parts = formatter.formatToParts(date);
-    const dateObj = {
-      year: parts.find((p) => p.type === "year")?.value,
-      month: parts.find((p) => p.type === "month")?.value,
-      day: parts.find((p) => p.type === "day")?.value,
-      hour: parts.find((p) => p.type === "hour")?.value,
-      minute: parts.find((p) => p.type === "minute")?.value,
-    };
-
-    const sanitize = (name: string) =>
-      name
-        .trim()
-        .toUpperCase()
-        .replace(/[/\\:*?"<>|]/g, "_")
-        .replace(/\s+/g, "_");
-
-    return `${sanitize(home)}_vs_${sanitize(away)}_${dateObj.year}-${dateObj.month}-${dateObj.day}_${dateObj.hour}-${dateObj.minute}.txt`;
-  };
-
   const statusText =
     upcoming.length === 0
       ? `⏸ Không có trận nào sắp đá trong ${HOURS_WINDOW}h tới.`
@@ -123,16 +93,13 @@ async function main(): Promise<void> {
   await sendMessage(statusText);
 
   if (newPayload.length > 0) {
-    console.log("\n📤 Gửi từng file trận mới lên Telegram...");
+    console.log("\n📤 Gửi từng trận mới lên Telegram (dạng text)...");
     for (const match of newPayload) {
-      const buffer = Buffer.from(formatOddsText(match));
-      const filename = formatMatchFilename(match.home, match.away, match.kickoffUnix);
-      const caption = `⚽ ${match.home} vs ${match.away}`;
-      await sendDocument(buffer, filename, caption);
+      await sendMessage(`\`\`\`\n${formatOddsText(match)}\n\`\`\``);
     }
-    console.log(`\n✅ Đã gửi ${newPayload.length} file trận đấu mới lên Telegram.`);
+    console.log(`\n✅ Đã gửi ${newPayload.length} trận đấu mới lên Telegram.`);
   } else {
-    console.log("\n✓ Không có file mới cần gửi.");
+    console.log("\n✓ Không có trận mới cần gửi.");
   }
 }
 
