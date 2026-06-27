@@ -34,11 +34,28 @@ export type MatchInfo = {
   kickoffUnix: number;
 };
 
-/** Response thô từ /events/{id}/odds — không cắt/lọc field nào. */
+export type CompactOutcome = {
+  name: string;
+  price: number;
+  point?: number;
+};
+
+export type CompactMarket = {
+  key: string;
+  outcomes: CompactOutcome[];
+};
+
+export type CompactOdds = {
+  updatedUnix: number;
+  legend: string;
+  markets: CompactMarket[];
+};
+
+/** Odds đã rút gọn (bỏ field trùng lặp, mã hóa tên đội) để tiết kiệm token cho AI đọc. */
 export type MatchOddsPayload = {
   gameId: string;
   home: string;
   away: string;
   kickoffUnix: number;
-  odds: OddsApiEvent;
+  odds: CompactOdds;
 };

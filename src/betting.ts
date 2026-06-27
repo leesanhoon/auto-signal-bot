@@ -1,5 +1,6 @@
 import { fetchEventMarketKeys, fetchEventFullOdds } from "./betting-api.js";
 import type { MatchInfo, MatchOddsPayload, OddsApiEvent } from "./betting-types.js";
+import { compactOdds } from "./odds-compact.js";
 
 /**
  * Market không cần thiết cho phân tích S1: h2h_3_way trùng hoàn toàn với h2h;
@@ -55,7 +56,8 @@ export async function buildOddsPayload(
         throw new Error("Không dò được market nào từ bookmaker");
       }
 
-      const odds = (await fetchEventFullOdds(match.gameId, marketKeys)) as OddsApiEvent;
+      const rawOdds = (await fetchEventFullOdds(match.gameId, marketKeys)) as OddsApiEvent;
+      const odds = compactOdds(rawOdds, match);
       payload.push({ ...match, odds });
       console.log(`  ✓ Lấy kèo (${marketKeys.length} market): ${match.home} vs ${match.away}`);
     } catch (error) {

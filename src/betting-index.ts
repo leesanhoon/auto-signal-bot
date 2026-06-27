@@ -11,8 +11,9 @@ import {
   cleanupExpiredOddsCache,
 } from "./cache.js";
 import type { MatchInfo } from "./betting-types.js";
+import { sendDailyCurlTemplates } from "./curl-templates.js";
 
-const HOURS_WINDOW = 1;
+const HOURS_WINDOW = 5;
 
 async function getMatches(): Promise<MatchInfo[]> {
   const cached = loadDailyMatchesCache();
@@ -35,6 +36,8 @@ async function main(): Promise<void> {
   cleanupExpiredOddsCache();
 
   const matches = await getMatches();
+
+  await sendDailyCurlTemplates(matches);
 
   const upcoming = filterUpcomingWithin(matches, HOURS_WINDOW);
   console.log(`✓ ${upcoming.length} trận sắp đá trong ${HOURS_WINDOW}h tới\n`);
@@ -124,7 +127,7 @@ async function main(): Promise<void> {
   if (newPayload.length > 0) {
     console.log("\n📤 Gửi từng file trận mới lên Telegram...");
     for (const match of newPayload) {
-      const buffer = Buffer.from(JSON.stringify(match, null, 2));
+      const buffer = Buffer.from(JSON.stringify(match));
       const filename = formatMatchFilename(match.home, match.away, match.kickoffUnix);
       const caption = `⚽ ${match.home} vs ${match.away}`;
       await sendDocument(buffer, filename, caption);
