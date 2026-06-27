@@ -40,7 +40,7 @@ export async function sendDocument(fileBuffer: Buffer, filename: string, caption
   const { chatId, api } = getTelegramConfig();
   const formData = new FormData();
   formData.append("chat_id", chatId);
-  formData.append("document", new Blob([new Uint8Array(fileBuffer)], { type: "application/json" }), filename);
+  formData.append("document", new Blob([new Uint8Array(fileBuffer)], { type: "text/plain" }), filename);
   formData.append("caption", caption.slice(0, 1024));
 
   const response = await fetch(`${api}/sendDocument`, {

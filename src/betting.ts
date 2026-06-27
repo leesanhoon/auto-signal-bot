@@ -2,20 +2,16 @@ import { fetchEventMarketKeys, fetchEventFullOdds } from "./betting-api.js";
 import type { MatchInfo, MatchOddsPayload, OddsApiEvent } from "./betting-types.js";
 import { compactOdds } from "./odds-compact.js";
 
-/**
- * Market không cần thiết cho phân tích S1: h2h_3_way trùng hoàn toàn với h2h;
- * các market player_* là kèo cầu thủ (ngoài phạm vi), trong đó player_shots/
- * player_shots_on_target chiếm nhiều outcomes nhất (~295) nhưng không liên quan.
- */
-const EXCLUDED_MARKETS = new Set([
-  "h2h_3_way",
-  "player_first_goal_scorer",
-  "player_last_goal_scorer",
-  "player_goal_scorer_anytime",
-  "player_goals_alternate",
-  "player_goalie_saves_alternate",
-  "player_shots",
-  "player_shots_on_target",
+/** Market cần thiết cho framework S1 — tất cả market khác đều bị loại. */
+const ESSENTIAL_MARKETS = new Set([
+  "h2h",
+  "spreads",
+  "totals",
+  "alternate_totals",
+  "alternate_spreads",
+  "btts",
+  "h2h_3_way_h1",
+  "h2h_3_way_h2",
 ]);
 
 export function extractMatches(raw: unknown): MatchInfo[] {
@@ -51,7 +47,7 @@ export async function buildOddsPayload(
   for (const match of matches) {
     try {
       const allMarketKeys = await fetchEventMarketKeys(match.gameId);
-      const marketKeys = allMarketKeys.filter((key) => !EXCLUDED_MARKETS.has(key));
+      const marketKeys = allMarketKeys.filter((key) => ESSENTIAL_MARKETS.has(key));
       if (marketKeys.length === 0) {
         throw new Error("Không dò được market nào từ bookmaker");
       }

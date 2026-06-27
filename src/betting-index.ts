@@ -12,6 +12,7 @@ import {
 } from "./cache.js";
 import type { MatchInfo } from "./betting-types.js";
 import { sendDailyCurlTemplates } from "./curl-templates.js";
+import { formatOddsText } from "./odds-text-format.js";
 
 const HOURS_WINDOW = 5;
 
@@ -107,7 +108,7 @@ async function main(): Promise<void> {
         .replace(/[/\\:*?"<>|]/g, "_")
         .replace(/\s+/g, "_");
 
-    return `${sanitize(home)}_vs_${sanitize(away)}_${dateObj.year}-${dateObj.month}-${dateObj.day}_${dateObj.hour}-${dateObj.minute}.json`;
+    return `${sanitize(home)}_vs_${sanitize(away)}_${dateObj.year}-${dateObj.month}-${dateObj.day}_${dateObj.hour}-${dateObj.minute}.txt`;
   };
 
   const statusText =
@@ -127,7 +128,7 @@ async function main(): Promise<void> {
   if (newPayload.length > 0) {
     console.log("\n📤 Gửi từng file trận mới lên Telegram...");
     for (const match of newPayload) {
-      const buffer = Buffer.from(JSON.stringify(match));
+      const buffer = Buffer.from(formatOddsText(match));
       const filename = formatMatchFilename(match.home, match.away, match.kickoffUnix);
       const caption = `⚽ ${match.home} vs ${match.away}`;
       await sendDocument(buffer, filename, caption);
