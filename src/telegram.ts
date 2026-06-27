@@ -27,7 +27,25 @@ async function sendPhoto(photoBuffer: Buffer, caption: string): Promise<void> {
   }
 }
 
-async function sendMessage(text: string): Promise<void> {
+export async function sendDocument(fileBuffer: Buffer, filename: string, caption: string): Promise<void> {
+  const { chatId, api } = getTelegramConfig();
+  const formData = new FormData();
+  formData.append("chat_id", chatId);
+  formData.append("document", new Blob([new Uint8Array(fileBuffer)], { type: "application/json" }), filename);
+  formData.append("caption", caption.slice(0, 1024));
+
+  const response = await fetch(`${api}/sendDocument`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Telegram sendDocument failed: ${error}`);
+  }
+}
+
+export async function sendMessage(text: string): Promise<void> {
   const { chatId, api } = getTelegramConfig();
   const response = await fetch(`${api}/sendMessage`, {
     method: "POST",

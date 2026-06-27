@@ -7,7 +7,8 @@
         "start": "tsx src/index.ts",
         "build": "tsc",
         "analyze": "tsx src/index.ts",
-        "test-analyze": "tsx src/test-analyze.ts"
+        "test-analyze": "tsx src/test-analyze.ts",
+        "match-odds": "tsx src/betting-index.ts"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.105.0",
