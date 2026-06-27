@@ -22,12 +22,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log("📊 Lấy kèo chi tiết từng trận...");
+  console.log("📊 Lấy dữ liệu chi tiết từng trận...");
   const { payload, failures } = await buildOddsPayload(upcoming);
 
   if (payload.length === 0) {
-    await sendMessage(`⚠️ Tìm thấy ${upcoming.length} trận sắp đá nhưng không lấy được kèo cho trận nào (có thể x-hd token đã hết hạn).`);
-    console.log("→ Không lấy được kèo cho trận nào. Đã gửi cảnh báo.");
+    await sendMessage(`⚠️ Tìm thấy ${upcoming.length} trận sắp đá nhưng không lấy được dữ liệu cho trận nào (có thể x-hd token đã hết hạn).`);
+    console.log("→ Không lấy được dữ liệu cho trận nào. Đã gửi cảnh báo.");
     return;
   }
 
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
       .map((f) => `• ${f.match.home} vs ${f.match.away}: ${f.message}`)
       .join("\n");
     await sendMessage(
-      `⚠️ Lấy kèo thất bại cho ${failures.length} trận (đã bỏ qua, vẫn gửi ${payload.length} trận còn lại):\n${failedList}`,
+      `⚠️ Lấy dữ liệu thất bại cho ${failures.length} trận (đã bỏ qua, vẫn gửi ${payload.length} trận còn lại):\n${failedList}`,
     );
   }
 
@@ -57,15 +57,15 @@ async function main(): Promise<void> {
     .join("\n\n");
 
   await sendMessage(
-    `🏆 *Kèo ${payload.length} trận sắp đá trong ${HOURS_WINDOW}h tới*\n\n${matchListText}`,
+    `🏆 *Dữ liệu ${payload.length} trận đấu sắp đá trong ${HOURS_WINDOW}h tới*\n\n${matchListText}`,
   );
 
   const buffer = Buffer.from(JSON.stringify(payload, null, 2));
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const caption = `📄 File kèo chi tiết (${payload.length} trận)`;
+  const caption = `📄 File dữ liệu chi tiết (${payload.length} trận)`;
 
   await sendDocument(buffer, `odds-${timestamp}.json`, caption);
-  console.log(`\n✅ Đã gửi file kèo (${payload.length} trận) lên Telegram.`);
+  console.log(`\n✅ Đã gửi dữ liệu (${payload.length} trận) lên Telegram.`);
 }
 
 main().catch(async (error) => {
