@@ -116,6 +116,9 @@ export function formatOddsText(payload: MatchOddsPayload): string {
   const totLine = formatAsiaTotals(findMarket(payload, "asia_totals"), "ASIA-TOT");
   if (totLine) lines.push(totLine);
 
+  const euTotLine = formatAsiaTotals(findMarket(payload, "eu_totals"), "EU-TOT");
+  if (euTotLine) lines.push(euTotLine);
+
   const kqTotLine = formatResultTotal(findMarket(payload, "result_total_goals"));
   if (kqTotLine) lines.push(kqTotLine);
 
@@ -143,6 +146,9 @@ export function formatOddsText(payload: MatchOddsPayload): string {
 
   const cornersTotLine = formatAsiaTotals(findMarket(payload, "corners_totals"), "CORNERS-TOT");
   if (cornersTotLine) lines.push(cornersTotLine);
+
+  const cornersTotEuLine = formatAsiaTotals(findMarket(payload, "corners_totals_eu"), "CORNERS-TOT-EU");
+  if (cornersTotEuLine) lines.push(cornersTotEuLine);
 
   return lines.join("\n");
 }
@@ -187,7 +193,7 @@ export function formatMainOddsSummary(payload: MatchOddsPayload): string | undef
   const h2hText = h !== undefined && d !== undefined && a !== undefined ? `1X2: ${h}/${d}/${a}` : undefined;
 
   const hcpText = mainHandicapText(findMarket(payload, "asia_handicap"));
-  const totText = mainTotalText(findMarket(payload, "asia_totals"));
+  const totText = mainTotalText(findMarket(payload, "eu_totals")) ?? mainTotalText(findMarket(payload, "asia_totals"));
 
   const bttsMarket = findMarket(payload, "btts");
   const gg = findOutcome(bttsMarket, "GG")?.price;
