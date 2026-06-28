@@ -19,10 +19,18 @@ export async function runLotteryCheck(): Promise<void> {
   const weekdayLabel = WEEKDAY_LABELS[weekday];
   console.log(`🎰 Lottery History Scanner — ${weekdayLabel} ${dateStr}\n`);
 
+  const historyBefore = loadWeekdayHistory(weekday);
+  const regionsAlreadyToday = new Set(historyBefore.filter((r) => r.date === dateStr).map((r) => r.region));
+
   const todayRecords: LotteryDrawRecord[] = [];
   const failures: string[] = [];
 
   for (const region of REGIONS) {
+    if (regionsAlreadyToday.has(region)) {
+      console.log(`✓ [${region}] Đã có dữ liệu hôm nay (${dateStr}) trong cache — bỏ qua, không fetch lại.\n`);
+      continue;
+    }
+
     try {
       console.log(`📡 [${region}] Lấy kết quả hôm nay (${dateStr})...`);
       const html = await fetchDayPage(region, dateStr);
@@ -38,6 +46,11 @@ export async function runLotteryCheck(): Promise<void> {
 
   if (failures.length > 0) {
     await sendMessage(`⚠️ [Lottery] Lấy dữ liệu hôm nay thất bại:\n${failures.join("\n").slice(0, 1000)}`);
+  }
+
+  if (todayRecords.length === 0 && regionsAlreadyToday.size === REGIONS.length) {
+    console.log(`\n✓ Hôm nay (${weekdayLabel} ${dateStr}) đã có đủ dữ liệu 3 miền từ trước — không gửi lại Telegram.`);
+    return;
   }
 
   appendWeekdayHistory(weekday, todayRecords);
