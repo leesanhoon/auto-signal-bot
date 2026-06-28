@@ -1,30 +1,9 @@
-export type OddsApiOutcome = {
-  name: string;
-  price: number;
-  point?: number;
-};
-
-export type OddsApiMarket = {
-  key: string;
-  last_update: string;
-  outcomes: OddsApiOutcome[];
-};
-
-export type OddsApiBookmaker = {
-  key: string;
-  title: string;
-  last_update: string;
-  markets: OddsApiMarket[];
-};
-
-export type OddsApiEvent = {
-  id: string;
-  sport_key: string;
-  sport_title: string;
-  commence_time: string;
-  home_team: string;
-  away_team: string;
-  bookmakers: OddsApiBookmaker[];
+export type ApiFootballFixture = {
+  fixture: { id: number; date: string };
+  teams: {
+    home: { name: string | null };
+    away: { name: string | null };
+  };
 };
 
 export type MatchInfo = {
@@ -51,6 +30,8 @@ export type CompactOdds = {
   markets: CompactMarket[];
 };
 
+export type CorrectScoreOutcome = { score: string; price: number };
+
 /** Odds đã rút gọn (bỏ field trùng lặp, mã hóa tên đội) để tiết kiệm token cho AI đọc. */
 export type MatchOddsPayload = {
   gameId: string;
@@ -58,4 +39,6 @@ export type MatchOddsPayload = {
   away: string;
   kickoffUnix: number;
   odds: CompactOdds;
+  /** Market "Exact Score" (Correct Score) từ API-Football. */
+  correctScore?: CorrectScoreOutcome[];
 };

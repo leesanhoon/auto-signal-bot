@@ -35,6 +35,58 @@ function format3Way(market: CompactMarket | undefined, label: string): string | 
   return `${label}: H=${h} D=${d} A=${a}`;
 }
 
+/** Liệt kê đầy đủ mọi mốc Asian Handicap, sort theo point tăng dần, H rồi A mỗi mốc. */
+function formatAsiaHandicap(market: CompactMarket | undefined): string | undefined {
+  if (!market) return undefined;
+  const points = [...new Set(market.outcomes.map((o) => o.point).filter((p): p is number => p !== undefined))].sort(
+    (a, b) => a - b,
+  );
+  const parts: string[] = [];
+  for (const point of points) {
+    const sameLine = market.outcomes.filter((o) => o.point === point);
+    const h = sameLine.find((o) => o.name === "H");
+    const a = sameLine.find((o) => o.name === "A");
+    if (h) parts.push(`H${fmtSignedPoint(point)}=${h.price}`);
+    if (a) parts.push(`A${fmtSignedPoint(point)}=${a.price}`);
+  }
+  return parts.length > 0 ? `ASIA-HCP: ${parts.join(" ")}` : undefined;
+}
+
+/** Liệt kê đầy đủ mọi mốc Goals Over/Under, sort theo point tăng dần, Over rồi Under mỗi mốc. */
+function formatAsiaTotals(market: CompactMarket | undefined): string | undefined {
+  if (!market) return undefined;
+  const points = [...new Set(market.outcomes.map((o) => o.point).filter((p): p is number => p !== undefined))].sort(
+    (a, b) => a - b,
+  );
+  const parts: string[] = [];
+  for (const point of points) {
+    const sameLine = market.outcomes.filter((o) => o.point === point);
+    const over = sameLine.find((o) => o.name === "Over");
+    const under = sameLine.find((o) => o.name === "Under");
+    if (over) parts.push(`O${fmtNum(point)}=${over.price}`);
+    if (under) parts.push(`U${fmtNum(point)}=${under.price}`);
+  }
+  return parts.length > 0 ? `ASIA-TOT: ${parts.join(" ")}` : undefined;
+}
+
+/** Combo Kết quả + Tổng điểm — liệt kê đầy đủ mọi mốc, dạng "H-U1.5=3.32 H-O2.5=3.0 A-U1.5=5.4 ...". */
+function formatResultTotal(market: CompactMarket | undefined): string | undefined {
+  if (!market) return undefined;
+  const points = [...new Set(market.outcomes.map((o) => o.point).filter((p): p is number => p !== undefined))].sort(
+    (a, b) => a - b,
+  );
+  const order = ["HO", "DO", "AO", "HU", "DU", "AU"];
+  const parts: string[] = [];
+  for (const point of points) {
+    const sameLine = market.outcomes.filter((o) => o.point === point);
+    for (const code of order) {
+      const o = sameLine.find((x) => x.name === code);
+      if (o) parts.push(`${code[0]}-${code[1]}${fmtNum(point)}=${o.price}`);
+    }
+  }
+  return parts.length > 0 ? `KQ-TOT: ${parts.join(" ")}` : undefined;
+}
+
 /**
  * Build format text siêu gọn cho AI đọc — thay thế JSON. Mỗi market 1 dòng,
  * bỏ field thừa (key tên dài, last_update, point lặp lại không cần thiết).
@@ -49,68 +101,19 @@ export function formatOddsText(payload: MatchOddsPayload): string {
   const h2hLine = format3Way(findMarket(payload, "h2h"), "H2H");
   if (h2hLine) lines.push(h2hLine);
 
-  const spreads = findMarket(payload, "spreads");
-  const spreadsH = findOutcome(spreads, "H");
-  const spreadsA = findOutcome(spreads, "A");
-  const mainSpreadPoint = spreadsH?.point ?? spreadsA?.point;
-  if (spreadsH && spreadsA && mainSpreadPoint !== undefined) {
-    // "spreads" là handicap châu Á — bookmaker không cố định mốc ở 0, nên chỉ
-    // gọi là DNB (Draw No Bet) khi mốc thực sự = 0; ngược lại ghi rõ mốc thật
-    // (vd: HCP+1) để không đánh lừa AI đọc nhầm thành Draw No Bet.
-    const label = mainSpreadPoint === 0 ? "DNB" : `HCP${fmtSignedPoint(mainSpreadPoint)}`;
-    lines.push(`${label}: H=${spreadsH.price} A=${spreadsA.price}`);
+  const hcpLine = formatAsiaHandicap(findMarket(payload, "asia_handicap"));
+  if (hcpLine) lines.push(hcpLine);
+
+  const totLine = formatAsiaTotals(findMarket(payload, "asia_totals"));
+  if (totLine) lines.push(totLine);
+
+  const kqTotLine = formatResultTotal(findMarket(payload, "result_total_goals"));
+  if (kqTotLine) lines.push(kqTotLine);
+
+  if (payload.correctScore && payload.correctScore.length > 0) {
+    const cs = payload.correctScore.map((o) => `${o.score}=${o.price}`).join(" ");
+    lines.push(`CS: ${cs}`);
   }
-
-  const totals = findMarket(payload, "totals");
-  const over = findOutcome(totals, "Over");
-  const under = findOutcome(totals, "Under");
-  const mainTotalPoint = over?.point ?? under?.point;
-  if (over && under && mainTotalPoint !== undefined) {
-    lines.push(`TOT: O${fmtNum(mainTotalPoint)}=${over.price} U${fmtNum(mainTotalPoint)}=${under.price}`);
-  }
-
-  const btts = findMarket(payload, "btts");
-  const yes = findOutcome(btts, "Yes");
-  const no = findOutcome(btts, "No");
-  if (yes && no) {
-    lines.push(`BTTS: Y=${yes.price} N=${no.price}`);
-  }
-
-  const altTotals = findMarket(payload, "alternate_totals");
-  if (altTotals) {
-    const overs = altTotals.outcomes
-      .filter((o) => o.name === "Over" && o.point !== undefined && o.point !== mainTotalPoint)
-      .sort((a, b) => (a.point ?? 0) - (b.point ?? 0));
-    const unders = altTotals.outcomes
-      .filter((o) => o.name === "Under" && o.point !== undefined && o.point !== mainTotalPoint)
-      .sort((a, b) => (a.point ?? 0) - (b.point ?? 0));
-    const parts = [
-      ...overs.map((o) => `O${fmtNum(o.point!)}=${o.price}`),
-      ...unders.map((o) => `U${fmtNum(o.point!)}=${o.price}`),
-    ];
-    if (parts.length > 0) lines.push(`ALT-TOT: ${parts.join(" ")}`);
-  }
-
-  const altSpreads = findMarket(payload, "alternate_spreads");
-  if (altSpreads) {
-    const homeSide = altSpreads.outcomes
-      .filter((o) => o.name === "H" && o.point !== undefined && o.point !== mainSpreadPoint)
-      .sort((a, b) => (a.point ?? 0) - (b.point ?? 0));
-    const awaySide = altSpreads.outcomes
-      .filter((o) => o.name === "A" && o.point !== undefined && o.point !== mainSpreadPoint)
-      .sort((a, b) => (a.point ?? 0) - (b.point ?? 0));
-    const parts = [
-      ...homeSide.map((o) => `H${fmtSignedPoint(o.point!)}=${o.price}`),
-      ...awaySide.map((o) => `A${fmtSignedPoint(o.point!)}=${o.price}`),
-    ];
-    if (parts.length > 0) lines.push(`ALT-SP: ${parts.join(" ")}`);
-  }
-
-  const h1Line = format3Way(findMarket(payload, "h2h_3_way_h1"), "H1");
-  if (h1Line) lines.push(h1Line);
-
-  const h2Line = format3Way(findMarket(payload, "h2h_3_way_h2"), "H2");
-  if (h2Line) lines.push(h2Line);
 
   return lines.join("\n");
 }

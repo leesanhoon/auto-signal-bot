@@ -1,19 +1,18 @@
 import "./env.js";
-import { fetchEvents, getConfiguredBookmaker } from "./betting-api.js";
+import { fetchFixtures, getConfiguredBookmaker } from "./betting-api.js";
 import { extractMatches, filterUpcomingWithin, buildOddsPayload, formatWindowLabel } from "./betting.js";
 import { sendMessage, notifyError } from "./telegram.js";
 import {
   loadDailyMatchesCache,
   saveDailyMatchesCache,
   isDailyCacheValid,
-  hasOddsCache,
-  saveOddsCache,
-  cleanupExpiredOddsCache,
+  hasBeenSent,
+  markMatchesSent,
 } from "./cache.js";
 import type { MatchInfo } from "./betting-types.js";
 import { formatOddsText } from "./odds-text-format.js";
 
-const WINDOW_MINUTES = 45;
+const WINDOW_MINUTES = 1500;
 
 async function getMatches(): Promise<MatchInfo[]> {
   const cached = loadDailyMatchesCache();
@@ -23,7 +22,7 @@ async function getMatches(): Promise<MatchInfo[]> {
   }
 
   console.log("📡 Cache hết hạn/không có — lấy danh sách trận mới...");
-  const raw = await fetchEvents();
+  const raw = await fetchFixtures();
   const matches = extractMatches(raw);
   saveDailyMatchesCache(matches);
   console.log(`✓ ${matches.length} trận đấu (đã lưu cache)\n`);
@@ -33,17 +32,15 @@ async function getMatches(): Promise<MatchInfo[]> {
 async function main(): Promise<void> {
   console.log("🏆 Match Odds Scanner — Starting...\n");
 
-  cleanupExpiredOddsCache();
-
   const matches = await getMatches();
 
   const windowLabel = formatWindowLabel(WINDOW_MINUTES);
   const upcoming = filterUpcomingWithin(matches, WINDOW_MINUTES);
   console.log(`✓ ${upcoming.length} trận sắp đá trong ${windowLabel} tới\n`);
 
-  const needsFetch = upcoming.filter((m) => !hasOddsCache(m.gameId));
-  const alreadyCached = upcoming.length - needsFetch.length;
-  console.log(`✓ ${needsFetch.length} trận cần lấy kèo mới, ${alreadyCached} trận đã có cache\n`);
+  const needsFetch = upcoming.filter((m) => !hasBeenSent(m.gameId));
+  const alreadySent = upcoming.length - needsFetch.length;
+  console.log(`✓ ${needsFetch.length} trận cần lấy kèo, ${alreadySent} trận đã gửi trước đó (bỏ qua)\n`);
 
   const bookmakerKey = getConfiguredBookmaker();
   let newPayload: Awaited<ReturnType<typeof buildOddsPayload>>["payload"] = [];
@@ -54,10 +51,6 @@ async function main(): Promise<void> {
     const result = await buildOddsPayload(needsFetch);
     newPayload = result.payload;
     failures = result.failures;
-
-    for (const match of newPayload) {
-      saveOddsCache(match);
-    }
   }
 
   if (failures.length > 0) {
@@ -83,24 +76,25 @@ async function main(): Promise<void> {
     upcoming.length === 0
       ? `⏸ Không có trận nào sắp đá trong ${windowLabel} tới.`
       : newPayload.length > 0
-        ? `🏆 *${newPayload.length} trận mới lấy được kèo* (${alreadyCached} trận đã cache từ trước, trong ${windowLabel} tới):\n\n` +
+        ? `🏆 *${newPayload.length} trận mới lấy được kèo* (${alreadySent} trận đã gửi từ trước, trong ${windowLabel} tới):\n\n` +
           newPayload
             .slice()
             .sort((a, b) => a.kickoffUnix - b.kickoffUnix)
             .map((m, i) => `${i + 1}. ⏰ *${formatKickoff(m.kickoffUnix)}*\n   🏟 ${m.home} vs ${m.away}`)
             .join("\n\n")
-        : `⏸ ${upcoming.length} trận trong ${windowLabel} tới, không có trận nào mới (đã cache hết).`;
+        : `⏸ ${upcoming.length} trận trong ${windowLabel} tới, nhưng không lấy được kèo trận nào.`;
 
   await sendMessage(statusText);
 
   if (newPayload.length > 0) {
-    console.log("\n📤 Gửi từng trận mới lên Telegram (dạng text)...");
+    console.log("\n📤 Gửi từng trận lên Telegram (dạng text)...");
     for (const match of newPayload) {
       await sendMessage(`\`\`\`\n${formatOddsText(match)}\n\`\`\``);
+      markMatchesSent([match]);
     }
-    console.log(`\n✅ Đã gửi ${newPayload.length} trận đấu mới lên Telegram.`);
+    console.log(`\n✅ Đã gửi ${newPayload.length} trận đấu lên Telegram.`);
   } else {
-    console.log("\n✓ Không có trận mới cần gửi.");
+    console.log("\n✓ Không có trận cần gửi.");
   }
 }
 

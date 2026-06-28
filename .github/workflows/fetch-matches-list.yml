@@ -1,14 +1,14 @@
-name: Match Odds Scanner
+name: Fetch Matches List
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "0 */5 * * *"
   workflow_dispatch:
 
 jobs:
-  match-odds:
+  fetch-matches-list:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     environment: production
 
     steps:
@@ -32,13 +32,13 @@ jobs:
           restore-keys: |
             match-odds-cache-
 
-      - name: Run match odds scanner
+      - name: Run fetch matches list
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           API_FOOTBALL_BOOKMAKER: ${{ secrets.API_FOOTBALL_BOOKMAKER }}
-        run: npm run match-odds
+        run: npm run fetch-matches-list
 
       - name: Save data cache
         if: always()

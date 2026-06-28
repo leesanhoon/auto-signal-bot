@@ -1,27 +1,18 @@
-import { fetchEventMarketKeys, fetchEventFullOdds } from "./betting-api.js";
-import type { MatchInfo, MatchOddsPayload, OddsApiEvent } from "./betting-types.js";
+import { fetchFixtureOdds } from "./betting-api.js";
+import { extractCorrectScore } from "./correct-score-api.js";
+import type { ApiFootballFixture, MatchInfo, MatchOddsPayload } from "./betting-types.js";
 import { compactOdds } from "./odds-compact.js";
 
-/** Market cần thiết cho framework S1 — tất cả market khác đều bị loại. */
-const ESSENTIAL_MARKETS = new Set([
-  "h2h",
-  "spreads",
-  "totals",
-  "alternate_totals",
-  "alternate_spreads",
-  "btts",
-  "h2h_3_way_h1",
-  "h2h_3_way_h2",
-]);
-
 export function extractMatches(raw: unknown): MatchInfo[] {
-  const events = (raw as OddsApiEvent[] | undefined) ?? [];
-  return events.map((e) => ({
-    gameId: e.id,
-    home: e.home_team,
-    away: e.away_team,
-    kickoffUnix: Math.floor(new Date(e.commence_time).getTime() / 1000),
-  }));
+  const fixtures = (raw as { response?: ApiFootballFixture[] } | undefined)?.response ?? [];
+  return fixtures
+    .filter((f) => f.teams.home.name && f.teams.away.name)
+    .map((f) => ({
+      gameId: String(f.fixture.id),
+      home: f.teams.home.name as string,
+      away: f.teams.away.name as string,
+      kickoffUnix: Math.floor(new Date(f.fixture.date).getTime() / 1000),
+    }));
 }
 
 export function filterUpcomingWithin(
@@ -52,16 +43,19 @@ export async function buildOddsPayload(
 
   for (const match of matches) {
     try {
-      const allMarketKeys = await fetchEventMarketKeys(match.gameId);
-      const marketKeys = allMarketKeys.filter((key) => ESSENTIAL_MARKETS.has(key));
-      if (marketKeys.length === 0) {
-        throw new Error("Không dò được market nào từ bookmaker");
+      const fixtureOdds = await fetchFixtureOdds(match.gameId);
+      if (!fixtureOdds || fixtureOdds.bets.length === 0) {
+        throw new Error("Không có bookmaker nào cung cấp odds cho trận này");
       }
 
-      const rawOdds = (await fetchEventFullOdds(match.gameId, marketKeys)) as OddsApiEvent;
-      const odds = compactOdds(rawOdds, match);
-      payload.push({ ...match, odds });
-      console.log(`  ✓ Lấy kèo (${marketKeys.length} market): ${match.home} vs ${match.away}`);
+      const odds = compactOdds(fixtureOdds.bets, fixtureOdds.updateIso, match);
+      const correctScore = extractCorrectScore(fixtureOdds.bets);
+
+      payload.push({ ...match, odds, ...(correctScore.length > 0 ? { correctScore } : {}) });
+      console.log(
+        `  ✓ Lấy kèo (${odds.markets.length} market${correctScore.length > 0 ? " + Correct Score" : ""}) ` +
+          `từ ${fixtureOdds.bookmakerName}: ${match.home} vs ${match.away}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`  ⚠ Lỗi lấy kèo cho ${match.home} vs ${match.away}: ${message}`);

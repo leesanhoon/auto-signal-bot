@@ -1,54 +1,76 @@
-function getOddsApiConfig() {
-  const apiKey = process.env.ODDS_API_KEY;
-  const sport = process.env.ODDS_API_SPORT ?? "soccer_fifa_world_cup";
-  const region = process.env.ODDS_API_REGION ?? "eu";
-  const bookmaker = process.env.ODDS_API_BOOKMAKER ?? "onexbet";
+const BASE_URL = "https://v3.football.api-sports.io";
+
+export type ApiFootballBetValue = { value: string; odd: string };
+export type ApiFootballBet = { id: number; name: string; values: ApiFootballBetValue[] };
+
+function getConfig() {
+  const apiKey = process.env.API_FOOTBALL_KEY;
+  const bookmaker = process.env.API_FOOTBALL_BOOKMAKER ?? "1xBet";
+  // 1 = FIFA World Cup. Lọc ở client (không gửi season= qua query) vì free plan
+  // chặn truy vấn /fixtures có kèm season hiện tại (chỉ cho phép season 2022-2024).
+  const leagueId = Number(process.env.API_FOOTBALL_LEAGUE ?? "1");
   if (!apiKey) {
-    throw new Error("ODDS_API_KEY environment variable is required");
+    throw new Error("API_FOOTBALL_KEY environment variable is required");
   }
-  return { apiKey, sport, region, bookmaker };
+  return { apiKey, bookmaker, leagueId };
 }
 
 export function getConfiguredBookmaker(): string {
-  return getOddsApiConfig().bookmaker;
+  return getConfig().bookmaker;
 }
 
-async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url);
+async function fetchJson(path: string): Promise<any> {
+  const { apiKey } = getConfig();
+  const response = await fetch(`${BASE_URL}${path}`, {
+    headers: { "x-apisports-key": apiKey },
+  });
   const text = await response.text();
 
-  if (!response.ok) {
-    throw new Error(`The Odds API request failed (${response.status}): ${text.slice(0, 300)}`);
-  }
-
+  let json: any;
   try {
-    return JSON.parse(text);
+    json = JSON.parse(text);
   } catch {
-    throw new Error(`The Odds API returned non-JSON response: ${text.slice(0, 300)}`);
+    throw new Error(`API-Football trả về non-JSON (${response.status}): ${text.slice(0, 300)}`);
   }
+
+  const hasErrors = Array.isArray(json.errors) ? json.errors.length > 0 : Object.keys(json.errors ?? {}).length > 0;
+  if (!response.ok || hasErrors) {
+    throw new Error(`API-Football lỗi (${response.status}): ${JSON.stringify(json.errors ?? json)}`);
+  }
+  return json;
 }
 
-/** Danh sách trận đấu (không cần markets/regions, không tốn quota odds). */
-export async function fetchEvents(): Promise<unknown> {
-  const { apiKey, sport } = getOddsApiConfig();
-  const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/?apiKey=${apiKey}`;
-  return fetchJson(url);
+function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
-/** Dò toàn bộ market mà bookmaker đang cấu hình cung cấp cho 1 trận cụ thể. */
-export async function fetchEventMarketKeys(eventId: string): Promise<string[]> {
-  const { apiKey, sport, bookmaker } = getOddsApiConfig();
-  const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/markets/?bookmakers=${bookmaker}&apiKey=${apiKey}`;
-  const raw = (await fetchJson(url)) as {
-    bookmakers?: Array<{ key: string; markets?: Array<{ key: string }> }>;
-  };
-  const bm = raw.bookmakers?.find((b) => b.key === bookmaker);
-  return bm?.markets?.map((m) => m.key) ?? [];
+/**
+ * Danh sách fixtures trong ngày hôm nay, lọc theo league cấu hình (mặc định World Cup).
+ * Không gửi `league=`/`season=` qua query — free plan chặn filter theo season hiện tại,
+ * nên phải lấy full /fixtures?date= rồi lọc `league.id` ở client.
+ */
+export async function fetchFixtures(dateStr: string = todayDateString()): Promise<unknown> {
+  const { leagueId } = getConfig();
+  const json = await fetchJson(`/fixtures?date=${dateStr}`);
+  const all = (json.response ?? []) as Array<{ league: { id: number } }>;
+  return { response: all.filter((f) => f.league.id === leagueId) };
 }
 
-/** Lấy nguyên response odds cho tất cả market đã dò được — không cắt/lọc field nào. */
-export async function fetchEventFullOdds(eventId: string, marketKeys: string[]): Promise<unknown> {
-  const { apiKey, sport, region, bookmaker } = getOddsApiConfig();
-  const url = `https://api.the-odds-api.com/v4/sports/${sport}/events/${eventId}/odds/?regions=${region}&markets=${marketKeys.join(",")}&oddsFormat=decimal&bookmakers=${bookmaker}&apiKey=${apiKey}`;
-  return fetchJson(url);
+export type FixtureOdds = { bookmakerName: string; bets: ApiFootballBet[]; updateIso?: string };
+
+/**
+ * Toàn bộ market (kể cả "Exact Score") cho 1 fixture, từ bookmaker đã cấu hình
+ * (ưu tiên API_FOOTBALL_BOOKMAKER, mặc định "1xBet"); fallback bookmaker đầu
+ * tiên có data nếu bookmaker ưu tiên không cung cấp trận này.
+ */
+export async function fetchFixtureOdds(fixtureId: string): Promise<FixtureOdds | null> {
+  const { bookmaker } = getConfig();
+  const json = await fetchJson(`/odds?fixture=${fixtureId}`);
+  const entry = json.response?.[0] as { update?: string; bookmakers?: Array<{ name: string; bets: ApiFootballBet[] }> } | undefined;
+  const allBookmakers = entry?.bookmakers ?? [];
+  if (allBookmakers.length === 0) return null;
+
+  const preferred = allBookmakers.find((b) => b.name?.toLowerCase() === bookmaker.toLowerCase());
+  const chosen = preferred ?? allBookmakers[0];
+  return { bookmakerName: chosen.name, bets: chosen.bets, updateIso: entry?.update };
 }
