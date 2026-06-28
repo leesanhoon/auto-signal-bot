@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
 
 function getConfig() {
   const url = process.env.SUPABASE_URL;
@@ -14,7 +15,7 @@ let client: ReturnType<typeof createClient> | undefined;
 export function getDb() {
   if (!client) {
     const { url, key } = getConfig();
-    client = createClient(url, key);
+    client = createClient(url, key, { realtime: { transport: ws as any } });
   }
   return client;
 }
