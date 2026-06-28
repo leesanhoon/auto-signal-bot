@@ -4,20 +4,20 @@
     "description": "Automated signal scanner — TradingView chart analysis and sports match odds, delivered via Telegram",
     "type": "module",
     "scripts": {
-        "start": "tsx src/index.ts",
+        "start": "tsx src/charts/index.ts",
         "build": "tsc",
-        "analyze": "tsx src/index.ts",
-        "test-analyze": "tsx src/test-analyze.ts",
-        "match-odds": "tsx src/betting-index.ts",
-        "periodic-odds": "tsx src/periodic-odds-index.ts",
-        "fetch-matches-list": "tsx src/fetch-matches-list-index.ts",
-        "lottery": "tsx src/lottery-index.ts",
-        "lottery-backfill": "tsx src/lottery-backfill-index.ts",
-        "lottery-migrate": "tsx src/lottery-migrate-index.ts"
+        "analyze": "tsx src/charts/index.ts",
+        "test-analyze": "tsx src/charts/test-analyze.ts",
+        "match-odds": "tsx src/betting/betting-index.ts",
+        "periodic-odds": "tsx src/betting/periodic-odds-index.ts",
+        "fetch-matches-list": "tsx src/betting/fetch-matches-list-index.ts",
+        "lottery": "tsx src/lottery/lottery-index.ts",
+        "lottery-backfill": "tsx src/lottery/lottery-backfill-index.ts"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.105.0",
         "@google/genai": "^2.9.0",
+        "@supabase/supabase-js": "^2.108.2",
         "playwright": "^1.49.0"
     },
     "devDependencies": {

@@ -1,4 +1,4 @@
-import type { ChartConfig } from "./types.js";
+import type { ChartConfig } from "../shared/types.js";
 
 function chart(name: string, symbol: string): ChartConfig {
   return { name: `${name} H4`, symbol, interval: "240", description: `${name} — H4` };

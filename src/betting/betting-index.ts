@@ -1,6 +1,6 @@
-import "./env.js";
+import "../shared/env.js";
 import { runOddsCheck } from "./odds-runner.js";
-import { notifyError } from "./telegram.js";
+import { notifyError } from "../shared/telegram.js";
 
 const WINDOW_MINUTES = 30;
 

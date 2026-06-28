@@ -1,7 +1,7 @@
-import "./env.js";
+import "../shared/env.js";
 import { captureAllCharts } from "./screenshot.js";
 import { analyzeAllCharts, confirmHighConfidenceSetups } from "./analyzer.js";
-import { sendAllAnalyses, notifyError } from "./telegram.js";
+import { sendAllAnalyses, notifyError } from "../shared/telegram.js";
 
 async function main(): Promise<void> {
   const startTime = Date.now();

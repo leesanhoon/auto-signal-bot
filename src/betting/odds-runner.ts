@@ -1,6 +1,6 @@
 import { fetchFixtures, getConfiguredBookmaker } from "./betting-api.js";
 import { extractMatches, filterUpcomingWithin, buildOddsPayload, formatWindowLabel } from "./betting.js";
-import { sendMessage } from "./telegram.js";
+import { sendMessage } from "../shared/telegram.js";
 import {
   loadDailyMatchesCache,
   saveDailyMatchesCache,
@@ -13,7 +13,7 @@ import type { MatchInfo } from "./betting-types.js";
 import { formatOddsText, formatMainOddsSummary } from "./odds-text-format.js";
 
 async function getMatches(): Promise<MatchInfo[]> {
-  const cached = loadDailyMatchesCache();
+  const cached = await loadDailyMatchesCache();
   if (isDailyCacheValid(cached)) {
     console.log(`📦 Dùng danh sách trận từ cache (${cached!.matches.length} trận)\n`);
     return cached!.matches;
@@ -22,7 +22,7 @@ async function getMatches(): Promise<MatchInfo[]> {
   console.log("📡 Cache hết hạn/không có — lấy danh sách trận mới...");
   const raw = await fetchFixtures();
   const matches = extractMatches(raw);
-  saveDailyMatchesCache(matches);
+  await saveDailyMatchesCache(matches);
   console.log(`✓ ${matches.length} trận đấu (đã lưu cache)\n`);
   return matches;
 }
@@ -68,7 +68,11 @@ export async function runOddsCheck(config: OddsCheckConfig): Promise<void> {
   // "final": mỗi trận chỉ lấy lại kèo tối đa 1 lần ngay trước kickoff.
   // "periodic": luôn lấy kèo mới nhất cho mọi trận còn trong window, kể cả đã gửi ở lần chạy trước.
   const needsFetch =
-    config.stage === "final" ? upcoming.filter((m) => !hasBeenSent(m.gameId, config.stage)) : upcoming;
+    config.stage === "final"
+      ? (
+          await Promise.all(upcoming.map(async (m) => ((await hasBeenSent(m.gameId, config.stage)) ? null : m)))
+        ).filter((m): m is MatchInfo => m !== null)
+      : upcoming;
   const alreadySent = upcoming.length - needsFetch.length;
   console.log(`✓ ${needsFetch.length} trận cần lấy kèo, ${alreadySent} trận đã gửi trước đó (bỏ qua)\n`);
 
@@ -116,7 +120,7 @@ export async function runOddsCheck(config: OddsCheckConfig): Promise<void> {
     for (const match of newPayload) {
       await sendMessage(`\`\`\`\n${formatOddsText(match)}\n\`\`\``);
       if (config.stage === "final") {
-        markMatchesSent([match], config.stage);
+        await markMatchesSent([match], config.stage);
       }
     }
     console.log(`\n✅ Đã gửi ${newPayload.length} trận đấu lên Telegram.`);

@@ -1,6 +1,6 @@
-import "./env.js";
+import "../shared/env.js";
 import { runLotteryBackfill } from "./lottery-backfill-runner.js";
-import { notifyError } from "./telegram.js";
+import { notifyError } from "../shared/telegram.js";
 
 const days = Number(process.argv[2] ?? process.env.LOTTERY_BACKFILL_DAYS ?? "365");
 

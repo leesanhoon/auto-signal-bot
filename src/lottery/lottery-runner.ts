@@ -1,8 +1,8 @@
 import { fetchDayPage, parseWeekdayPage } from "./lottery-scraper.js";
-import { appendWeekdayHistory, getLastSentDate, loadWeekdayHistory, setLastSentDate } from "./lottery-cache.js";
+import { appendWeekdayHistory, getLastSentDate, loadWeekdayHistory, setLastSentDate } from "./lottery-repository.js";
 import { buildLotteryDataset, lotteryFilename } from "./lottery-format.js";
 import { WEEKDAY_LABELS } from "./lottery-schedule.js";
-import { sendDocument, sendMessage } from "./telegram.js";
+import { sendDocument, sendMessage } from "../shared/telegram.js";
 import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
 
 const REGIONS: LotteryRegion[] = ["mien-bac", "mien-trung", "mien-nam"];
@@ -29,7 +29,7 @@ export async function runLotteryCheck(): Promise<void> {
   const tomorrowLabel = WEEKDAY_LABELS[tomorrow.weekday];
   console.log(`🎰 Lottery History Scanner — hôm nay ${todayLabel} ${today.dateStr}, chuẩn bị data cho ${tomorrowLabel} ${tomorrow.dateStr}\n`);
 
-  const historyToday = loadWeekdayHistory(today.weekday);
+  const historyToday = await loadWeekdayHistory(today.weekday);
   const regionsAlreadyToday = new Set(historyToday.filter((r) => r.date === today.dateStr).map((r) => r.region));
 
   const todayRecords: LotteryDrawRecord[] = [];
@@ -58,14 +58,14 @@ export async function runLotteryCheck(): Promise<void> {
     await sendMessage(`⚠️ [Lottery] Lấy dữ liệu hôm nay thất bại:\n${failures.join("\n").slice(0, 1000)}`);
   }
 
-  appendWeekdayHistory(today.weekday, todayRecords);
+  await appendWeekdayHistory(today.weekday, todayRecords);
 
-  if (getLastSentDate() === today.dateStr) {
+  if ((await getLastSentDate()) === today.dateStr) {
     console.log(`\n✓ Hôm nay (${todayLabel} ${today.dateStr}) đã gửi file cho ${tomorrowLabel} rồi — không gửi lại Telegram.`);
     return;
   }
 
-  const historyForTomorrow = loadWeekdayHistory(tomorrow.weekday);
+  const historyForTomorrow = await loadWeekdayHistory(tomorrow.weekday);
   if (historyForTomorrow.length === 0) {
     await sendMessage(`🎰 *Lottery History Scanner*\nChưa có dữ liệu lịch sử cho ${tomorrowLabel} (${tomorrow.dateStr}) — bỏ qua, không gửi file.`);
     console.log("\n✓ Không có dữ liệu để gửi.");
@@ -80,7 +80,7 @@ export async function runLotteryCheck(): Promise<void> {
     filename,
     `🎰 Chuẩn bị cho ${tomorrowLabel} ${tomorrow.dateStr} — cả 3 miền (${historyForTomorrow.length} kỳ tích lũy)`,
   );
-  setLastSentDate(today.dateStr);
+  await setLastSentDate(today.dateStr);
   console.log(`✓ Đã gửi file ${filename} (${historyForTomorrow.length} bản ghi, cả 3 miền, cho ${tomorrowLabel}).`);
 
   console.log("\n✅ Hoàn tất.");

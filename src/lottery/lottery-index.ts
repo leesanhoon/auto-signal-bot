@@ -1,6 +1,6 @@
-import "./env.js";
+import "../shared/env.js";
 import { runLotteryCheck } from "./lottery-runner.js";
-import { notifyError } from "./telegram.js";
+import { notifyError } from "../shared/telegram.js";
 
 runLotteryCheck().catch(async (error) => {
   console.error("Fatal error:", error);

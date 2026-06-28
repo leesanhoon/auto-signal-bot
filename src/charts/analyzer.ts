@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
-import type { ScreenshotResult, AnalysisResult, TradeSetup, PairSummary } from "./types.js";
+import type { ScreenshotResult, AnalysisResult, TradeSetup, PairSummary } from "../shared/types.js";
 
 const SYSTEM_PROMPT = `Act as a professional price action trader who follows Bob Volman’s methodology (“Understanding Price Action”) and exclusively analyzes H4 charts with EMA 20. For each instrument provided, deliver a structured report comprising the following sections:
 

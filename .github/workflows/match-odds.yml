@@ -24,25 +24,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Restore data cache
-        uses: actions/cache/restore@v4
-        with:
-          path: data
-          key: match-odds-cache-${{ github.run_id }}
-          restore-keys: |
-            match-odds-cache-
-
       - name: Run match odds scanner
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           API_FOOTBALL_BOOKMAKER: ${{ secrets.API_FOOTBALL_BOOKMAKER }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: npm run match-odds
-
-      - name: Save data cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: data
-          key: match-odds-cache-${{ github.run_id }}

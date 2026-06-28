@@ -1,7 +1,7 @@
-import "./env.js";
+import "../shared/env.js";
 import { readdir, readFile } from "fs/promises";
 import { join, extname } from "path";
-import type { ScreenshotResult, ChartConfig } from "./types.js";
+import type { ScreenshotResult, ChartConfig } from "../shared/types.js";
 import { analyzeAllCharts } from "./analyzer.js";
 
 const TEST_DIR = join(process.cwd(), "test-charts");

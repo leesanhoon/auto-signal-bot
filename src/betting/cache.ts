@@ -1,10 +1,5 @@
-import fs from "fs";
-import path from "path";
+import { getDb } from "../shared/db.js";
 import type { MatchInfo } from "./betting-types.js";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const MATCHES_CACHE_FILE = path.join(DATA_DIR, "matches-list.json");
-const SENT_MATCHES_FILE = path.join(DATA_DIR, "sent-matches.json");
 
 /** Coi như trận đã đá xong, có thể xóa khỏi danh sách "đã gửi". */
 const SENT_MARKER_GRACE_SECONDS = 2 * 60 * 60;
@@ -14,19 +9,24 @@ const MATCHES_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type MatchesCache = { fetchedAtUnix: number; matches: MatchInfo[] };
 
-export function loadDailyMatchesCache(): MatchesCache | null {
-  try {
-    const raw = fs.readFileSync(MATCHES_CACHE_FILE, "utf-8");
-    return JSON.parse(raw) as MatchesCache;
-  } catch {
-    return null;
-  }
+export async function loadDailyMatchesCache(): Promise<MatchesCache | null> {
+  const { data, error } = await (getDb().from("matches_cache") as any)
+    .select("fetched_at, matches")
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { fetchedAtUnix: Math.floor(new Date(data.fetched_at as string).getTime() / 1000), matches: data.matches as MatchInfo[] };
 }
 
-export function saveDailyMatchesCache(matches: MatchInfo[], now: number = Date.now()): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const cache: MatchesCache = { fetchedAtUnix: Math.floor(now / 1000), matches };
-  fs.writeFileSync(MATCHES_CACHE_FILE, JSON.stringify(cache, null, 2), "utf-8");
+/** Bảng chỉ giữ đúng 1 dòng (lần fetch mới nhất) — xoá hết dòng cũ trước khi ghi dòng mới. */
+export async function saveDailyMatchesCache(matches: MatchInfo[], now: number = Date.now()): Promise<void> {
+  const db = getDb();
+  const { error: deleteError } = await (db.from("matches_cache") as any).delete().gte("id", 0);
+  if (deleteError) throw new Error(`saveDailyMatchesCache cleanup failed: ${deleteError.message}`);
+
+  const { error } = await (db.from("matches_cache") as any).insert({ fetched_at: new Date(now).toISOString(), matches });
+  if (error) throw new Error(`saveDailyMatchesCache failed: ${error.message}`);
 }
 
 export function isDailyCacheValid(cache: MatchesCache | null, now: number = Date.now()): boolean {
@@ -40,32 +40,31 @@ export function isDailyCacheValid(cache: MatchesCache | null, now: number = Date
  * 1 lần/giai đoạn — tổng cộng tối đa 2 lần gửi Telegram/trận.
  */
 export type SentStage = "periodic" | "final";
-type SentMatchRecord = { gameId: string; kickoffUnix: number; stage: SentStage };
 
-function loadSentMatches(now: number = Date.now()): SentMatchRecord[] {
-  let records: SentMatchRecord[];
-  try {
-    records = JSON.parse(fs.readFileSync(SENT_MATCHES_FILE, "utf-8")) as SentMatchRecord[];
-  } catch {
-    return [];
-  }
+export async function hasBeenSent(gameId: string, stage: SentStage): Promise<boolean> {
+  const { data, error } = await getDb()
+    .from("sent_matches")
+    .select("game_id")
+    .eq("game_id", gameId)
+    .eq("stage", stage)
+    .maybeSingle();
+  return !error && data !== null;
+}
+
+export async function markMatchesSent(matches: MatchInfo[], stage: SentStage, now: number = Date.now()): Promise<void> {
+  const db = getDb();
   const nowSeconds = now / 1000;
-  return records.filter((r) => r.kickoffUnix + SENT_MARKER_GRACE_SECONDS >= nowSeconds);
-}
 
-export function hasBeenSent(gameId: string, stage: SentStage): boolean {
-  return loadSentMatches().some((r) => r.gameId === gameId && r.stage === stage);
-}
+  // Tự dọn dần mỗi lần gọi — xoá dòng đã qua grace period, tránh bảng phình vô hạn.
+  const { error: pruneError } = await (db.from("sent_matches") as any).delete().lt("kickoff_unix", nowSeconds - SENT_MARKER_GRACE_SECONDS);
+  if (pruneError) throw new Error(`markMatchesSent prune failed: ${pruneError.message}`);
 
-export function markMatchesSent(matches: MatchInfo[], stage: SentStage, now: number = Date.now()): void {
   if (matches.length === 0) return;
-  const existing = loadSentMatches(now);
-  const newRecords = matches.map((m) => ({ gameId: m.gameId, kickoffUnix: m.kickoffUnix, stage }));
-  const merged = [
-    ...existing,
-    ...newRecords.filter((n) => !existing.some((e) => e.gameId === n.gameId && e.stage === n.stage)),
-  ];
+  const rows = matches
+    .filter((m) => m.kickoffUnix + SENT_MARKER_GRACE_SECONDS >= nowSeconds)
+    .map((m) => ({ game_id: m.gameId, kickoff_unix: m.kickoffUnix, stage, sent_at: new Date(now).toISOString() }));
+  if (rows.length === 0) return;
 
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(SENT_MATCHES_FILE, JSON.stringify(merged), "utf-8");
+  const { error } = await (db.from("sent_matches") as any).upsert(rows, { onConflict: "game_id,stage" });
+  if (error) throw new Error(`markMatchesSent failed: ${error.message}`);
 }

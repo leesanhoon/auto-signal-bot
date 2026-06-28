@@ -2,7 +2,7 @@ import { chromium, type BrowserContext } from "playwright";
 import { mkdir } from "fs/promises";
 import { join } from "path";
 import { CHARTS, buildChartHtml } from "./charts.config.js";
-import type { ScreenshotResult } from "./types.js";
+import type { ScreenshotResult } from "../shared/types.js";
 
 const SCREENSHOT_DIR = join(process.cwd(), "screenshots");
 const VIEWPORT = { width: 1400, height: 900 };

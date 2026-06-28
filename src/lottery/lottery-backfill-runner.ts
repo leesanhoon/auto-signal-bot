@@ -1,5 +1,5 @@
 import { fetchDayPage, parseWeekdayPage } from "./lottery-scraper.js";
-import { appendWeekdayHistory, loadWeekdayHistory } from "./lottery-cache.js";
+import { appendWeekdayHistory, loadWeekdayHistory } from "./lottery-repository.js";
 import type { LotteryRegion } from "./lottery-types.js";
 
 const REGIONS: LotteryRegion[] = ["mien-bac", "mien-trung", "mien-nam"];
@@ -27,10 +27,11 @@ export async function runLotteryBackfill(days: number): Promise<void> {
   console.log(`🎰 Lottery Backfill — ${days} ngày gần nhất, cả 3 miền\n`);
 
   const weekdayKeyCache = new Map<number, Set<string>>();
-  const existingKeysFor = (weekday: number): Set<string> => {
+  const existingKeysFor = async (weekday: number): Promise<Set<string>> => {
     let set = weekdayKeyCache.get(weekday);
     if (!set) {
-      set = new Set(loadWeekdayHistory(weekday).map((r) => `${r.date}|${r.region}`));
+      const history = await loadWeekdayHistory(weekday);
+      set = new Set(history.map((r) => `${r.date}|${r.region}`));
       weekdayKeyCache.set(weekday, set);
     }
     return set;
@@ -42,7 +43,7 @@ export async function runLotteryBackfill(days: number): Promise<void> {
 
   for (let offset = 0; offset < days; offset++) {
     const { dateStr, weekday } = vnDateNDaysAgo(offset);
-    const existingKeys = existingKeysFor(weekday);
+    const existingKeys = await existingKeysFor(weekday);
 
     for (const region of REGIONS) {
       const key = `${dateStr}|${region}`;
@@ -54,7 +55,7 @@ export async function runLotteryBackfill(days: number): Promise<void> {
       try {
         const html = await fetchDayPage(region, dateStr);
         const records = parseWeekdayPage(html, region, weekday).filter((r) => r.prizes.db !== "");
-        appendWeekdayHistory(weekday, records);
+        await appendWeekdayHistory(weekday, records);
         existingKeys.add(key);
         fetched++;
       } catch (error) {

@@ -24,23 +24,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Restore data cache
-        uses: actions/cache/restore@v4
-        with:
-          path: data
-          key: lottery-cache-${{ github.run_id }}
-          restore-keys: |
-            lottery-cache-
-
       - name: Run lottery history scanner
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: npm run lottery
-
-      - name: Save data cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: data
-          key: lottery-cache-${{ github.run_id }}
