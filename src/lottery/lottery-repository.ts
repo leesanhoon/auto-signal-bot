@@ -7,7 +7,8 @@ const HISTORY_RETENTION_DAYS = 1095;
 /** Đọc toàn bộ lịch sử (cả 3 miền) của đúng 1 thứ trong tuần. */
 export async function loadWeekdayHistory(weekday: number): Promise<LotteryDrawRecord[]> {
   const { data, error } = await (getDb().from("lottery_draws") as any).select("date, weekday, region, province, prizes").eq("weekday", weekday);
-  if (error || !data) return [];
+  if (error) throw new Error(`loadWeekdayHistory failed for weekday ${weekday}: ${error.message}`);
+  if (!data) return [];
   return data as LotteryDrawRecord[];
 }
 

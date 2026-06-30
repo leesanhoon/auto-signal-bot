@@ -19,23 +19,23 @@ export const CHARTS: ChartConfig[] = [
   chart("NZD/USD", "OANDA:NZDUSD"),
 
   // Cross pairs — good price action patterns
-  chart("EUR/GBP", "OANDA:EURGBP"),
-  chart("EUR/JPY", "OANDA:EURJPY"),
-  chart("GBP/JPY", "OANDA:GBPJPY"),
-  chart("AUD/JPY", "OANDA:AUDJPY"),
-  chart("EUR/AUD", "OANDA:EURAUD"),
-  chart("GBP/AUD", "OANDA:GBPAUD"),
-  chart("EUR/CAD", "OANDA:EURCAD"),
+  // chart("EUR/GBP", "OANDA:EURGBP"),
+  // chart("EUR/JPY", "OANDA:EURJPY"),
+  // chart("GBP/JPY", "OANDA:GBPJPY"),
+  // chart("AUD/JPY", "OANDA:AUDJPY"),
+  // chart("EUR/AUD", "OANDA:EURAUD"),
+  // chart("GBP/AUD", "OANDA:GBPAUD"),
+  // chart("EUR/CAD", "OANDA:EURCAD"),
 
   // Additional volatile crosses — strong momentum setups
-  chart("CAD/JPY", "OANDA:CADJPY"),
-  chart("CHF/JPY", "OANDA:CHFJPY"),
-  chart("GBP/CHF", "OANDA:GBPCHF"),
-  chart("EUR/NZD", "OANDA:EURNZD"),
-  chart("GBP/NZD", "OANDA:GBPNZD"),
-  chart("NZD/JPY", "OANDA:NZDJPY"),
-  chart("AUD/CAD", "OANDA:AUDCAD"),
-  chart("AUD/NZD", "OANDA:AUDNZD"),
+  // chart("CAD/JPY", "OANDA:CADJPY"),
+  // chart("CHF/JPY", "OANDA:CHFJPY"),
+  // chart("GBP/CHF", "OANDA:GBPCHF"),
+  // chart("EUR/NZD", "OANDA:EURNZD"),
+  // chart("GBP/NZD", "OANDA:GBPNZD"),
+  // chart("NZD/JPY", "OANDA:NZDJPY"),
+  // chart("AUD/CAD", "OANDA:AUDCAD"),
+  // chart("AUD/NZD", "OANDA:AUDNZD"),
 ];
 
 export function buildChartHtml(c: ChartConfig): string {
