@@ -15,6 +15,9 @@ export type MatchAiAnalysis = {
   keyPoints: string[];
   risks: string[];
   summary: string;
+  verifiedConfirmed?: boolean;
+  verifiedConfidence?: number;
+  verifiedComment?: string;
 };
 
 export type MatchInfo = {

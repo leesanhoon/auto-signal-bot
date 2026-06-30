@@ -160,10 +160,10 @@ function buildCopyableSetup(setup: TradeSetup): string {
 }
 
 function buildConfirmationLine(setup: TradeSetup): string {
-  if (setup.claudeConfirmed === true) {
-    return `✅ *Đã xác nhận bởi Claude Sonnet 4.6* (${setup.claudeConfidence}%)${setup.claudeComment ? ` — ${setup.claudeComment}` : ""}`;
+  if (setup.verifiedConfirmed === true) {
+    return `✅ *Đã xác nhận bởi Gemini 2.5 Pro* (${setup.verifiedConfidence}%)${setup.verifiedComment ? ` — ${setup.verifiedComment}` : ""}`;
   }
-  return `⚠️ _Chưa xác nhận bởi Claude Sonnet 4.6 (lỗi xác minh, chỉ dựa trên Gemini)_`;
+  return `⚠️ _Chưa xác nhận bởi Gemini 2.5 Pro (lỗi xác minh, chỉ dựa trên Gemini 3.5 Flash)_`;
 }
 
 function findScreenshot(pair: string, screenshots: ScreenshotResult[]): ScreenshotResult | undefined {
@@ -186,9 +186,9 @@ export async function sendAllAnalyses(result: AnalysisResult): Promise<void> {
   }
 
   const geminiHighConfSetups = result.setups.filter((s) => (s.confidence ?? 0) > 80);
-  const rejectedByClaude = geminiHighConfSetups.filter((s) => s.claudeConfirmed === false);
-  const highConfSetups = geminiHighConfSetups.filter((s) => s.claudeConfirmed !== false);
-  const headerSuffix = geminiHighConfSetups.length > 0 ? " (>80%, đã đối chiếu Claude)" : " (>80%)";
+  const rejectedByVerified = geminiHighConfSetups.filter((s) => s.verifiedConfirmed === false);
+  const highConfSetups = geminiHighConfSetups.filter((s) => s.verifiedConfirmed !== false);
+  const headerSuffix = geminiHighConfSetups.length > 0 ? " (>80%, đã đối chiếu Gemini Pro)" : " (>80%)";
 
   // Header
   await sendMessage(
@@ -199,7 +199,7 @@ export async function sendAllAnalyses(result: AnalysisResult): Promise<void> {
     const reason =
       geminiHighConfSetups.length === 0
         ? `Gemini không tìm thấy setup nào > 80% (chỉ có ${result.setups.length} setup ở mức ≥70%).`
-        : `Gemini tìm thấy ${geminiHighConfSetups.length} setup > 80%, nhưng Claude đã *từ chối* tất cả ${rejectedByClaude.length} setup đó sau khi đối chiếu độc lập.`;
+        : `Gemini tìm thấy ${geminiHighConfSetups.length} setup > 80%, nhưng Gemini Pro đã *từ chối* tất cả ${rejectedByVerified.length} setup đó sau khi đối chiếu độc lập.`;
     await sendMessage(
       `⏸ ${reason}\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
     );

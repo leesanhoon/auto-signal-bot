@@ -1,5 +1,6 @@
 type TelegramUpdate = {
   message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
 };
 
 type TelegramMessage = {
@@ -8,6 +9,12 @@ type TelegramMessage = {
   chat: {
     id: number;
   };
+};
+
+type TelegramCallbackQuery = {
+  id: string;
+  data?: string;
+  message?: TelegramMessage;
 };
 
 type WorkflowConfig = {
@@ -22,63 +29,46 @@ type WorkflowDispatchResult = {
   html_url?: string;
 };
 
-const COMMANDS: Record<string, WorkflowConfig> = {
-  "/analyze": {
-    file: "analyze.yml",
-    description: "workflow phân tích biểu đồ",
-  },
-  "/match_odds": {
-    file: "match-odds.yml",
-    description: "workflow quét kèo bóng đá",
-  },
-  "/fetch_matches": {
-    file: "fetch-matches-list.yml",
-    description: "workflow cập nhật danh sách trận đấu",
-  },
-  "/lottery": {
-    file: "lottery.yml",
-    description: "workflow quét kết quả xổ số",
-  },
-  "/lottery_predict": {
-    file: "lottery-predict.yml",
-    description: "workflow dự đoán xổ số",
-  },
-  "/lottery_verify": {
-    file: "lottery-verify.yml",
-    description: "workflow xác minh kết quả xổ số theo miền",
-    parseInputs: (args) => {
-      const region = args[0]?.trim().toLowerCase();
-      const allowedRegions = new Set(["mien-bac", "mien-trung", "mien-nam"]);
+type InlineKeyboardMarkup = {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+};
 
-      if (!region || !allowedRegions.has(region)) {
-        throw new Error("Cách dùng: /lottery_verify mien-bac|mien-trung|mien-nam");
+type CallbackAction =
+  | { type: "menu"; menu: "main" | "lottery_verify" }
+  | { type: "run"; command: keyof typeof COMMANDS; args: string[] };
+
+const VERIFY_REGIONS = new Set(["mien-bac", "mien-trung", "mien-nam"]);
+
+const COMMANDS = {
+  analyze: {
+    file: "analyze.yml",
+    description: "phân tích chart",
+  },
+  match_odds: {
+    file: "match-odds.yml",
+    description: "quét kèo bóng đá",
+  },
+  lottery: {
+    file: "lottery.yml",
+    description: "quét kết quả xổ số",
+  },
+  lottery_predict: {
+    file: "lottery-predict.yml",
+    description: "dự đoán xổ số",
+  },
+  lottery_verify: {
+    file: "lottery-verify.yml",
+    description: "xác minh kết quả xổ số theo miền",
+    parseInputs: (args: string[]) => {
+      const region = args[0]?.trim().toLowerCase();
+      if (!region || !VERIFY_REGIONS.has(region)) {
+        throw new Error("Miền không hợp lệ.");
       }
 
       return { region };
     },
   },
-  "/lottery_backfill": {
-    file: "lottery-backfill.yml",
-    description: "workflow bổ sung lịch sử xổ số theo số ngày",
-    parseInputs: (args) => {
-      const rawDays = args[0]?.trim();
-      if (!rawDays) {
-        return { days: "1095" };
-      }
-
-      if (!/^\d+$/.test(rawDays)) {
-        throw new Error("Cách dùng: /lottery_backfill [days]");
-      }
-
-      const days = Number.parseInt(rawDays, 10);
-      if (days < 1 || days > 3650) {
-        throw new Error("days phải nằm trong khoảng 1-3650");
-      }
-
-      return { days: String(days) };
-    },
-  },
-};
+} satisfies Record<string, WorkflowConfig>;
 
 function getEnv(name: string): string {
   const value = Deno.env.get(name);
@@ -88,46 +78,124 @@ function getEnv(name: string): string {
   return value;
 }
 
-function buildHelpMessage(): string {
-  const lines = [
-    "Các lệnh hỗ trợ:",
-    "/help - Xem danh sách lệnh",
-    "/analyze - Phân tích biểu đồ",
-    "/match_odds - Quét kèo bóng đá",
-    "/fetch_matches - Cập nhật danh sách trận đấu",
-    "/lottery - Quét kết quả xổ số",
-    "/lottery_predict - Dự đoán xổ số",
-    "/lottery_verify mien-nam - Xác minh kết quả theo miền Nam",
-    "/lottery_verify mien-trung - Xác minh kết quả theo miền Trung",
-    "/lottery_verify mien-bac - Xác minh kết quả theo miền Bắc",
-    "/lottery_backfill [days] - Bổ sung lịch sử, mặc định 1095 ngày",
-  ];
-
-  return lines.join("\n");
+function buildMainMenuMessage(note?: string): string {
+  return note ?? "Chọn tác vụ bên dưới:";
 }
 
-function parseCommand(text: string): { command: string; args: string[] } {
-  const [rawCommand = "", ...args] = text.trim().split(/\s+/);
-  const command = rawCommand.toLowerCase().replace(/@[\w_]+$/, "");
-  return { command, args };
+function buildMainMenuKeyboard(): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📊 Phân tích chart", callback_data: "run:analyze" },
+        { text: "⚽ Quét kèo bóng đá", callback_data: "run:match_odds" },
+      ],
+      [
+        { text: "🎰 Quét kết quả xổ số", callback_data: "run:lottery" },
+        { text: "🔮 Dự đoán xổ số", callback_data: "run:lottery_predict" },
+      ],
+      [
+        { text: "✅ Xác minh kết quả ▸", callback_data: "menu:lottery_verify" },
+      ],
+    ],
+  };
 }
 
-async function sendTelegramMessage(botToken: string, chatId: number | string, text: string): Promise<void> {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+function buildRegionSubmenuKeyboard(): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Miền Bắc", callback_data: "run:lottery_verify:mien-bac" },
+        { text: "Miền Trung", callback_data: "run:lottery_verify:mien-trung" },
+      ],
+      [{ text: "Miền Nam", callback_data: "run:lottery_verify:mien-nam" }],
+      [{ text: "◂ Quay lại", callback_data: "menu:main" }],
+    ],
+  };
+}
+
+function parseCallbackData(data: string): CallbackAction | null {
+  const [kind = "", scope = "", part = ""] = data.trim().split(":");
+
+  if (kind === "menu") {
+    if (scope === "main" || scope === "lottery_verify") {
+      return { type: "menu", menu: scope };
+    }
+    return null;
+  }
+
+  if (kind !== "run") {
+    return null;
+  }
+
+  if (!(scope in COMMANDS)) {
+    return null;
+  }
+
+  if (scope === "lottery_verify") {
+    return VERIFY_REGIONS.has(part)
+      ? { type: "run", command: scope, args: [part] }
+      : null;
+  }
+
+  return { type: "run", command: scope as keyof typeof COMMANDS, args: [] };
+}
+
+async function sendTelegramRequest(
+  botToken: string,
+  method: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Telegram sendMessage failed: ${body}`);
+    throw new Error(`Telegram ${method} failed: ${body}`);
   }
+}
+
+async function sendTelegramMessage(
+  botToken: string,
+  chatId: number | string,
+  text: string,
+  replyMarkup?: InlineKeyboardMarkup,
+): Promise<void> {
+  await sendTelegramRequest(botToken, "sendMessage", {
+    chat_id: chatId,
+    text,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  });
+}
+
+async function editTelegramMessage(
+  botToken: string,
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  replyMarkup?: InlineKeyboardMarkup,
+): Promise<void> {
+  await sendTelegramRequest(botToken, "editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  });
+}
+
+async function answerTelegramCallbackQuery(
+  botToken: string,
+  callbackQueryId: string,
+  text?: string,
+): Promise<void> {
+  await sendTelegramRequest(botToken, "answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    ...(text ? { text } : {}),
+  });
 }
 
 async function dispatchWorkflow(
@@ -172,6 +240,128 @@ async function dispatchWorkflow(
   }
 }
 
+function buildWorkflowSummary(inputs: Record<string, string>): string {
+  if (Object.keys(inputs).length === 0) {
+    return "";
+  }
+
+  return `\nInputs: ${Object.entries(inputs)
+    .map(([key, value]) => `${key}=${value}`)
+    .join(", ")}`;
+}
+
+function buildSuccessMessage(
+  workflow: WorkflowConfig,
+  inputs: Record<string, string>,
+  dispatchResult: WorkflowDispatchResult | null,
+): string {
+  const inputSummary = buildWorkflowSummary(inputs);
+  const runSummary = dispatchResult?.html_url ? `\nRun: ${dispatchResult.html_url}` : "";
+
+  return `✅ Đã kích hoạt ${workflow.description} ${inputSummary}${runSummary}`;
+}
+
+function buildErrorMessage(workflow: WorkflowConfig, message: string): string {
+  return `❌ Không thể kích hoạt ${workflow.description} \n${message}`;
+}
+
+async function showMenu(botToken: string, chatId: number | string): Promise<void> {
+  await sendTelegramMessage(botToken, chatId, buildMainMenuMessage(), buildMainMenuKeyboard());
+}
+
+async function editMenu(
+  botToken: string,
+  chatId: number | string,
+  messageId: number,
+  menu: "main" | "lottery_verify",
+): Promise<void> {
+  if (menu === "main") {
+    await editTelegramMessage(botToken, chatId, messageId, buildMainMenuMessage(), buildMainMenuKeyboard());
+    return;
+  }
+
+  await editTelegramMessage(botToken, chatId, messageId, "Chọn miền để xác minh:", buildRegionSubmenuKeyboard());
+}
+
+async function runWorkflowFromCallback(
+  botToken: string,
+  callbackQueryId: string,
+  chatId: number,
+  messageId: number,
+  githubToken: string,
+  githubOwner: string,
+  githubRepo: string,
+  githubRef: string,
+  command: keyof typeof COMMANDS,
+  args: string[],
+): Promise<Response> {
+  const workflow = COMMANDS[command];
+
+  let inputs: Record<string, string>;
+  try {
+    inputs = workflow.parseInputs ? workflow.parseInputs(args) : {};
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    await answerTelegramCallbackQuery(botToken, callbackQueryId, "⏳ Đang xử lý...");
+    await editTelegramMessage(botToken, chatId, messageId, buildErrorMessage(workflow, messageText));
+    return Response.json({ ok: true, command, ignored: "invalid-input" });
+  }
+
+  await answerTelegramCallbackQuery(botToken, callbackQueryId, "⏳ Đang xử lý...");
+  await editTelegramMessage(botToken, chatId, messageId, `⏳ Đang kích hoạt ${workflow.description}...`);
+
+  try {
+    const dispatchResult = await dispatchWorkflow(githubToken, githubOwner, githubRepo, githubRef, workflow, inputs);
+    const successMessage = buildSuccessMessage(workflow, inputs, dispatchResult);
+    await editTelegramMessage(botToken, chatId, messageId, successMessage);
+    return Response.json({ ok: true, command, workflow: workflow.file, inputs, dispatchResult });
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    await editTelegramMessage(botToken, chatId, messageId, buildErrorMessage(workflow, messageText));
+    return Response.json({ ok: true, command, ignored: "dispatch-error" });
+  }
+}
+
+async function handleTelegramCallback(
+  botToken: string,
+  callbackQuery: TelegramCallbackQuery,
+  githubToken: string,
+  githubOwner: string,
+  githubRepo: string,
+  githubRef: string,
+): Promise<Response> {
+  const message = callbackQuery.message;
+  if (!message?.chat?.id) {
+    await answerTelegramCallbackQuery(botToken, callbackQuery.id, "Thiếu ngữ cảnh chat");
+    return Response.json({ ok: true, ignored: "callback-without-message" });
+  }
+
+  const action = callbackQuery.data ? parseCallbackData(callbackQuery.data) : null;
+  if (!action) {
+    await answerTelegramCallbackQuery(botToken, callbackQuery.id, "Callback không hợp lệ");
+    return Response.json({ ok: true, ignored: "unknown-callback" });
+  }
+
+  if (action.type === "menu") {
+    await answerTelegramCallbackQuery(botToken, callbackQuery.id);
+    await editMenu(botToken, message.chat.id, message.message_id, action.menu);
+    return Response.json({ ok: true, menu: action.menu });
+  }
+
+  return await runWorkflowFromCallback(
+    botToken,
+    callbackQuery.id,
+    message.chat.id,
+    message.message_id,
+    githubToken,
+    githubOwner,
+    githubRepo,
+    githubRef,
+    action.command,
+    action.args,
+  );
+}
+
 Deno.serve(async (request) => {
   let botToken: string | undefined;
   let allowedChatId: string | undefined;
@@ -196,67 +386,44 @@ Deno.serve(async (request) => {
     }
 
     const update = (await request.json()) as TelegramUpdate;
-    const message = update.message;
 
-    if (!message?.text) {
-      return Response.json({ ok: true, ignored: "no-text-message" });
+    if (update.message) {
+      const message = update.message;
+      messageChatId = message.chat.id;
+      if (String(message.chat.id) !== allowedChatId) {
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      await showMenu(botToken, message.chat.id);
+      return Response.json({ ok: true, menu: "main" });
     }
 
-    messageChatId = message.chat.id;
+    if (update.callback_query) {
+      const callbackQuery = update.callback_query;
+      messageChatId = callbackQuery.message?.chat.id;
 
-    if (String(message.chat.id) !== allowedChatId) {
-      return new Response("Forbidden", { status: 403 });
-    }
+      if (!messageChatId || String(messageChatId) !== allowedChatId) {
+        return new Response("Forbidden", { status: 403 });
+      }
 
-    const { command, args } = parseCommand(message.text);
-    if (command === "/help" || command === "/start") {
-      await sendTelegramMessage(botToken, message.chat.id, buildHelpMessage());
-      return Response.json({ ok: true, command });
-    }
-
-    const workflow = COMMANDS[command];
-    if (!workflow) {
-      await sendTelegramMessage(
+      return await handleTelegramCallback(
         botToken,
-        message.chat.id,
-        `Lệnh không hợp lệ: ${command}\n\n${buildHelpMessage()}`,
+        callbackQuery,
+        githubToken,
+        githubOwner,
+        githubRepo,
+        githubRef,
       );
-      return Response.json({ ok: true, command, ignored: "unknown-command" });
     }
 
-    let inputs: Record<string, string>;
-    try {
-      inputs = workflow.parseInputs ? workflow.parseInputs(args) : {};
-    } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      await sendTelegramMessage(botToken, message.chat.id, messageText);
-      return Response.json({ ok: true, command, ignored: "invalid-input" });
-    }
-
-    const dispatchResult = await dispatchWorkflow(githubToken, githubOwner, githubRepo, githubRef, workflow, inputs);
-
-    const inputSummary =
-      Object.keys(inputs).length === 0
-        ? ""
-        : `\nInputs: ${Object.entries(inputs)
-            .map(([key, value]) => `${key}=${value}`)
-            .join(", ")}`;
-    const runSummary = dispatchResult?.html_url ? `\nRun: ${dispatchResult.html_url}` : "";
-
-    await sendTelegramMessage(
-      botToken,
-      message.chat.id,
-      `Đã kích hoạt ${workflow.description} (${workflow.file})${inputSummary}${runSummary}`,
-    );
-
-    return Response.json({ ok: true, command, workflow: workflow.file, inputs, dispatchResult });
+    return Response.json({ ok: true, ignored: "unsupported-update" });
   } catch (error) {
     console.error(error);
 
     if (botToken && allowedChatId && messageChatId && String(messageChatId) === allowedChatId) {
       try {
         const messageText = error instanceof Error ? error.message : String(error);
-        await sendTelegramMessage(botToken, messageChatId, `Không thể xử lý lệnh:\n${messageText}`);
+        await sendTelegramMessage(botToken, messageChatId, `Không thể xử lý yêu cầu:\n${messageText}`);
       } catch (notifyError) {
         console.error("Failed to send Telegram error message", notifyError);
       }

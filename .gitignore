@@ -4,3 +4,4 @@ data/
 screenshots/
 .env
 *.png
+supabase/.temp/

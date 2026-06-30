@@ -1,6 +1,6 @@
 import { getConfiguredBookmaker } from "./betting-api.js";
 import { buildOddsPayload, pickNearestUpcomingDateMatches } from "./betting.js";
-import { analyzeMatchOdds } from "./betting-gemini.js";
+import { analyzeMatchOdds, verifyMatchAnalysis } from "./betting-gemini.js";
 import { sendMessage } from "../shared/telegram.js";
 import { loadUpcomingMatches } from "./match-repository.js";
 import { formatMainOddsSummary, formatMatchAnalysisMessage, formatOddsDataMessage, formatOddsFallbackMessage } from "./odds-text-format.js";
@@ -82,6 +82,21 @@ export async function runOddsCheck(): Promise<void> {
 
     try {
       const analysis = await analyzeMatchOdds(match);
+      if (analysis.confidence >= 70) {
+        try {
+          const verification = await verifyMatchAnalysis(match, analysis);
+          analysis.verifiedConfirmed = verification.confirmed;
+          analysis.verifiedConfidence = verification.confidence;
+          analysis.verifiedComment = verification.comment;
+          console.log(
+            `  ${verification.confirmed ? "✓" : "✗"} Verify ${match.home} vs ${match.away}: Gemini 2.5 Pro ${verification.confirmed ? "confirmed" : "rejected"} (${verification.confidence}%)`,
+          );
+        } catch (error) {
+          console.warn(
+            `  ⚠ Verify failed for ${match.home} vs ${match.away}: ${error instanceof Error ? error.message : error}`,
+          );
+        }
+      }
       await sendMessage(formatMatchAnalysisMessage(match, analysis));
       await sendMessage(formatOddsDataMessage(match));
       console.log(`  ✓ Gemini analyzed: ${match.home} vs ${match.away}`);

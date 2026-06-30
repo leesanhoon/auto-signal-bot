@@ -21,7 +21,7 @@ async function main(): Promise<void> {
 
   const highConfSetups = result.setups.filter((s) => (s.confidence ?? 0) > 80);
   if (highConfSetups.length > 0) {
-    console.log(`🔍 Verifying ${highConfSetups.length} high-confidence setup(s) with Claude Sonnet 4.6...`);
+    console.log(`🔍 Verifying ${highConfSetups.length} high-confidence setup(s) with Gemini 2.5 Pro...`);
     const verified = await confirmHighConfidenceSetups(highConfSetups, screenshots);
     const verifiedByPair = new Map(verified.map((s) => [s.pair, s]));
     result.setups = result.setups.map((s) => verifiedByPair.get(s.pair) ?? s);

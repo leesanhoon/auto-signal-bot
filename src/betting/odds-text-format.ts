@@ -202,6 +202,11 @@ export function formatMatchAnalysisMessage(payload: MatchOddsPayload, analysis: 
     `Tin cay ti so: *${analysis.scoreConfidence}%* (${scoreConfidenceLabel})`,
     `Khuyen nghi: *${analysis.recommendation}*`,
     `Do ro tin hieu: *${analysis.confidence}%* (${confidenceLabel})`,
+    analysis.verifiedConfirmed !== undefined
+      ? analysis.verifiedConfirmed
+        ? `✅ Da xac nhan boi Gemini 2.5 Pro (${analysis.verifiedConfidence ?? 0}%) — ${analysis.verifiedComment ?? ""}`
+        : `⚠️ Gemini 2.5 Pro khong xac nhan ket qua nay (${analysis.verifiedConfidence ?? 0}%) — ${analysis.verifiedComment ?? ""}`
+      : "",
     mainOdds ? `Keo chinh: ${mainOdds}` : "",
     "",
     `Tom tat: ${analysis.summary}`,

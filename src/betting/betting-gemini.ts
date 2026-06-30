@@ -3,6 +3,7 @@ import type { MatchAiAnalysis, MatchOddsPayload } from "./betting-types.js";
 import { formatOddsAnalysisInput } from "./odds-text-format.js";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
+const VERIFY_MODEL = "gemini-2.5-pro";
 
 const SYSTEM_PROMPT = `Ban la chuyen gia phan tich odds bong da, uu tien ky luat va tinh thuc dung.
 
@@ -34,6 +35,24 @@ Quy tac:
 - risks phai co 2 den 4 y ngan.
 - summary phai gon trong 1 den 2 cau.
 - Khong duoc them markdown, loi chao, giai thich thua, hay key ngoai danh sach.`;
+
+const VERIFY_PROMPT = `Ban la nguoi tham dinh doc lap cho mot phan tich odds bong da.
+
+Nhiem vu:
+- Danh gia xem phan tich ben duoi co hop ly va nhat quan voi snapshot odds hay khong.
+- Chi dua tren odds snapshot va ket luan duoc cung cap.
+- Khong dung kien thuc ben ngoai.
+- Tra ve duy nhat JSON hop le voi keys:
+  - confirmed: boolean
+  - confidence: number
+  - comment: string
+
+Quy tac:
+- confirmed = true neu ket luan co luan ly, nhat quan, va khong mau thuan lon voi odds.
+- confirmed = false neu ket luan yeu, mau thuan, hoac khong co edge ro rang.
+- confidence la do chac chan cua viec tham dinh, tu 0-100.
+- comment ngan gon, noi ro vi sao dong y hoac bac bo.
+- Khong duoc them markdown, giai thich thua, hay key ngoai danh sach.`;
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -129,4 +148,54 @@ export async function analyzeMatchOdds(payload: MatchOddsPayload): Promise<Match
     throw new Error(`Gemini parse failed. Raw: ${(response.text ?? "").slice(0, 300)}`);
   }
   return parsed;
+}
+
+export async function verifyMatchAnalysis(
+  payload: MatchOddsPayload,
+  analysis: MatchAiAnalysis,
+): Promise<{ confirmed: boolean; confidence: number; comment: string }> {
+  const ai = getClient();
+  const oddsText = formatOddsAnalysisInput(payload);
+  const verifyInput = {
+    match: analysis.match,
+    preferredScoreline: analysis.preferredScoreline,
+    scoreConfidence: analysis.scoreConfidence,
+    recommendation: analysis.recommendation,
+    confidence: analysis.confidence,
+    keyPoints: analysis.keyPoints,
+    risks: analysis.risks,
+    summary: analysis.summary,
+  };
+
+  const response = await ai.models.generateContent({
+    model: VERIFY_MODEL,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text:
+              `${VERIFY_PROMPT}\n\n` +
+              `Odds snapshot:\n${oddsText}\n\n` +
+              `Phan tich can tham dinh:\n${JSON.stringify(verifyInput, null, 2)}`,
+          },
+        ],
+      },
+    ],
+    config: {
+      temperature: 0.2,
+      topP: 0.9,
+      maxOutputTokens: 500,
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  const cleaned = extractJsonObject(response.text ?? "");
+  const parsed = JSON.parse(cleaned) as { confirmed?: unknown; confidence?: unknown; comment?: unknown };
+  return {
+    confirmed: Boolean(parsed.confirmed),
+    confidence: clampConfidence(parsed.confidence),
+    comment: String(parsed.comment || ""),
+  };
 }
