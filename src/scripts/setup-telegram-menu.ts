@@ -4,9 +4,7 @@ import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("scripts:setup-telegram-menu");
 async function main(): Promise<void> {
-  const commands = [
-    { command: "help", description: "Hướng dẫn sử dụng" },
-  ];
+  const commands = [{ command: "help", description: "Hướng dẫn sử dụng" }];
 
   logger.info("Setting Telegram commands...");
   await setMyCommands(commands);

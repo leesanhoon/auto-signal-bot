@@ -91,12 +91,19 @@ function getEnv(name: string): string {
   return value;
 }
 
-async function sendTelegramRequest(botToken: string, method: string, payload: Record<string, unknown>): Promise<void> {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+async function sendTelegramRequest(
+  botToken: string,
+  method: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/${method}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text();
@@ -118,11 +125,14 @@ async function sendTelegramMessage(
     ...(parseMode ? { parse_mode: parseMode } : {}),
   };
 
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text();
@@ -134,7 +144,9 @@ async function sendTelegramMessage(
   }
 }
 
-function normalizeTelegramCommandToken(token: string | undefined): string | null {
+function normalizeTelegramCommandToken(
+  token: string | undefined,
+): string | null {
   if (!token) {
     return null;
   }
@@ -163,7 +175,11 @@ async function editTelegramMessage(
   });
 }
 
-async function answerTelegramCallbackQuery(botToken: string, callbackQueryId: string, text?: string): Promise<void> {
+async function answerTelegramCallbackQuery(
+  botToken: string,
+  callbackQueryId: string,
+  text?: string,
+): Promise<void> {
   await sendTelegramRequest(botToken, "answerCallbackQuery", {
     callback_query_id: callbackQueryId,
     ...(text ? { text } : {}),
@@ -178,20 +194,25 @@ async function dispatchWorkflow(
   workflow: WorkflowConfig,
   inputs: Record<string, string>,
 ): Promise<WorkflowDispatchResult | null> {
-  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow.file}/dispatches`, {
-    method: "POST",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${githubToken}`,
-      "Content-Type": "application/json",
-      "X-GitHub-Api-Version": "2022-11-28",
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow.file}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${githubToken}`,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({ ref, inputs }),
     },
-    body: JSON.stringify({ ref, inputs }),
-  });
+  );
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`GitHub workflow dispatch failed: ${response.status} ${body}`);
+    throw new Error(
+      `GitHub workflow dispatch failed: ${response.status} ${body}`,
+    );
   }
 
   const rawBody = await response.text();
@@ -222,11 +243,14 @@ async function claimTelegramWebhookIdempotency(
   }
 
   try {
-    const { data, error } = await client.rpc("claim_telegram_webhook_idempotency", {
-      p_idempotency_key: idempotencyKey,
-      p_event_type: eventType,
-      p_payload: payload,
-    });
+    const { data, error } = await client.rpc(
+      "claim_telegram_webhook_idempotency",
+      {
+        p_idempotency_key: idempotencyKey,
+        p_event_type: eventType,
+        p_payload: payload,
+      },
+    );
 
     if (error) {
       logger.warn(
@@ -301,7 +325,9 @@ function parseCallbackData(data: string): CallbackAction | null {
   if (!(scope in COMMANDS)) return null;
 
   if (scope === "lottery_verify") {
-    return VERIFY_REGIONS.has(part) ? { type: "run", command: scope, args: [part] } : null;
+    return VERIFY_REGIONS.has(part)
+      ? { type: "run", command: scope, args: [part] }
+      : null;
   }
 
   return { type: "run", command: scope as keyof typeof COMMANDS, args: [] };
@@ -320,7 +346,9 @@ function buildSuccessMessage(
   dispatchResult: WorkflowDispatchResult | null,
 ): string {
   const inputSummary = buildWorkflowSummary(inputs);
-  const runSummary = dispatchResult?.html_url ? `\nRun: ${dispatchResult.html_url}` : "";
+  const runSummary = dispatchResult?.html_url
+    ? `\nRun: ${dispatchResult.html_url}`
+    : "";
   return `✅ Đã kích hoạt ${workflow.description} ${inputSummary}${runSummary}`;
 }
 
@@ -328,8 +356,16 @@ function buildErrorMessage(workflow: WorkflowConfig, message: string): string {
   return `❌ Không thể kích hoạt ${workflow.description} \n${message}`;
 }
 
-async function showMenu(botToken: string, chatId: number | string): Promise<void> {
-  await sendTelegramMessage(botToken, chatId, buildMainMenuMessage(), buildMainMenuKeyboard());
+async function showMenu(
+  botToken: string,
+  chatId: number | string,
+): Promise<void> {
+  await sendTelegramMessage(
+    botToken,
+    chatId,
+    buildMainMenuMessage(),
+    buildMainMenuKeyboard(),
+  );
 }
 
 async function editMenu(
@@ -339,11 +375,23 @@ async function editMenu(
   menu: "main" | "lottery_verify",
 ): Promise<void> {
   if (menu === "main") {
-    await editTelegramMessage(botToken, chatId, messageId, buildMainMenuMessage(), buildMainMenuKeyboard());
+    await editTelegramMessage(
+      botToken,
+      chatId,
+      messageId,
+      buildMainMenuMessage(),
+      buildMainMenuKeyboard(),
+    );
     return;
   }
 
-  await editTelegramMessage(botToken, chatId, messageId, "Chọn miền để xác minh:", buildRegionSubmenuKeyboard());
+  await editTelegramMessage(
+    botToken,
+    chatId,
+    messageId,
+    "Chọn miền để xác minh:",
+    buildRegionSubmenuKeyboard(),
+  );
 }
 
 async function runWorkflowFromCallback(
@@ -365,37 +413,90 @@ async function runWorkflowFromCallback(
     inputs = workflow.parseInputs ? workflow.parseInputs(args) : {};
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
-    await answerTelegramCallbackQuery(botToken, callbackQueryId, "⏳ Đang xử lý...");
-    await editTelegramMessage(botToken, chatId, messageId, buildErrorMessage(workflow, messageText));
+    await answerTelegramCallbackQuery(
+      botToken,
+      callbackQueryId,
+      "⏳ Đang xử lý...",
+    );
+    await editTelegramMessage(
+      botToken,
+      chatId,
+      messageId,
+      buildErrorMessage(workflow, messageText),
+    );
     return Response.json({ ok: true, command, ignored: "invalid-input" });
   }
 
-  await answerTelegramCallbackQuery(botToken, callbackQueryId, "⏳ Đang xử lý...");
-  await editTelegramMessage(botToken, chatId, messageId, `⏳ Đang kích hoạt ${workflow.description}...`);
+  await answerTelegramCallbackQuery(
+    botToken,
+    callbackQueryId,
+    "⏳ Đang xử lý...",
+  );
+  await editTelegramMessage(
+    botToken,
+    chatId,
+    messageId,
+    `⏳ Đang kích hoạt ${workflow.description}...`,
+  );
 
   try {
-    const dispatchResult = await dispatchWorkflow(githubToken, githubOwner, githubRepo, githubRef, workflow, inputs);
-    await editTelegramMessage(botToken, chatId, messageId, buildSuccessMessage(workflow, inputs, dispatchResult));
-    return Response.json({ ok: true, command, workflow: workflow.file, inputs, dispatchResult });
+    const dispatchResult = await dispatchWorkflow(
+      githubToken,
+      githubOwner,
+      githubRepo,
+      githubRef,
+      workflow,
+      inputs,
+    );
+    await editTelegramMessage(
+      botToken,
+      chatId,
+      messageId,
+      buildSuccessMessage(workflow, inputs, dispatchResult),
+    );
+    return Response.json({
+      ok: true,
+      command,
+      workflow: workflow.file,
+      inputs,
+      dispatchResult,
+    });
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
-    await editTelegramMessage(botToken, chatId, messageId, buildErrorMessage(workflow, messageText));
+    await editTelegramMessage(
+      botToken,
+      chatId,
+      messageId,
+      buildErrorMessage(workflow, messageText),
+    );
     return Response.json({ ok: true, command, ignored: "dispatch-error" });
   }
 }
 
-async function handleStatsCommand(botToken: string, chatId: number): Promise<Response> {
+async function handleStatsCommand(
+  botToken: string,
+  chatId: number,
+): Promise<Response> {
   const client = getSupabaseClient();
   if (!client) {
     throw new Error("Missing Supabase configuration for /stats");
   }
 
   const now = new Date();
-  const performanceSince = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const performanceSince = new Date(
+    now.getTime() - 7 * 24 * 60 * 60 * 1000,
+  ).toISOString();
   const today = vnDateStr(now.getTime());
 
-  const [{ count: openPositionsCount, error: openPositionsError }, closedPositionsResult, aiUsageResult] = await Promise.all([
-    client.from("open_positions").select("id", { count: "exact", head: true }).eq("status", "open"),
+  const [
+    { count: openPositionsCount, error: openPositionsError },
+    closedPositionsResult,
+    aiUsageResult,
+  ] = await Promise.all([
+    client
+      .from("open_positions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "open"),
     client
       .from("open_positions")
       .select(
@@ -406,16 +507,22 @@ async function handleStatsCommand(botToken: string, chatId: number): Promise<Res
       .order("closed_at", { ascending: true }),
     client
       .from("ai_usage")
-      .select("recorded_at, usage_date, provider, model, source, input_tokens, output_tokens, estimated_cost_usd, metadata")
+      .select(
+        "recorded_at, usage_date, provider, model, source, input_tokens, output_tokens, estimated_cost_usd, metadata",
+      )
       .eq("usage_date", today)
       .order("recorded_at", { ascending: true }),
   ]);
 
   if (openPositionsError) {
-    throw new Error(`Failed to load open positions: ${openPositionsError.message}`);
+    throw new Error(
+      `Failed to load open positions: ${openPositionsError.message}`,
+    );
   }
   if (closedPositionsResult.error) {
-    throw new Error(`Failed to load closed positions: ${closedPositionsResult.error.message}`);
+    throw new Error(
+      `Failed to load closed positions: ${closedPositionsResult.error.message}`,
+    );
   }
   if (aiUsageResult.error) {
     throw new Error(`Failed to load AI usage: ${aiUsageResult.error.message}`);
@@ -458,7 +565,13 @@ async function handleStatsCommand(botToken: string, chatId: number): Promise<Res
     performanceWindowDays: 7,
   });
 
-  await sendTelegramMessage(botToken, chatId, buildStatsMessage(report), undefined, "Markdown");
+  await sendTelegramMessage(
+    botToken,
+    chatId,
+    buildStatsMessage(report),
+    undefined,
+    "Markdown",
+  );
   return Response.json({ ok: true, command: "stats" });
 }
 
@@ -472,13 +585,23 @@ async function handleTelegramCallback(
 ): Promise<Response> {
   const message = callbackQuery.message;
   if (!message?.chat?.id) {
-    await answerTelegramCallbackQuery(botToken, callbackQuery.id, "Thiếu ngữ cảnh chat");
+    await answerTelegramCallbackQuery(
+      botToken,
+      callbackQuery.id,
+      "Thiếu ngữ cảnh chat",
+    );
     return Response.json({ ok: true, ignored: "callback-without-message" });
   }
 
-  const action = callbackQuery.data ? parseCallbackData(callbackQuery.data) : null;
+  const action = callbackQuery.data
+    ? parseCallbackData(callbackQuery.data)
+    : null;
   if (!action) {
-    await answerTelegramCallbackQuery(botToken, callbackQuery.id, "Callback không hợp lệ");
+    await answerTelegramCallbackQuery(
+      botToken,
+      callbackQuery.id,
+      "Callback không hợp lệ",
+    );
     return Response.json({ ok: true, ignored: "unknown-callback" });
   }
 
@@ -520,7 +643,9 @@ Deno.serve(async (request) => {
     const githubRepo = getEnv("GITHUB_REPO");
     const githubRef = Deno.env.get("GITHUB_REF") ?? "main";
 
-    const requestSecret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
+    const requestSecret = request.headers.get(
+      "X-Telegram-Bot-Api-Secret-Token",
+    );
     if (requestSecret !== webhookSecret) {
       return new Response("Unauthorized", { status: 401 });
     }
@@ -534,9 +659,12 @@ Deno.serve(async (request) => {
         return new Response("Forbidden", { status: 403 });
       }
 
-      const messageDescriptor = buildTelegramWebhookIdempotencyDescriptor(update);
-      const shouldProcessMessage = await shouldProcessTelegramWebhookUpdate(update, async ({ idempotencyKey, eventType, payload }) =>
-        claimTelegramWebhookIdempotency(idempotencyKey, eventType, payload)
+      const messageDescriptor =
+        buildTelegramWebhookIdempotencyDescriptor(update);
+      const shouldProcessMessage = await shouldProcessTelegramWebhookUpdate(
+        update,
+        async ({ idempotencyKey, eventType, payload }) =>
+          claimTelegramWebhookIdempotency(idempotencyKey, eventType, payload),
       );
       if (!shouldProcessMessage) {
         logger.info(
@@ -549,7 +677,9 @@ Deno.serve(async (request) => {
         return Response.json({ ok: true, ignored: "duplicate-message-update" });
       }
 
-      const command = normalizeTelegramCommandToken(message.text?.trim().split(/\s+/)[0]);
+      const command = normalizeTelegramCommandToken(
+        message.text?.trim().split(/\s+/)[0],
+      );
       if (command === "/stats") {
         return handleStatsCommand(botToken, message.chat.id);
       }
@@ -566,9 +696,12 @@ Deno.serve(async (request) => {
         return new Response("Forbidden", { status: 403 });
       }
 
-      const callbackDescriptor = buildTelegramWebhookIdempotencyDescriptor(update);
-      const shouldProcessCallback = await shouldProcessTelegramWebhookUpdate(update, async ({ idempotencyKey, eventType, payload }) =>
-        claimTelegramWebhookIdempotency(idempotencyKey, eventType, payload)
+      const callbackDescriptor =
+        buildTelegramWebhookIdempotencyDescriptor(update);
+      const shouldProcessCallback = await shouldProcessTelegramWebhookUpdate(
+        update,
+        async ({ idempotencyKey, eventType, payload }) =>
+          claimTelegramWebhookIdempotency(idempotencyKey, eventType, payload),
       );
       if (!shouldProcessCallback) {
         logger.info(
@@ -581,17 +714,34 @@ Deno.serve(async (request) => {
         return Response.json({ ok: true, ignored: "duplicate-callback-query" });
       }
 
-      return handleTelegramCallback(botToken, callbackQuery, githubToken, githubOwner, githubRepo, githubRef);
+      return handleTelegramCallback(
+        botToken,
+        callbackQuery,
+        githubToken,
+        githubOwner,
+        githubRepo,
+        githubRef,
+      );
     }
 
     return Response.json({ ok: true, ignored: "unsupported-update" });
   } catch (error) {
     logger.error(error);
 
-    if (botToken && allowedChatId && messageChatId && String(messageChatId) === allowedChatId) {
+    if (
+      botToken &&
+      allowedChatId &&
+      messageChatId &&
+      String(messageChatId) === allowedChatId
+    ) {
       try {
-        const messageText = error instanceof Error ? error.message : String(error);
-        await sendTelegramMessage(botToken, messageChatId, `Không thể xử lý yêu cầu:\n${messageText}`);
+        const messageText =
+          error instanceof Error ? error.message : String(error);
+        await sendTelegramMessage(
+          botToken,
+          messageChatId,
+          `Không thể xử lý yêu cầu:\n${messageText}`,
+        );
       } catch (notifyError) {
         logger.error("Failed to send Telegram error message", notifyError);
       }
