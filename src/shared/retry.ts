@@ -2,7 +2,12 @@ type RetryOptions = {
   maxAttempts?: number;
   baseDelayMs?: number;
   isRetryable?: (error: unknown) => boolean;
-  onRetry?: (error: unknown, attempt: number, maxAttempts: number, delayMs: number) => void;
+  onRetry?: (
+    error: unknown,
+    attempt: number,
+    maxAttempts: number,
+    delayMs: number,
+  ) => void;
 };
 
 const DEFAULT_RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
@@ -39,14 +44,23 @@ export function isRetryableError(error: unknown): boolean {
   }
 
   const status = getErrorField(error, "status");
-  if (typeof status === "string" && /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)) {
+  if (
+    typeof status === "string" &&
+    /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)
+  ) {
     return true;
   }
 
   const message = error instanceof Error ? error.message : String(error);
   if (/"code"\s*:\s*(429|500|502|503|504)/.test(message)) return true;
-  if (/UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(message)) return true;
-  if (/ETIMEDOUT|ECONNRESET|fetch failed|network error|socket hang up/i.test(message)) return true;
+  if (/UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(message))
+    return true;
+  if (
+    /ETIMEDOUT|ECONNRESET|fetch failed|network error|socket hang up/i.test(
+      message,
+    )
+  )
+    return true;
 
   return false;
 }
@@ -55,7 +69,10 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {},
+): Promise<T> {
   const maxAttempts = options.maxAttempts ?? 3;
   const baseDelayMs = options.baseDelayMs ?? 2_000;
   const retryable = options.isRetryable ?? isRetryableError;
