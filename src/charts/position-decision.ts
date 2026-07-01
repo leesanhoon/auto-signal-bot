@@ -5,8 +5,14 @@ import { withRetry } from "../shared/retry.js";
 import type { OpenPosition } from "./positions-repository.js";
 import { getVerifyProvider } from "./verify-provider.js";
 import { createLogger } from "../shared/logger.js";
+import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 
 const logger = createLogger("charts:position-decision");
+const GEMINI_RATE_LIMIT = {
+  key: "gemini",
+  envVar: "GEMINI_RATE_LIMIT_RPM",
+  defaultRpm: 15,
+};
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -160,24 +166,26 @@ decision must be one of HOLD, CLOSE, STOP.
 Comment should be short and practical.`;
 
   const request = () =>
-    ai.models.generateContent({
-      model,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: screenshot.buffer.toString("base64"),
+    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
+      ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: screenshot.buffer.toString("base64"),
+                },
               },
-            },
-            { text: prompt },
-          ],
-        },
-      ],
-      config: buildGenerationConfig(model, 300),
-    });
+              { text: prompt },
+            ],
+          },
+        ],
+        config: buildGenerationConfig(model, 300),
+      }),
+    );
 
   const response = await withRetry(request, {
     onRetry: (error, attempt, maxAttempts, delayMs) => {

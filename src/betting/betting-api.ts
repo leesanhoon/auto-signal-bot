@@ -1,4 +1,11 @@
+import { withConfiguredRateLimit } from "../shared/rate-limit.js";
+
 const BASE_URL = "https://v3.football.api-sports.io";
+const API_FOOTBALL_RATE_LIMIT = {
+  key: "api-football",
+  envVar: "API_FOOTBALL_RATE_LIMIT_RPM",
+  defaultRpm: 100,
+};
 
 export type ApiFootballBetValue = { value: string; odd: string };
 export type ApiFootballBet = { id: number; name: string; values: ApiFootballBetValue[] };
@@ -25,9 +32,11 @@ export function getConfiguredBookmaker(): string {
 
 async function fetchJson(path: string): Promise<any> {
   const { apiKey } = getConfig();
-  const response = await fetch(`${BASE_URL}${path}`, {
-    headers: { "x-apisports-key": apiKey },
-  });
+  const response = await withConfiguredRateLimit(API_FOOTBALL_RATE_LIMIT, async () =>
+    fetch(`${BASE_URL}${path}`, {
+      headers: { "x-apisports-key": apiKey },
+    }),
+  );
   const text = await response.text();
 
   let json: any;

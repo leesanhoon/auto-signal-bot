@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { withRetry } from "../shared/retry.js";
+import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 import type { MatchAiAnalysis, MatchOddsPayload } from "./betting-types.js";
 import { formatOddsAnalysisInput } from "./odds-text-format.js";
 import { createLogger } from "../shared/logger.js";
@@ -8,6 +9,11 @@ const logger = createLogger("betting:betting-gemini");
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const VERIFY_MODEL_PRIMARY = "gemini-2.5-pro";
 const VERIFY_MODEL_FALLBACK = "gemini-3.5-flash";
+const GEMINI_RATE_LIMIT = {
+  key: "gemini",
+  envVar: "GEMINI_RATE_LIMIT_RPM",
+  defaultRpm: 15,
+};
 
 const SYSTEM_PROMPT = `Ban la chuyen gia phan tich odds bong da, uu tien ky luat va tinh thuc dung.
 
@@ -204,25 +210,27 @@ export async function analyzeMatchOdds(payload: MatchOddsPayload): Promise<Match
   const oddsText = formatOddsAnalysisInput(payload);
 
   const request = () =>
-    ai.models.generateContent({
-      model,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text:
-                `${SYSTEM_PROMPT}\n\n` +
-                `Match: ${payload.home} vs ${payload.away}\n` +
-                `Kickoff Unix: ${payload.kickoffUnix}\n\n` +
-                `Hay phan tich odds snapshot sau va tra ve JSON ngay bay gio.\n\n` +
-                `Odds snapshot:\n${oddsText}`,
-            },
-          ],
-        },
-      ],
-      config: buildGenerationConfig(model, 600),
-    });
+    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
+      ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text:
+                  `${SYSTEM_PROMPT}\n\n` +
+                  `Match: ${payload.home} vs ${payload.away}\n` +
+                  `Kickoff Unix: ${payload.kickoffUnix}\n\n` +
+                  `Hay phan tich odds snapshot sau va tra ve JSON ngay bay gio.\n\n` +
+                  `Odds snapshot:\n${oddsText}`,
+              },
+            ],
+          },
+        ],
+        config: buildGenerationConfig(model, 600),
+      }),
+    );
 
   const response = await withRetry(request, {
     onRetry: (error, attempt, maxAttempts, delayMs) => {
@@ -259,23 +267,25 @@ export async function verifyMatchAnalysis(
   };
 
   const buildRequest = (model: string) => () =>
-    ai.models.generateContent({
-      model,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text:
-                `${VERIFY_PROMPT}\n\n` +
-                `Odds snapshot:\n${oddsText}\n\n` +
-                `Phan tich can tham dinh:\n${JSON.stringify(verifyInput, null, 2)}`,
-            },
-          ],
-        },
-      ],
-      config: buildGenerationConfig(model, 500),
-    });
+    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
+      ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text:
+                  `${VERIFY_PROMPT}\n\n` +
+                  `Odds snapshot:\n${oddsText}\n\n` +
+                  `Phan tich can tham dinh:\n${JSON.stringify(verifyInput, null, 2)}`,
+              },
+            ],
+          },
+        ],
+        config: buildGenerationConfig(model, 500),
+      }),
+    );
 
   const callVerifyModel = async (model: string): Promise<{ confirmed: boolean; confidence: number; comment: string }> => {
     const response = await withRetry(buildRequest(model), {
@@ -317,24 +327,26 @@ export async function reviseMatchAnalysis(
   const oddsText = formatOddsAnalysisInput(payload);
 
   const request = () =>
-    ai.models.generateContent({
-      model: VERIFY_MODEL_FALLBACK,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text:
-                `${REVISE_PROMPT}\n\n` +
-                `Odds snapshot:\n${oddsText}\n\n` +
-                `Nhan dinh ban dau (da bi tu choi):\n${JSON.stringify(original, null, 2)}\n\n` +
-                `Ly do tu choi:\n${rejectionComment}`,
-            },
-          ],
-        },
-      ],
-      config: buildGenerationConfig(VERIFY_MODEL_FALLBACK, 600),
-    });
+    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
+      ai.models.generateContent({
+        model: VERIFY_MODEL_FALLBACK,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text:
+                  `${REVISE_PROMPT}\n\n` +
+                  `Odds snapshot:\n${oddsText}\n\n` +
+                  `Nhan dinh ban dau (da bi tu choi):\n${JSON.stringify(original, null, 2)}\n\n` +
+                  `Ly do tu choi:\n${rejectionComment}`,
+              },
+            ],
+          },
+        ],
+        config: buildGenerationConfig(VERIFY_MODEL_FALLBACK, 600),
+      }),
+    );
 
   const response = await withRetry(request, {
     onRetry: (error, attempt, maxAttempts, delayMs) => {

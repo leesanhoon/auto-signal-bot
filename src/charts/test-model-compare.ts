@@ -7,11 +7,17 @@ import { extractTextFromClaudeResponse, getClaudeClient } from "../shared/claude
 import { withRetry } from "../shared/retry.js";
 import type { ChartConfig, ScreenshotResult, TradeSetup } from "../shared/types.js";
 import { createLogger } from "../shared/logger.js";
+import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 
 const logger = createLogger("charts:test-model-compare");
 const TEST_DIR = join(process.cwd(), "test-charts");
 const GEMINI_PRO_MODEL = "gemini-2.5-pro";
 const GEMINI_FLASH_MODEL = "gemini-3.5-flash";
+const GEMINI_RATE_LIMIT = {
+  key: "gemini",
+  envVar: "GEMINI_RATE_LIMIT_RPM",
+  defaultRpm: 15,
+};
 
 type VerifyResult = { confirmed: boolean; confidence: number; comment: string };
 type VerifyFailure = { error: string };
@@ -151,7 +157,9 @@ async function verifyWithClaude(setup: TradeSetup, imageBuffer: Buffer): Promise
 }
 
 async function verifyGeminiModel(model: string, setup: TradeSetup, imageBuffer: Buffer): Promise<VerifyResult> {
-  return verifySetupWithGeminiModel(setup, imageBuffer, model, getGeminiClient());
+  return withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
+    verifySetupWithGeminiModel(setup, imageBuffer, model, getGeminiClient()),
+  );
 }
 
 function formatRow(model: string, elapsedMs: number, result: CompareResult): string {

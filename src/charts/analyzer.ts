@@ -4,10 +4,16 @@ import { extractTextFromClaudeResponse, getClaudeClient } from "../shared/claude
 import { withRetry } from "../shared/retry.js";
 import { captureVerificationChartScreenshot, findChartForPair } from "./screenshot.js";
 import { createLogger } from "../shared/logger.js";
+import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 
 const logger = createLogger("charts:analyzer");
 const VERIFY_MODEL_PRIMARY = "gemini-2.5-pro";
 const ANALYSIS_MODEL = "gemini-3.5-flash";
+const GEMINI_RATE_LIMIT = {
+  key: "gemini",
+  envVar: "GEMINI_RATE_LIMIT_RPM",
+  defaultRpm: 15,
+};
 
 type VerificationResult = {
   confirmed: boolean;
@@ -158,11 +164,13 @@ async function analyzeWithGemini(screenshots: ScreenshotResult[]): Promise<strin
   parts.push({ text: SYSTEM_PROMPT + "\n\n" + USER_PROMPT });
 
   const request = () =>
-    ai.models.generateContent({
-      model: ANALYSIS_MODEL,
-      contents: [{ role: "user", parts }],
-      config: buildGenerationConfig(ANALYSIS_MODEL, 4000),
-    });
+    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
+      ai.models.generateContent({
+        model: ANALYSIS_MODEL,
+        contents: [{ role: "user", parts }],
+        config: buildGenerationConfig(ANALYSIS_MODEL, 4000),
+      }),
+    );
 
   const result = await withRetry(request, {
     onRetry: (error, attempt, maxAttempts, delayMs) => {
@@ -240,24 +248,26 @@ export async function verifySetupWithGeminiModel(
   const userPrompt = buildVerificationPrompt(setup);
 
   const request = () =>
-    ai.models.generateContent({
-      model,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: detectImageMimeType(imageBuffer),
-                data: imageBuffer.toString("base64"),
+    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
+      ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  mimeType: detectImageMimeType(imageBuffer),
+                  data: imageBuffer.toString("base64"),
+                },
               },
-            },
-            { text: userPrompt },
-          ],
-        },
-      ],
-      config: buildGenerationConfig(model, 500),
-    });
+              { text: userPrompt },
+            ],
+          },
+        ],
+        config: buildGenerationConfig(model, 500),
+      }),
+    );
 
   const result = await withRetry(request, {
     onRetry: (error, attempt, maxAttempts, delayMs) => {
