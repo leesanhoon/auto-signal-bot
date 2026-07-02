@@ -54,8 +54,9 @@ export type OpenPositionValidation = {
   plan: RiskRewardPlan | null;
 };
 
-function parsePrice(value: string): number {
-  const parsed = Number(value.replace(/,/g, "").trim());
+function parsePrice(value: string | number): number {
+  const str = String(value ?? "").replace(/,/g, "").trim();
+  const parsed = Number(str);
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 

@@ -15,6 +15,17 @@ export type MatchAiAnalysis = {
   keyPoints: string[];
   risks: string[];
   summary: string;
+  picks?: Array<{
+    market: string;
+    selection: string;
+    odds: number;
+  }>;
+  marketViews?: Array<{
+    market: string;
+    assessment: string;
+    odds: number | null;
+  }>;
+  verificationStatus?: "confirmed" | "revised" | "failed";
   verifiedConfirmed?: boolean;
   verifiedConfidence?: number;
   verifiedComment?: string;

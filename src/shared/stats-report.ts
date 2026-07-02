@@ -1,11 +1,12 @@
 import { summarizeClosedPositionsPerformance, type ClosedPositionRecord } from "../charts/performance-tracking.js";
 import { vnDateStr } from "./vn-time.js";
 import type { AiUsageDailySummary, StatsReport } from "./stats.js";
+import type { AiProvider } from "./ai-usage.js";
 
 export type StatsAiUsageRecord = {
   recordedAt: string;
   usageDate: string;
-  provider: "gemini" | "claude";
+  provider: AiProvider;
   model: string;
   source: "chart" | "betting" | "lottery" | "test";
   inputTokens: number;
@@ -38,7 +39,7 @@ function aggregateStatsAiUsageByDay(records: StatsAiUsageRecord[]): Array<
     outputTokens: number;
     estimatedCostUsd: number;
     byProvider: Array<{
-      provider: "gemini" | "claude";
+      provider: AiProvider;
       requests: number;
       inputTokens: number;
       outputTokens: number;
@@ -53,7 +54,7 @@ function aggregateStatsAiUsageByDay(records: StatsAiUsageRecord[]): Array<
       inputTokens: number;
       outputTokens: number;
       estimatedCostUsd: number;
-      byProvider: Map<"gemini" | "claude", { requests: number; inputTokens: number; outputTokens: number; estimatedCostUsd: number }>;
+      byProvider: Map<AiProvider, { requests: number; inputTokens: number; outputTokens: number; estimatedCostUsd: number }>;
     }
   >();
 

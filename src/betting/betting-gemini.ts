@@ -1,152 +1,138 @@
-import { GoogleGenAI } from "@google/genai";
 import { withRetry } from "../shared/retry.js";
-import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 import type { MatchAiAnalysis, MatchOddsPayload } from "./betting-types.js";
 import { formatOddsAnalysisInput } from "./odds-text-format.js";
 import { createLogger } from "../shared/logger.js";
-import { recordGeminiUsage } from "../shared/ai-usage.js";
+import { recordOpenRouterUsage } from "../shared/ai-usage.js";
+import { callOpenRouter } from "../shared/openrouter.js";
 
-const logger = createLogger("betting:betting-gemini");
-const DEFAULT_MODEL = "gemini-3.5-flash";
-const VERIFY_MODEL_PRIMARY = process.env.BETTING_VERIFY_MODEL_PRIMARY?.trim() || "gemini-2.5-pro";
-const VERIFY_MODEL_FALLBACK = process.env.BETTING_VERIFY_MODEL_FALLBACK?.trim() || "gemini-3.5-flash";
-const GEMINI_RATE_LIMIT = {
-  key: "gemini",
-  envVar: "GEMINI_RATE_LIMIT_RPM",
-  defaultRpm: 15,
-};
+const logger = createLogger("betting:betting-ai");
+const MODEL = process.env.AI_TEXT_MODEL?.trim() || "deepseek/deepseek-v4-flash";
+const VERIFY_MODEL =
+  process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
 
-const SYSTEM_PROMPT = `Ban la chuyen gia phan tich odds bong da, uu tien ky luat va tinh thuc dung.
+const SYSTEM_PROMPT = `Ban la chuyen gia doc odds bong da. Co the dung web search de tra cuu phong do, chan thuong, tin tuc moi nhat cua cac doi de ho tro phan tich.
 
-Nhiem vu:
-- Chi phan tich dua tren odds snapshot duoc cung cap.
-- Khong hoi lai nguoi dung.
-- Khong duoc dung kien thuc ben ngoai nhu tin tuc, chan thuong, phong do, bang xep hang, hay lich su doi dau.
-- Chi duoc suy luan tu cau truc keo, tuong quan gia, va xung dot giua cac market.
+Muc tieu: tim va xep hang cac keo nen can nhac co odds >1.80.
 
-Dau ra:
-- Tra ve duy nhat mot JSON hop le voi dung cac key sau:
-  - match: string
-  - preferredScoreline: string
-  - scoreConfidence: number
-  - recommendation: string
-  - confidence: number
-  - keyPoints: string[]
-  - risks: string[]
-  - summary: string
+Cach lam:
+1. Doc dung H=chu nha, A=doi khach, D=hoa, O=tai, U=xiu, GG=hai doi ghi ban, NG=khong.
+2. Dau handicap sau H/A la handicap that cua chinh doi do; tuyet doi khong dao dau.
+3. Doi chieu market: 1X2 voi handicap; totals voi GG/NG va team goals; corners 1X2 voi corners handicap/totals; correct_score_top chi ho tro kich ban.
+4. Chon toi da 3 keo DON co odds >1.80, xep tu manh den yeu. Chi chon keo duoc it nhat 2 tin hieu cung market ho tro va khong co mau thuan lon.
+5. Khong ghep xien. Khong bao dam thang. Neu khong co lua chon dat dieu kien, ghi ro "Dung ngoai".
 
-Quy tac:
-- Toan bo gia tri string phai viet bang tieng Viet, khong dung tieng Anh.
-- preferredScoreline phai la 1 ti so cu the, dang "1-0", "2-1", "1-1"...
-- scoreConfidence danh gia rieng muc do tin cay cua ti so uu tien, tu 0-100.
-- recommendation phai ngan, thuc dung, va noi ro huong xu ly tu odds.
-- confidence danh gia do ro rang cua tin hieu odds, khong phai do chac chan cua ket qua tran dau.
-- Neu odds can bang, nhieu xung dot, hoac khong co gia tri ro rang, phai ket luan khong co edge ro rang.
-- keyPoints phai co 2 den 4 y ngan.
-- risks phai co 2 den 4 y ngan.
-- summary phai gon trong 1 den 2 cau.
-- Khong duoc them markdown, loi chao, giai thich thua, hay key ngoai danh sach.`;
+Quy tac output:
+- recommendation: danh sach ngan dang "1) Keo @odds; 2) Keo @odds". Odds phai ton tai chinh xac trong snapshot.
+- confidence: do tin cay chung cua danh sach, 0-100; khong ha confidence chi vi odds >=1.80.
+- preferredScoreline la mot ti so tham khao phu hop cac keo ban thang.
+- keyPoints gom dung 2 bang chung odds quan trong nhat; risks gom dung 2 mau thuan/rui ro.
+- Khong goi chenh lech odds la value chac chan; chi goi la tin hieu phu hop.
 
-const VERIFY_PROMPT = `Ban la nguoi tham dinh doc lap cho mot phan tich odds bong da.
+Tra duy nhat JSON: {"match":string,"preferredScoreline":string,"scoreConfidence":number,"recommendation":string,"confidence":number,"picks":[{"market":string,"selection":string,"odds":number}],"marketViews":[{"market":string,"assessment":string,"odds":number|null}],"keyPoints":string[2],"risks":string[2],"summary":string}.
+Moi pick phai la mot keo trong recommendation; market la ten ngan nhu "Chap Chau A", "Tai/Xiu", "GG/NG", "1X2", "Phat goc".
+marketViews phai tom tat 4-5 nhom neu co du lieu: "Chap Chau A", "GG/NG", "Tong ban", "Ty so", "Phat goc". assessment ngan gon; odds la gia cua lua chon duoc nhac, hoac null neu khong co huong ro. marketViews van phai co khi picks rong.
+Viet tieng Viet, ngan gon, khong markdown.`;
 
-Nhiem vu:
-- Danh gia xem phan tich ben duoi co hop ly va nhat quan voi snapshot odds hay khong.
-- Chi dua tren odds snapshot va ket luan duoc cung cap.
-- Khong dung kien thuc ben ngoai.
-- Tra ve duy nhat JSON hop le voi keys:
-  - confirmed: boolean
-  - confidence: number
-  - comment: string
+const VERIFY_PROMPT = `Ban tham dinh doc lap danh sach keo tu snapshot odds va co the dung web search de kiem tra thong tin thuc te (phong do, chan thuong).
+Xac nhan khi tat ca dieu sau dung:
+1. Moi keo de xuat co odds >1.80 va odds khop chinh xac snapshot.
+2. Khong sai side, sai dau handicap, nham keo ban thang voi keo corners, hoac ghep xien.
+3. Moi keo co it nhat 2 tin hieu lien quan ho tro, khong mau thuan lon voi market doi chieu.
+4. Toi da 3 keo va confidence khong overclaim.
+Bac bo neu chi vi odds cao ma chon, odds/line khong ton tai, hoac logic market mau thuan.
+Tra duy nhat JSON {"confirmed":boolean,"confidence":number,"comment":string}; comment mot cau ngan, neu bac bo chi ro keo va loi quan trong nhat.`;
 
-Quy tac:
-- confirmed = true neu ket luan co luan ly, nhat quan, va khong mau thuan lon voi odds.
-- confirmed = false neu ket luan yeu, mau thuan, hoac khong co edge ro rang.
-- confidence la do chac chan cua viec tham dinh, tu 0-100.
-- comment ngan gon, noi ro vi sao dong y hoac bac bo.
-- Khong duoc them markdown, giai thich thua, hay key ngoai danh sach.`;
-
-const REVISE_PROMPT = `Ban la chuyen gia phan tich odds bong da, dang duoc yeu cau dua ra nhan dinh thay the
-sau khi nhan dinh truoc do bi tham dinh tu choi.
-
-Nhiem vu:
-- Chi dua tren odds snapshot va ly do tu choi duoc cung cap.
-- Khong dung kien thuc ben ngoai (tin tuc, chan thuong, phong do, bang xep hang, lich su doi dau).
-- Dua ra mot nhan dinh moi, khac voi nhan dinh cu, khac phuc duoc van de da bi tu choi.
-- Neu odds khong co edge ro rang, phai ket luan trung thuc la khong co edge ro rang voi confidence thap.
-- Tra ve duy nhat mot JSON hop le voi dung cac key: match, preferredScoreline, scoreConfidence,
-  recommendation, confidence, keyPoints, risks, summary (cung dinh nghia nhu phan tich ban dau).
-- Khong duoc them markdown, loi chao, giai thich thua, hay key ngoai danh sach.`;
-
-function getClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not set");
-  return new GoogleGenAI({ apiKey });
-}
-
-function getModelName(): string {
-  return process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
-}
-
-function buildGenerationConfig(model: string, maxOutputTokens: number) {
-  const config: {
-    temperature: number;
-    topP: number;
-    maxOutputTokens: number;
-    responseMimeType: "application/json";
-    thinkingConfig?: { thinkingBudget: number };
-  } = {
-    temperature: 0.2,
-    topP: 0.9,
-    maxOutputTokens,
-    responseMimeType: "application/json",
-  };
-
-  if (model === VERIFY_MODEL_PRIMARY) {
-    config.maxOutputTokens = Math.max(maxOutputTokens, 900);
-    config.thinkingConfig = { thinkingBudget: 128 };
-  } else {
-    config.thinkingConfig = { thinkingBudget: 0 };
-  }
-
-  return config;
-}
+const REVISE_PROMPT = `Sua danh sach keo bi bac bo, dung snapshot, ly do tham dinh, va co the dung web search de tra cuu thong tin bo sung.
+Loai keo sai thay vi bat buoc chon keo nguoc lai. Danh sach moi toi da 3 keo don, moi keo odds >1.80, odds/line phai ton tai trong snapshot va co it nhat 2 tin hieu ho tro.
+Neu khong con keo dat dieu kien, recommendation la "Dung ngoai".
+Ket qua phai la mot phan tich doc lap cho nguoi dung: khong nhac den buoc verify/tham dinh, nhan dinh cu, viec bi bac bo, hay loi cua vong truoc trong bat ky field nao.
+Tra duy nhat JSON cung schema phan tich: match, preferredScoreline, scoreConfidence, recommendation, confidence, picks, marketViews, keyPoints[2], risks[2], summary. Neu dung ngoai thi picks la mang rong nhung marketViews van tom tat 4-5 nhom thi truong. Viet ngan gon.`;
 
 function cleanResponse(text: string): string {
-  return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  return text
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
 }
-
 function extractJsonObject(text: string): string {
   const cleaned = cleanResponse(text);
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) {
-    return cleaned.slice(start, end + 1);
-  }
-  return cleaned;
+  return start !== -1 && end > start ? cleaned.slice(start, end + 1) : cleaned;
 }
-
 function clampConfidence(value: unknown): number {
   const num = Number(value);
-  if (!Number.isFinite(num)) return 0;
-  return Math.max(0, Math.min(100, Math.round(num)));
+  return Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : 0;
 }
-
 function sanitizeStringList(value: unknown, fallback: string): string[] {
   if (!Array.isArray(value)) return [fallback];
   const items = value
     .map((item) => String(item).trim())
-    .filter((item) => item.length > 0)
-    .slice(0, 4);
+    .filter(Boolean)
+    .slice(0, 2);
   return items.length > 0 ? items : [fallback];
+}
+
+function sanitizePicks(value: unknown): MatchAiAnalysis["picks"] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const candidate = item as {
+        market?: unknown;
+        selection?: unknown;
+        odds?: unknown;
+      };
+      const market = String(candidate.market ?? "").trim();
+      const selection = String(candidate.selection ?? "").trim();
+      const odds = Number(candidate.odds);
+      return market && selection && Number.isFinite(odds) && odds > 0
+        ? { market, selection, odds }
+        : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .slice(0, 3);
+}
+
+function sanitizeMarketViews(value: unknown): MatchAiAnalysis["marketViews"] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const candidate = item as {
+        market?: unknown;
+        assessment?: unknown;
+        odds?: unknown;
+      };
+      const market = String(candidate.market ?? "").trim();
+      const assessment = String(candidate.assessment ?? "").trim();
+      const parsedOdds =
+        candidate.odds === null ||
+        candidate.odds === undefined ||
+        candidate.odds === ""
+          ? null
+          : Number(candidate.odds);
+      if (
+        !market ||
+        !assessment ||
+        (parsedOdds !== null &&
+          (!Number.isFinite(parsedOdds) || parsedOdds <= 0))
+      ) {
+        return null;
+      }
+      return { market, assessment, odds: parsedOdds };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .slice(0, 5);
 }
 
 function parseVerificationResponse(
   text: string,
 ): { confirmed: boolean; confidence: number; comment: string } | null {
-  const cleaned = extractJsonObject(text);
-
   try {
-    const parsed = JSON.parse(cleaned) as { confirmed?: unknown; confidence?: unknown; comment?: unknown };
+    const parsed = JSON.parse(extractJsonObject(text)) as {
+      confirmed?: unknown;
+      confidence?: unknown;
+      comment?: unknown;
+    };
     return {
       confirmed: Boolean(parsed.confirmed),
       confidence: clampConfidence(parsed.confidence),
@@ -162,9 +148,11 @@ function buildFallbackRevisedAnalysis(
   original: MatchAiAnalysis,
   rejectionComment: string,
 ): MatchAiAnalysis {
-  const shortReason = rejectionComment.trim() || "Nhan dinh truoc do khong vuot qua buoc tham dinh.";
-  const trimmedReason = shortReason.length > 160 ? `${shortReason.slice(0, 157)}...` : shortReason;
-
+  const shortReason =
+    rejectionComment.trim() ||
+    "Nhan dinh truoc do khong vuot qua buoc tham dinh.";
+  const trimmedReason =
+    shortReason.length > 160 ? `${shortReason.slice(0, 157)}...` : shortReason;
   return {
     match: `${payload.home} vs ${payload.away}`,
     preferredScoreline: original.preferredScoreline || "1-1",
@@ -181,77 +169,81 @@ function buildFallbackRevisedAnalysis(
       "Nhan dinh thay the duoc ha muc tin cay de tranh overclaim.",
       "Thi truong hien tai co the dang can bang hoac xung dot giua cac market.",
     ],
-    summary: `Nhan dinh goc bi tu choi trong buoc tham dinh doc lap. Ban thay the nay chuyen sang goc nhin bao thu vi odds chua cho edge ro rang.`,
+    summary:
+      "Nhan dinh goc bi tu choi trong buoc tham dinh doc lap. Ban thay the nay chuyen sang goc nhin bao thu vi odds chua cho edge ro rang.",
   };
 }
 
-export function parseMatchAnalysisResponse(text: string, payload: MatchOddsPayload): MatchAiAnalysis | null {
-  const cleaned = extractJsonObject(text);
-
+export function parseMatchAnalysisResponse(
+  text: string,
+  payload: MatchOddsPayload,
+): MatchAiAnalysis | null {
   try {
-    const parsed = JSON.parse(cleaned) as Partial<MatchAiAnalysis>;
+    const parsed = JSON.parse(
+      extractJsonObject(text),
+    ) as Partial<MatchAiAnalysis>;
+    const confidence = clampConfidence(parsed.confidence);
     return {
       match: String(parsed.match || `${payload.home} vs ${payload.away}`),
-      preferredScoreline: String(parsed.preferredScoreline || "Chua co ti so uu tien"),
-      scoreConfidence: clampConfidence((parsed as { scoreConfidence?: unknown }).scoreConfidence),
-      recommendation: String(parsed.recommendation || "Khong co goi y ro rang tu odds."),
-      confidence: clampConfidence(parsed.confidence),
-      keyPoints: sanitizeStringList(parsed.keyPoints, "Khong tach duoc cac diem odds noi bat."),
-      risks: sanitizeStringList(parsed.risks, "Can than vi du lieu odds chua cho thay mot edge ro rang."),
-      summary: String(parsed.summary || "Khong co du thong tin de rut ra ket luan on dinh."),
+      preferredScoreline: String(
+        parsed.preferredScoreline || "Chua co ti so uu tien",
+      ),
+      scoreConfidence: clampConfidence(parsed.scoreConfidence),
+      recommendation: String(parsed.recommendation || "Dung ngoai."),
+      confidence,
+      picks: sanitizePicks(parsed.picks),
+      marketViews: sanitizeMarketViews(parsed.marketViews),
+      keyPoints: sanitizeStringList(
+        parsed.keyPoints,
+        "Khong tach duoc cac diem odds noi bat.",
+      ),
+      risks: sanitizeStringList(
+        parsed.risks,
+        "Can than vi du lieu odds chua cho thay mot edge ro rang.",
+      ),
+      summary: String(
+        parsed.summary || "Khong co du thong tin de rut ra ket luan on dinh.",
+      ),
     };
   } catch {
     return null;
   }
 }
 
-export async function analyzeMatchOdds(payload: MatchOddsPayload): Promise<MatchAiAnalysis> {
-  const ai = getClient();
-  const model = getModelName();
+export async function analyzeMatchOdds(
+  payload: MatchOddsPayload,
+): Promise<MatchAiAnalysis> {
   const oddsText = formatOddsAnalysisInput(payload);
-
-  const request = () =>
-    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
-      ai.models.generateContent({
-        model,
-        contents: [
+  const response = await withRetry(
+    () =>
+      callOpenRouter({
+        model: MODEL,
+        systemPrompt: SYSTEM_PROMPT,
+        userContent: [
           {
-            role: "user",
-            parts: [
-              {
-                text:
-                  `${SYSTEM_PROMPT}\n\n` +
-                  `Match: ${payload.home} vs ${payload.away}\n` +
-                  `Kickoff Unix: ${payload.kickoffUnix}\n\n` +
-                  `Hay phan tich odds snapshot sau va tra ve JSON ngay bay gio.\n\n` +
-                  `Odds snapshot:\n${oddsText}`,
-              },
-            ],
+            type: "text",
+            text: `match=${payload.home} vs ${payload.away}\nkickoff=${payload.kickoffUnix}\n${oddsText}`,
           },
         ],
-        config: buildGenerationConfig(model, 600),
+        maxTokens: 8000,
+        temperature: 0.2,
+        responseFormat: { type: "json_object" },
+        reasoning: { effort: "low", exclude: true },
+        plugins: [{ id: "web", max_results: 5 }],
       }),
-    );
-
-  const response = await withRetry(request, {
-    onRetry: (error, attempt, maxAttempts, delayMs) => {
-      logger.warn(
-        `  ! Gemini match analysis temporary error for ${payload.home} vs ${payload.away} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${
-          error instanceof Error ? error.message : error
-        }`,
-      );
+    {
+      onRetry: (error, attempt, maxAttempts, delayMs) =>
+        logger.warn(
+          `  ! OpenRouter match analysis temporary error for ${payload.home} vs ${payload.away} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
+        ),
     },
-  });
-
-  void recordGeminiUsage(response as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } }, {
-    model,
-    source: "betting",
-  });
-
-  const parsed = parseMatchAnalysisResponse(response.text ?? "", payload);
-  if (!parsed) {
-    throw new Error(`Gemini parse failed. Raw: ${(response.text ?? "").slice(0, 300)}`);
-  }
+  );
+  void recordOpenRouterUsage(response, { model: MODEL, source: "betting" });
+  const parsed = parseMatchAnalysisResponse(response.text, payload);
+  if (!parsed)
+    throw new Error(
+      `OpenRouter parse failed. Raw: ${response.text.slice(0, 300)}`,
+    );
   return parsed;
 }
 
@@ -259,79 +251,52 @@ export async function verifyMatchAnalysis(
   payload: MatchOddsPayload,
   analysis: MatchAiAnalysis,
 ): Promise<{ confirmed: boolean; confidence: number; comment: string }> {
-  const ai = getClient();
   const oddsText = formatOddsAnalysisInput(payload);
   const verifyInput = {
-    match: analysis.match,
     preferredScoreline: analysis.preferredScoreline,
     scoreConfidence: analysis.scoreConfidence,
     recommendation: analysis.recommendation,
     confidence: analysis.confidence,
     keyPoints: analysis.keyPoints,
     risks: analysis.risks,
-    summary: analysis.summary,
+    picks: analysis.picks ?? [],
+    marketViews: analysis.marketViews ?? [],
   };
-
-  const buildRequest = (model: string) => () =>
-    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
-      ai.models.generateContent({
-        model,
-        contents: [
+  const response = await withRetry(
+    () =>
+      callOpenRouter({
+        model: VERIFY_MODEL,
+        systemPrompt: VERIFY_PROMPT,
+        userContent: [
           {
-            role: "user",
-            parts: [
-              {
-                text:
-                  `${VERIFY_PROMPT}\n\n` +
-                  `Odds snapshot:\n${oddsText}\n\n` +
-                  `Phan tich can tham dinh:\n${JSON.stringify(verifyInput, null, 2)}`,
-              },
-            ],
+            type: "text",
+            text: `${oddsText}\nanalysis=${JSON.stringify(verifyInput)}`,
           },
         ],
-        config: buildGenerationConfig(model, 500),
+        maxTokens: 4000,
+        temperature: 0.2,
+        responseFormat: { type: "json_object" },
+        reasoning: { effort: "none", exclude: true },
+        plugins: [{ id: "web", max_results: 5 }],
       }),
-    );
-
-  const callVerifyModel = async (model: string): Promise<{ confirmed: boolean; confidence: number; comment: string }> => {
-    const response = await withRetry(buildRequest(model), {
-      onRetry: (error, attempt, maxAttempts, delayMs) => {
+    {
+      onRetry: (error, attempt, maxAttempts, delayMs) =>
         logger.warn(
-          `  ! Gemini match verify temporary error with ${model} for ${payload.home} vs ${payload.away} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${
-            error instanceof Error ? error.message : error
-          }`,
-        );
-      },
-    });
-
-    void recordGeminiUsage(
-      response as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } },
-      {
-        model,
-        source: "betting",
-      },
+          `  ! OpenRouter match verify temporary error for ${payload.home} vs ${payload.away} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
+        ),
+    },
+  );
+  void recordOpenRouterUsage(response, {
+    model: VERIFY_MODEL,
+    source: "betting",
+  });
+  const parsed = parseVerificationResponse(response.text);
+  if (!parsed) {
+    throw new Error(
+      `OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`,
     );
-
-    const parsed = parseVerificationResponse(response.text ?? "");
-    if (!parsed) {
-      throw new Error(`Gemini verify parse failed for model ${model}. Raw: ${(response.text ?? "").slice(0, 300)}`);
-    }
-
-    return parsed;
-  };
-
-  try {
-    const result = await callVerifyModel(VERIFY_MODEL_PRIMARY);
-    return result;
-  } catch (primaryError) {
-    logger.warn(
-      `  ! Gemini match verify failed with ${VERIFY_MODEL_PRIMARY} for ${payload.home} vs ${payload.away}, falling back to ${VERIFY_MODEL_FALLBACK}: ${
-        primaryError instanceof Error ? primaryError.message : primaryError
-      }`,
-    );
-    const result = await callVerifyModel(VERIFY_MODEL_FALLBACK);
-    return result;
   }
+  return parsed;
 }
 
 export async function reviseMatchAnalysis(
@@ -339,55 +304,49 @@ export async function reviseMatchAnalysis(
   original: MatchAiAnalysis,
   rejectionComment: string,
 ): Promise<MatchAiAnalysis> {
-  const ai = getClient();
   const oddsText = formatOddsAnalysisInput(payload);
-
-  const request = () =>
-    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
-      ai.models.generateContent({
-        model: VERIFY_MODEL_FALLBACK,
-        contents: [
+  const originalInput = {
+    preferredScoreline: original.preferredScoreline,
+    scoreConfidence: original.scoreConfidence,
+    recommendation: original.recommendation,
+    confidence: original.confidence,
+    picks: original.picks ?? [],
+    marketViews: original.marketViews ?? [],
+  };
+  const response = await withRetry(
+    () =>
+      callOpenRouter({
+        model: VERIFY_MODEL,
+        systemPrompt: REVISE_PROMPT,
+        userContent: [
           {
-            role: "user",
-            parts: [
-              {
-                text:
-                  `${REVISE_PROMPT}\n\n` +
-                  `Odds snapshot:\n${oddsText}\n\n` +
-                  `Nhan dinh ban dau (da bi tu choi):\n${JSON.stringify(original, null, 2)}\n\n` +
-                  `Ly do tu choi:\n${rejectionComment}`,
-              },
-            ],
+            type: "text",
+            text: `${oddsText}\nrejected=${JSON.stringify(originalInput)}\nreason=${rejectionComment}`,
           },
         ],
-        config: buildGenerationConfig(VERIFY_MODEL_FALLBACK, 600),
+        maxTokens: 4000,
+        temperature: 0.2,
+        responseFormat: { type: "json_object" },
+        reasoning: { effort: "none", exclude: true },
+        plugins: [{ id: "web", max_results: 5 }],
       }),
-    );
-
-  const response = await withRetry(request, {
-    onRetry: (error, attempt, maxAttempts, delayMs) => {
-      logger.warn(
-        `  ! Gemini match revise temporary error for ${payload.home} vs ${payload.away} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${
-          error instanceof Error ? error.message : error
-        }`,
-      );
+    {
+      onRetry: (error, attempt, maxAttempts, delayMs) =>
+        logger.warn(
+          `  ! OpenRouter match revise temporary error for ${payload.home} vs ${payload.away} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
+        ),
     },
-  });
-
-  void recordGeminiUsage(response as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } }, {
-    model: VERIFY_MODEL_FALLBACK,
+  );
+  void recordOpenRouterUsage(response, {
+    model: VERIFY_MODEL,
     source: "betting",
   });
-
-  const parsed = parseMatchAnalysisResponse(response.text ?? "", payload);
+  const parsed = parseMatchAnalysisResponse(response.text, payload);
   if (!parsed) {
     logger.warn(
-      `  ! Gemini revise parse failed for ${payload.home} vs ${payload.away}, falling back to conservative revision. Raw: ${(response.text ?? "").slice(0, 300)}`,
+      `  ! OpenRouter revise parse failed for ${payload.home} vs ${payload.away}; using conservative fallback`,
     );
     return buildFallbackRevisedAnalysis(payload, original, rejectionComment);
   }
   return parsed;
 }
-
-
-

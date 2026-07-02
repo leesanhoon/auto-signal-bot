@@ -1,4 +1,5 @@
 import type { PerformanceSummary } from "../charts/performance-tracking.js";
+import type { AiProvider } from "./ai-usage.js";
 
 export type AiUsageDailySummary = {
   requests: number;
@@ -6,7 +7,7 @@ export type AiUsageDailySummary = {
   outputTokens: number;
   estimatedCostUsd: number;
   byProvider: Array<{
-    provider: string;
+    provider: AiProvider;
     requests: number;
     inputTokens: number;
     outputTokens: number;

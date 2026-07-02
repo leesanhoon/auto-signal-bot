@@ -74,7 +74,7 @@ function formatAsiaHandicap(
     const h = sameLine.find((o) => o.name === "H");
     const a = sameLine.find((o) => o.name === "A");
     if (h) parts.push(`H${fmtSignedPoint(point)}=${h.price}`);
-    if (a) parts.push(`A${fmtSignedPoint(point)}=${a.price}`);
+    if (a) parts.push(`A${fmtSignedPoint(-point)}=${a.price}`);
   }
   return parts.length > 0 ? `${label}: ${parts.join(" ")}` : undefined;
 }
@@ -210,7 +210,51 @@ export function formatOddsText(payload: MatchOddsPayload): string {
 }
 
 export function formatOddsAnalysisInput(payload: MatchOddsPayload): string {
-  return formatOddsText(payload);
+  const lines: string[] = [];
+  const marketKeys = [
+    "h2h",
+    "asia_handicap",
+    "asia_totals",
+    "eu_totals",
+    "btts",
+    "team_goals_home",
+    "team_goals_away",
+    "corners_1x2",
+    "corners_handicap",
+    "corners_totals",
+    "corners_totals_eu",
+  ];
+
+  for (const key of marketKeys) {
+    const market = findMarket(payload, key);
+    if (!market) continue;
+    const outcomes = market.outcomes.map((outcome) => {
+      const normalizedPoint =
+        key.includes("handicap") &&
+        outcome.name === "A" &&
+        outcome.point !== undefined
+          ? -outcome.point
+          : outcome.point;
+      const point =
+        normalizedPoint === undefined
+          ? ""
+          : `@${fmtSignedPoint(normalizedPoint)}`;
+      return `${outcome.name}${point}=${outcome.price}`;
+    });
+    if (outcomes.length > 0) lines.push(`${key}:${outcomes.join(",")}`);
+  }
+
+  if (payload.correctScore?.length) {
+    const strongestScores = [...payload.correctScore]
+      .filter((outcome) => Number.isFinite(outcome.price) && outcome.price > 0)
+      .sort((left, right) => left.price - right.price)
+      .slice(0, 8)
+      .map((outcome) => `${outcome.score}=${outcome.price}`);
+    if (strongestScores.length > 0)
+      lines.push(`correct_score_top:${strongestScores.join(",")}`);
+  }
+
+  return lines.join("\n");
 }
 
 function pickMainPoint(market: CompactMarket | undefined): number | undefined {
@@ -283,53 +327,87 @@ export function formatMatchAnalysisMessage(
   payload: MatchOddsPayload,
   analysis: MatchAiAnalysis,
 ): string {
-  const mainOdds = formatMainOddsSummary(payload);
+  const isStandAside =
+    /d[uứ]ng\s*(ngo[aà]i|l[aạ]i)|kh[oô]ng\s+(c[oó]\s+)?(k[eè]o|edge)/i.test(
+      analysis.recommendation,
+    );
   const confidenceLabel =
     analysis.confidence >= 70
-      ? "cao"
+      ? "CAO"
       : analysis.confidence >= 40
-        ? "trung binh"
-        : "thap";
-  const scoreConfidenceLabel =
-    analysis.scoreConfidence >= 70
-      ? "cao"
-      : analysis.scoreConfidence >= 40
-        ? "trung binh"
-        : "thap";
-  const verificationLine =
-    analysis.verifiedConfirmed !== undefined
-      ? analysis.verifiedConfirmed
-        ? `✅ Đã được xác nhận bởi chuyên gia (${analysis.verifiedConfidence ?? 0}%)${
-            analysis.verifiedComment ? ` — ${analysis.verifiedComment}` : ""
-          }`
-        : analysis.revisedAfterReject
-          ? `⚠️ Nhận định này được điều chỉnh sau khi chuyên gia từ chối (${analysis.verifiedConfidence ?? 0}%)${
-              analysis.verifiedComment ? ` — ${analysis.verifiedComment}` : ""
-            }`
-          : `⚠️ Chuyên gia không xác nhận kết quả này (${analysis.verifiedConfidence ?? 0}%)${
-              analysis.verifiedComment ? ` — ${analysis.verifiedComment}` : ""
-            }`
-      : "";
+        ? "TRUNG BÌNH"
+        : "THẤP";
+  const compact = (value: string, maxLength = 140): string => {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    return normalized.length > maxLength
+      ? `${normalized.slice(0, maxLength - 1).trimEnd()}…`
+      : normalized;
+  };
+  const keyPoints = analysis.keyPoints.filter(Boolean).slice(0, 2);
+  const risks = analysis.risks.filter(Boolean).slice(0, 2);
+  const confidenceStars =
+    analysis.confidence >= 80
+      ? "⭐⭐⭐⭐⭐"
+      : analysis.confidence >= 65
+        ? "⭐⭐⭐⭐"
+        : analysis.confidence >= 50
+          ? "⭐⭐⭐"
+          : analysis.confidence >= 35
+            ? "⭐⭐"
+            : "⭐";
+  const picks = (analysis.picks ?? []).slice(0, 3);
+  const marketViews = (analysis.marketViews ?? []).slice(0, 5);
+  const verifyLabel =
+    analysis.verificationStatus === "confirmed"
+      ? "✅ *Verify:* đạt"
+      : analysis.verificationStatus === "revised"
+        ? "🔄 *Verify:* đã hiệu chỉnh"
+        : analysis.verificationStatus === "failed"
+          ? "⚠️ *Verify:* lỗi model"
+          : "⚪ *Verify:* chưa chạy";
+  const sections: string[] = [
+    [
+      `🏟 *${payload.home} (H) vs ${payload.away} (A)*`,
+      `⭐ *Độ tin cậy: ${confidenceLabel}* ${confidenceStars}`,
+      verifyLabel,
+    ].join("\n"),
+  ];
 
-  const lines = [
-    `*${payload.home} vs ${payload.away}*`,
-    `Ti so uu tien: *${analysis.preferredScoreline}*`,
-    `Tin cay ti so: *${analysis.scoreConfidence}%* (${scoreConfidenceLabel})`,
-    `Khuyen nghi: *${analysis.recommendation}*`,
-    `Do ro tin hieu: *${analysis.confidence}%* (${confidenceLabel})`,
-    verificationLine,
-    mainOdds ? `Keo chinh: ${mainOdds}` : "",
-    "",
-    `Tom tat: ${analysis.summary}`,
-    "",
-    "*Diem dang chu y:*",
-    ...analysis.keyPoints.map((point) => `- ${point}`),
-    "",
-    "*Rui ro can luu y:*",
-    ...analysis.risks.map((risk) => `- ${risk}`),
-  ].filter((line) => line !== "");
+  if (picks.length > 0) {
+    sections.push(
+      [
+        "🎯 *KÈO ĐỀ XUẤT*",
+        ...picks.map(
+          (pick, index) =>
+            `${index + 1}. *${compact(pick.selection, 60)}*  \`@${pick.odds}\`\n   _${compact(pick.market, 35)}_`,
+        ),
+      ].join("\n"),
+    );
+  } else if (!isStandAside) {
+    sections.push(
+      `🎯 *KÈO ĐỀ XUẤT*\n• ${compact(analysis.recommendation, 120)}`,
+    );
+  }
+  sections.push(
+    `⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`,
+  );
+  if (marketViews.length > 0) {
+    sections.push(
+      [
+        "📋 *NHẬN ĐỊNH THỊ TRƯỜNG*",
+        ...marketViews.map(
+          (view) =>
+            `• *${compact(view.market, 30)}:* ${compact(view.assessment, 75)}${view.odds === null ? "" : `  \`@${view.odds}\``}`,
+        ),
+      ].join("\n"),
+    );
+  }
 
-  return lines.join("\n");
+  if (keyPoints.length > 0)
+    sections.push(`🔎 *Nhận định:* ${compact(keyPoints[0])}`);
+  if (risks.length > 0) sections.push(`⚠️ *Rủi ro:* ${compact(risks[0])}`);
+
+  return sections.join("\n\n");
 }
 
 export function formatOddsFallbackMessage(
@@ -338,7 +416,7 @@ export function formatOddsFallbackMessage(
 ): string {
   return [
     `*${payload.home} vs ${payload.away}*`,
-    `_Gemini tam thoi chua phan tich duoc tran nay: ${reason}_`,
+    `_AI tam thoi chua phan tich duoc tran nay: ${reason}_`,
     "",
     formatOddsDataMessage(payload),
   ].join("\n");

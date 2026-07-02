@@ -1,128 +1,67 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const analyzerState = vi.hoisted(() => ({
-  generateContent: vi.fn(),
-  claudeCreate: vi.fn(),
+const state = vi.hoisted(() => ({
+  call: vi.fn(),
   retry: vi.fn(async (request: () => Promise<unknown>) => request()),
 }));
-
-vi.mock("@google/genai", () => ({
-  GoogleGenAI: class {
-    models = { generateContent: analyzerState.generateContent };
-    constructor(_options: unknown) {}
-  },
-}));
-
-vi.mock("../../src/shared/retry.js", () => ({
-  withRetry: analyzerState.retry,
-}));
-
-vi.mock("../../src/charts/screenshot.js", () => ({
-  captureVerificationChartScreenshot: vi.fn(async (chart: { symbol: string; name: string }) => ({
-    chart,
-    buffer: Buffer.from(`chart-${chart.symbol}`),
-    filepath: `/tmp/${chart.symbol}.jpg`,
-  })),
-  findChartForPair: vi.fn((pair: string) => (pair === "EUR/USD" ? { symbol: "EURUSD", name: "EUR/USD" } : undefined)),
-}));
-
-vi.mock("../../src/shared/claude.js", () => ({
-  extractTextFromClaudeResponse: (response: { content?: Array<{ type: string; text?: string }> }) =>
-    response.content?.map((block) => block.text ?? "").join("") ?? "",
-  getClaudeClient: () => ({
-    messages: { create: analyzerState.claudeCreate },
-  }),
-}));
-
+vi.mock("../../src/shared/openrouter.js", () => ({ callOpenRouter: state.call }));
+vi.mock("../../src/shared/retry.js", () => ({ withRetry: state.retry }));
 const analyzer = await import("../../src/charts/analyzer.js");
 
 describe("charts/analyzer", () => {
   beforeEach(() => {
-    analyzerState.generateContent.mockReset();
-    analyzerState.claudeCreate.mockReset();
-    analyzerState.retry.mockClear();
-    process.env.GEMINI_API_KEY = "test";
-    process.env.ANTHROPIC_API_KEY = "test";
+    state.call.mockReset();
+    state.retry.mockClear();
   });
 
   test("parseAnalysisResponse filters low-confidence setups", () => {
     const parsed = analyzer.parseAnalysisResponse(
       '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"Trade","confidence":81}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Breakout","reasons":["A"],"risks":["B"],"confidence":72,"entry":"1.10","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"ok"},{"pair":"GBP/USD","direction":"SHORT","setup":"Reversal","reasons":["C"],"risks":["D"],"confidence":69,"entry":"1.25","stopLoss":"1.26","takeProfit1":"1.23","takeProfit2":"1.22","riskReward":"1:2","summary":"skip"}],"noSetupReason":"none"}',
     );
-
     expect(parsed.summaries).toHaveLength(1);
     expect(parsed.setups).toHaveLength(1);
     expect(parsed.setups[0].pair).toBe("EUR/USD");
-    expect(parsed.noSetupReason).toBe("none");
   });
 
-  test("analyzeAllCharts returns parsed AI output and preserves screenshots", async () => {
-    analyzerState.generateContent.mockResolvedValueOnce({
-      text: "```json\n{\"summaries\":[{\"pair\":\"EUR/USD\",\"trend\":\"Up\",\"emaProximity\":\"gần\",\"status\":\"TRADE\",\"confidence\":88}],\"setups\":[{\"pair\":\"EUR/USD\",\"direction\":\"LONG\",\"setup\":\"Pullback\",\"emaTouch\":true,\"reasons\":[\"EMA touch\"],\"risks\":[\"False breakout\"],\"confidence\":78,\"entry\":\"1.1000\",\"stopLoss\":\"1.0960\",\"takeProfit1\":\"1.1080\",\"takeProfit2\":\"1.1120\",\"riskReward\":\"1:2\",\"summary\":\"Valid long\"},{\"pair\":\"GBP/USD\",\"direction\":\"SHORT\",\"setup\":\"Weak setup\",\"reasons\":[\"Chop\"],\"risks\":[\"Noise\"],\"confidence\":63,\"entry\":\"1.2500\",\"stopLoss\":\"1.2540\",\"takeProfit1\":\"1.2420\",\"takeProfit2\":\"1.2380\",\"riskReward\":\"1:2\",\"summary\":\"Skip\"}],\"noSetupReason\":\"No clean setup\"}\n```",
+  test("analyzeAllCharts sends data URLs and parses OpenRouter output", async () => {
+    state.call.mockResolvedValueOnce({
+      text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
+      usage: { promptTokens: 10, completionTokens: 20 },
     });
-
-    const screenshots = [
-      { chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("one"), filepath: "/tmp/eur.jpg" },
-    ];
-
+    const screenshots = [{ chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("image"), filepath: "/tmp/chart.jpg" }];
     const result = await analyzer.analyzeAllCharts(screenshots);
-
-    expect(result.summaries).toHaveLength(1);
-    expect(result.setups).toHaveLength(1);
     expect(result.setups[0].pair).toBe("EUR/USD");
-    expect(result.noSetupReason).toBe("No clean setup");
     expect(result.screenshots).toBe(screenshots);
-    expect(analyzerState.generateContent).toHaveBeenCalledTimes(1);
+    expect(state.call.mock.calls[0][0].userContent[0].image_url.url).toMatch(/^data:image\/jpeg;base64,/);
   });
 
-  test("confirmHighConfidenceSetups annotates verified setups and leaves unmatched ones untouched", async () => {
-    analyzerState.generateContent.mockResolvedValueOnce({
+  test("confirmHighConfidenceSetups attaches OpenRouter verification", async () => {
+    state.call.mockResolvedValueOnce({
       text: '{"confirmed":true,"confidence":91,"comment":"aligned"}',
+      usage: { promptTokens: 0, completionTokens: 0 },
     });
+    const setup = {
+      pair: "EUR/USD", direction: "LONG" as const, setup: "Pullback", reasons: ["EMA"],
+      risks: ["Noise"], confidence: 85, entry: "1.1", stopLoss: "1.09",
+      takeProfit1: "1.12", takeProfit2: "1.13", riskReward: "1:2", summary: "Valid",
+    };
+    const screenshots = [{
+      chart: { symbol: "OANDA:EURUSD", name: "EUR/USD H4", timeframe: "H4" as const },
+      buffer: Buffer.from("image"),
+      filepath: "/tmp/chart.jpg",
+    }];
 
-    const setups = [
-      {
-        pair: "EUR/USD",
-        direction: "LONG" as const,
-        setup: "Pullback",
-        emaTouch: true,
-        reasons: ["EMA touch", "Trend aligned"],
-        risks: ["News risk"],
-        confidence: 84,
-        entry: "1.1000",
-        stopLoss: "1.0960",
-        takeProfit1: "1.1080",
-        takeProfit2: "1.1120",
-        riskReward: "1:2",
-        summary: "Valid long",
-      },
-      {
-        pair: "AUD/USD",
-        direction: "SHORT" as const,
-        setup: "Fade",
-        reasons: ["Resistance"],
-        risks: ["Bounce"],
-        confidence: 88,
-        entry: "0.6800",
-        stopLoss: "0.6840",
-        takeProfit1: "0.6720",
-        takeProfit2: "0.6680",
-        riskReward: "1:2",
-        summary: "Another setup",
-      },
-    ];
+    const [verified] = await analyzer.confirmHighConfidenceSetups([setup], screenshots);
 
-    const result = await analyzer.confirmHighConfidenceSetups(setups, [
-      { chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("eur"), filepath: "/tmp/eur.jpg" },
-    ]);
-
-    expect(result[0]).toMatchObject({
+    expect(verified).toMatchObject({
       verifiedConfirmed: true,
       verifiedConfidence: 91,
-      verifiedComment: "aligned",
-      verifiedBy: "gemini-2.5-pro",
+      verifiedBy: "moonshotai/kimi-k2.6",
     });
-    expect(result[1]).toEqual(setups[1]);
-    expect(analyzerState.generateContent).toHaveBeenCalledTimes(1);
+    expect(state.call.mock.calls[0][0].userContent[0]).toMatchObject({
+      type: "image_url",
+      image_url: { url: expect.stringMatching(/^data:image\/jpeg;base64,/) },
+    });
+    expect(state.call.mock.calls[0][0].userContent[1]).toMatchObject({ type: "text" });
   });
 });

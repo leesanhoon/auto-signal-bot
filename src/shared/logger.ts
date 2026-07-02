@@ -21,6 +21,7 @@ const SENSITIVE_KEYS = new Set([
   "supabaseKey",
   "geminiApiKey",
   "anthropicApiKey",
+  "openrouterApiKey",
   "telegramBotToken",
   "telegramChatId",
 ]);
@@ -43,6 +44,7 @@ function buildBaseLogger() {
         "supabaseKey",
         "geminiApiKey",
         "anthropicApiKey",
+        "openrouterApiKey",
         "telegramBotToken",
         "telegramChatId",
       ],
@@ -68,8 +70,7 @@ function redactSecrets(value: string): string {
   const secrets = [
     process.env.SUPABASE_KEY,
     process.env.SUPABASE_URL,
-    process.env.GEMINI_API_KEY,
-    process.env.ANTHROPIC_API_KEY,
+    process.env.OPENROUTER_API_KEY,
     process.env.TELEGRAM_BOT_TOKEN,
     process.env.TELEGRAM_CHAT_ID,
   ].filter((secret): secret is string => Boolean(secret && secret.length >= 6));

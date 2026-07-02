@@ -29,13 +29,12 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AI_TEXT_MODEL: ${{ vars.AI_TEXT_MODEL }}
+          AI_VERIFY_MODEL: ${{ vars.AI_VERIFY_MODEL }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           API_FOOTBALL_BOOKMAKER: ${{ secrets.API_FOOTBALL_BOOKMAKER }}
           API_FOOTBALL_LEAGUE: ${{ vars.API_FOOTBALL_LEAGUE }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          BETTING_VERIFY_MODEL_PRIMARY: ${{ vars.BETTING_VERIFY_MODEL_PRIMARY }}
-          BETTING_VERIFY_MODEL_FALLBACK: ${{ vars.BETTING_VERIFY_MODEL_FALLBACK }}
         run: npm run match-odds

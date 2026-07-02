@@ -41,17 +41,13 @@ jobs:
 
       - name: Run analysis
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          VERIFY_PROVIDER: ${{ vars.VERIFY_PROVIDER }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AI_VISION_MODEL: ${{ vars.AI_VISION_MODEL }}
+          AI_CHART_VERIFY_MODEL: ${{ vars.AI_CHART_VERIFY_MODEL }}
+          AI_VERIFY_MODEL: ${{ vars.AI_VERIFY_MODEL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CHART_SIGNAL_CONFIDENCE_THRESHOLD: ${{ vars.CHART_SIGNAL_CONFIDENCE_THRESHOLD }}
-          CHART_VERIFY_MODEL_PRIMARY: ${{ vars.CHART_VERIFY_MODEL_PRIMARY }}
-          CHART_ANALYSIS_MODEL: ${{ vars.CHART_ANALYSIS_MODEL }}
-          CHART_VERIFY_MODEL_CLAUDE: ${{ vars.CHART_VERIFY_MODEL_CLAUDE }}
-          POSITION_VERIFY_MODEL_GEMINI: ${{ vars.POSITION_VERIFY_MODEL_GEMINI }}
-          POSITION_VERIFY_MODEL_CLAUDE: ${{ vars.POSITION_VERIFY_MODEL_CLAUDE }}
         run: npm run analyze

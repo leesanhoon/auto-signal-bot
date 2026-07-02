@@ -1,73 +1,36 @@
-import { GoogleGenAI } from "@google/genai";
-import type {
-  AnalysisResult,
-  PairSummary,
-  ScreenshotResult,
-  TradeSetup,
-} from "./chart-types.js";
-import {
-  extractTextFromClaudeResponse,
-  getClaudeClient,
-} from "../shared/claude.js";
+import type { AnalysisResult, PairSummary, ScreenshotResult, TradeSetup } from "./chart-types.js";
 import { withRetry } from "../shared/retry.js";
-import {
-  captureVerificationChartScreenshot,
-  findChartForPair,
-} from "./screenshot.js";
 import { createLogger } from "../shared/logger.js";
-import { withConfiguredRateLimit } from "../shared/rate-limit.js";
-import { recordClaudeUsage, recordGeminiUsage } from "../shared/ai-usage.js";
+import { recordOpenRouterUsage } from "../shared/ai-usage.js";
+import { callOpenRouter, type OpenRouterRequest } from "../shared/openrouter.js";
 import { getConfiguredChartSignalConfidenceThreshold } from "./chart-config-env.js";
+import { findChartForPair } from "./screenshot.js";
 
 const logger = createLogger("charts:analyzer");
-const VERIFY_MODEL_PRIMARY =
-  process.env.CHART_VERIFY_MODEL_PRIMARY?.trim() || "gemini-2.5-pro";
-const ANALYSIS_MODEL =
-  process.env.CHART_ANALYSIS_MODEL?.trim() || "gemini-3.5-flash";
-const VERIFY_MODEL_CLAUDE =
-  process.env.CHART_VERIFY_MODEL_CLAUDE?.trim() || "claude-sonnet-4-6";
-const GEMINI_RATE_LIMIT = {
-  key: "gemini",
-  envVar: "GEMINI_RATE_LIMIT_RPM",
-  defaultRpm: 15,
-};
+const ANALYSIS_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
+const VERIFY_MODEL = process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
 
-type VerificationResult = {
-  confirmed: boolean;
-  confidence: number;
-  comment: string;
-  verifiedBy: string;
-};
-
-type PairScreenshotGroup = {
-  pair: string;
-  screenshots: ScreenshotResult[];
-};
+type PairScreenshotGroup = { pair: string; screenshots: ScreenshotResult[] };
 
 function getPairName(screenshot: ScreenshotResult): string {
   return screenshot.chart.name.replace(` ${screenshot.chart.timeframe}`, "");
 }
 
-function groupScreenshotsByPair(
-  screenshots: ScreenshotResult[],
-): PairScreenshotGroup[] {
+function groupScreenshotsByPair(screenshots: ScreenshotResult[]): PairScreenshotGroup[] {
   const groups = new Map<string, ScreenshotResult[]>();
-
   for (const screenshot of screenshots) {
     const pair = getPairName(screenshot);
     const items = groups.get(pair) ?? [];
     items.push(screenshot);
     groups.set(pair, items);
   }
-
   return Array.from(groups.entries()).map(([pair, groupScreenshots]) => ({
     pair,
-    screenshots: groupScreenshots.sort((left, right) => {
-      return (
+    screenshots: groupScreenshots.sort(
+      (left, right) =>
         ["D1", "H4", "M15"].indexOf(left.chart.timeframe) -
-        ["D1", "H4", "M15"].indexOf(right.chart.timeframe)
-      );
-    }),
+        ["D1", "H4", "M15"].indexOf(right.chart.timeframe),
+    ),
   }));
 }
 
@@ -90,130 +53,20 @@ In summaries include every pair with pair, trend (describe D1/H4/M15 alignment),
 In setups include only confluence setups with confidence >=${threshold}%; include pair, direction, setup, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, and summary. Reasons must explicitly mention D1, H4, M15, and volume evidence. Provide levels from H4/M15. Omit surrounding text.`;
 }
 
-function getClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not set");
-  return new GoogleGenAI({ apiKey });
-}
-
 export function cleanResponse(text: string): string {
-  return text
-    .replace(/```json\s*/gi, "")
-    .replace(/```\s*/g, "")
-    .trim();
+  return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
 }
 
 export function extractJsonObject(text: string): string {
   const cleaned = cleanResponse(text);
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) {
-    return cleaned.slice(start, end + 1);
-  }
-  return cleaned;
+  return start !== -1 && end > start ? cleaned.slice(start, end + 1) : cleaned;
 }
 
 export function clampConfidence(value: unknown): number {
   const num = Number(value);
-  if (!Number.isFinite(num)) return 0;
-  return Math.max(0, Math.min(100, Math.round(num)));
-}
-
-function toText(value: unknown, fallback = ""): string {
-  if (value === null || value === undefined) return fallback;
-  return String(value);
-}
-
-function detectImageMimeType(buffer: Buffer): "image/png" | "image/jpeg" {
-  if (
-    buffer.length >= 8 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47 &&
-    buffer[4] === 0x0d &&
-    buffer[5] === 0x0a &&
-    buffer[6] === 0x1a &&
-    buffer[7] === 0x0a
-  ) {
-    return "image/png";
-  }
-
-  return "image/jpeg";
-}
-
-export function buildGenerationConfig(model: string, maxOutputTokens: number) {
-  const config: {
-    temperature: number;
-    topP: number;
-    maxOutputTokens: number;
-    responseMimeType: "application/json";
-    thinkingConfig?: { thinkingBudget: number };
-  } = {
-    temperature: 0.2,
-    topP: 0.9,
-    maxOutputTokens,
-    responseMimeType: "application/json",
-  };
-
-  if (model === VERIFY_MODEL_PRIMARY) {
-    config.maxOutputTokens = Math.max(maxOutputTokens, 900);
-    config.thinkingConfig = { thinkingBudget: 128 };
-  } else {
-    config.thinkingConfig = { thinkingBudget: 0 };
-  }
-
-  return config;
-}
-
-export function parseAnalysisResponse(text: string): {
-  summaries: PairSummary[];
-  setups: TradeSetup[];
-  noSetupReason: string;
-} {
-  const cleaned = extractJsonObject(text);
-  try {
-    const parsed = JSON.parse(cleaned) as Partial<{
-      summaries: PairSummary[];
-      setups: TradeSetup[];
-      noSetupReason: string;
-    }>;
-    const threshold = getConfiguredChartSignalConfidenceThreshold();
-    const setups = (parsed.setups || []).filter(
-      (s) => (s.confidence ?? 0) >= threshold,
-    );
-    return {
-      summaries: parsed.summaries || [],
-      setups,
-      noSetupReason: toText(parsed.noSetupReason, ""),
-    };
-  } catch {
-    return {
-      summaries: [],
-      setups: [],
-      noSetupReason: "Failed to parse AI response. Raw: " + text.slice(0, 300),
-    };
-  }
-}
-
-function parseVerificationResponse(text: string): VerificationResult | null {
-  const cleaned = extractJsonObject(text);
-
-  try {
-    const parsed = JSON.parse(cleaned) as {
-      confirmed?: unknown;
-      confidence?: unknown;
-      comment?: unknown;
-    };
-    return {
-      confirmed: Boolean(parsed.confirmed),
-      confidence: clampConfidence(parsed.confidence),
-      comment: String(parsed.comment || ""),
-      verifiedBy: "",
-    };
-  } catch {
-    return null;
-  }
+  return Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : 0;
 }
 
 export function buildVerificationPrompt(setup: TradeSetup): string {
@@ -234,263 +87,77 @@ Return only JSON with keys confirmed, confidence, comment.
 Keep comment short and specific.`;
 }
 
-async function analyzeWithGemini(
-  screenshots: ScreenshotResult[],
-): Promise<string> {
-  const threshold = getConfiguredChartSignalConfidenceThreshold();
-  const ai = getClient();
-  const parts: Array<
-    { inlineData: { mimeType: string; data: string } } | { text: string }
-  > = [];
-  const orderedScreenshots = [...screenshots].sort((left, right) => {
-    const pairOrder = left.chart.symbol.localeCompare(right.chart.symbol);
-    if (pairOrder !== 0) return pairOrder;
-    return (
-      ["D1", "H4", "M15"].indexOf(left.chart.timeframe) -
-      ["D1", "H4", "M15"].indexOf(right.chart.timeframe)
-    );
-  });
-  for (const screenshot of orderedScreenshots) {
-    parts.push({
-      inlineData: {
-        mimeType: detectImageMimeType(screenshot.buffer),
-        data: screenshot.buffer.toString("base64"),
-      },
-    });
-    parts.push({
-      text: `[PAIR=${screenshot.chart.name.replace(` ${screenshot.chart.timeframe}`, "")}; TIMEFRAME=${screenshot.chart.timeframe}]`,
-    });
+function parseVerificationResponse(
+  text: string,
+): { confirmed: boolean; confidence: number; comment: string } | null {
+  const cleaned = extractJsonObject(text);
+  try {
+    const parsed = JSON.parse(cleaned) as { confirmed?: unknown; confidence?: unknown; comment?: unknown };
+    return {
+      confirmed: Boolean(parsed.confirmed),
+      confidence: clampConfidence(parsed.confidence),
+      comment: String(parsed.comment || ""),
+    };
+  } catch {
+    return null;
   }
-  parts.push({
-    text: `${buildSystemPrompt(threshold)}\n\n${buildUserPrompt(threshold)}`,
-  });
-
-  const request = () =>
-    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
-      ai.models.generateContent({
-        model: ANALYSIS_MODEL,
-        contents: [{ role: "user", parts }],
-        config: buildGenerationConfig(ANALYSIS_MODEL, 4000),
-      }),
-    );
-
-  const result = await withRetry(request, {
-    onRetry: (error, attempt, maxAttempts, delayMs) => {
-      logger.warn(
-        `  ! Gemini main analysis temporary error (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${
-          error instanceof Error ? error.message : error
-        }`,
-      );
-    },
-  });
-
-  void recordGeminiUsage(
-    result as {
-      usageMetadata?: {
-        promptTokenCount?: number;
-        candidatesTokenCount?: number;
-        totalTokenCount?: number;
-      };
-    },
-    {
-      model: ANALYSIS_MODEL,
-      source: "chart",
-    },
-  );
-
-  return result.text ?? "";
 }
 
-async function verifySetupWithClaude(
-  setup: TradeSetup,
-  chart: NonNullable<ReturnType<typeof findChartForPair>>,
-): Promise<VerificationResult> {
-  const ai = getClaudeClient();
-  const verificationChart = await captureVerificationChartScreenshot(chart);
-  const userPrompt = buildVerificationPrompt(setup);
-
-  const request = () =>
-    ai.messages.create({
-      model: VERIFY_MODEL_CLAUDE,
-      max_tokens: 300,
-      temperature: 0.2,
-      system: "You verify chart setups. Answer only with concise JSON.",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: detectImageMimeType(verificationChart.buffer),
-                data: verificationChart.buffer.toString("base64"),
-              },
-            },
-            { type: "text", text: userPrompt },
-          ],
-        },
-      ],
-    });
-
-  const result = await withRetry(request, {
-    onRetry: (error, attempt, maxAttempts, delayMs) => {
-      logger.warn(
-        `  ! Claude verify temporary error for ${setup.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${
-          error instanceof Error ? error.message : error
-        }`,
-      );
-    },
-  });
-
-  void recordClaudeUsage(
-    result as { usage?: { input_tokens?: number; output_tokens?: number } },
-    {
-      model: VERIFY_MODEL_CLAUDE,
-      source: "chart",
-    },
-  );
-
-  const cleaned = extractJsonObject(
-    extractTextFromClaudeResponse(
-      result as { content?: Array<{ type: string; text?: string }> },
-    ),
-  );
-  const parsed = JSON.parse(cleaned) as Partial<{
-    confirmed: boolean;
-    confidence: number;
-    comment: string;
-  }>;
-  return {
-    confirmed: Boolean(parsed.confirmed),
-    confidence: clampConfidence(parsed.confidence),
-    comment: String(parsed.comment || ""),
-    verifiedBy: VERIFY_MODEL_CLAUDE,
-  };
-}
-
-export async function verifySetupWithGeminiModel(
+async function verifySetup(
   setup: TradeSetup,
   imageBuffer: Buffer,
-  model: string,
-  ai: GoogleGenAI = getClient(),
-): Promise<VerificationResult> {
-  const userPrompt = buildVerificationPrompt(setup);
-
-  const request = () =>
-    withConfiguredRateLimit(GEMINI_RATE_LIMIT, async () =>
-      ai.models.generateContent({
-        model,
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                inlineData: {
-                  mimeType: detectImageMimeType(imageBuffer),
-                  data: imageBuffer.toString("base64"),
-                },
-              },
-              { text: userPrompt },
-            ],
-          },
-        ],
-        config: buildGenerationConfig(model, 500),
-      }),
-    );
-
-  const result = await withRetry(request, {
-    onRetry: (error, attempt, maxAttempts, delayMs) => {
-      logger.warn(
-        `  ! Gemini verify temporary error with ${model} for ${setup.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${
-          error instanceof Error ? error.message : error
-        }`,
-      );
-    },
-  });
-
-  void recordGeminiUsage(
-    result as {
-      usageMetadata?: {
-        promptTokenCount?: number;
-        candidatesTokenCount?: number;
-        totalTokenCount?: number;
-      };
-    },
+): Promise<{ confirmed: boolean; confidence: number; comment: string; verifiedBy: string }> {
+  const mime = detectImageMimeType(imageBuffer);
+  const response = await withRetry(
+    () => callOpenRouter({
+      model: VERIFY_MODEL,
+      systemPrompt: "You independently verify trading setups. Return only concise JSON.",
+      userContent: [
+        {
+          type: "image_url",
+          image_url: { url: `data:${mime};base64,${imageBuffer.toString("base64")}` },
+        },
+        { type: "text", text: buildVerificationPrompt(setup) },
+      ],
+      maxTokens: 300,
+      temperature: 0.2,
+      responseFormat: { type: "json_object" },
+    }),
     {
-      model,
-      source: "chart",
+      onRetry: (error, attempt, maxAttempts, delayMs) =>
+        logger.warn(
+          `  ! OpenRouter verify temporary error for ${setup.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
+        ),
     },
   );
-
-  const parsed = parseVerificationResponse(result.text ?? "");
+  void recordOpenRouterUsage(response, { model: VERIFY_MODEL, source: "chart" });
+  const parsed = parseVerificationResponse(response.text);
   if (!parsed) {
-    throw new Error(
-      `Gemini verify parse failed for model ${model}. Raw: ${(result.text ?? "").slice(0, 300)}`,
-    );
+    throw new Error(`OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`);
   }
-
-  return {
-    ...parsed,
-    verifiedBy: model,
-  };
+  return { ...parsed, verifiedBy: VERIFY_MODEL };
 }
 
-async function verifySetupWithGemini(
-  setup: TradeSetup,
-  chart: NonNullable<ReturnType<typeof findChartForPair>>,
-): Promise<VerificationResult> {
-  const verificationChart = await captureVerificationChartScreenshot(chart);
-
-  try {
-    return await verifySetupWithGeminiModel(
-      setup,
-      verificationChart.buffer,
-      VERIFY_MODEL_PRIMARY,
-    );
-  } catch (primaryError) {
-    logger.warn(
-      `  ! Gemini verify failed with ${VERIFY_MODEL_PRIMARY} for ${setup.pair}, falling back to ${VERIFY_MODEL_CLAUDE}: ${
-        primaryError instanceof Error ? primaryError.message : primaryError
-      }`,
-    );
-    return await verifySetupWithClaude(setup, chart);
-  }
-}
-
-/**
- * Re-checks high-confidence setups against the configured verify provider independently,
- * one chart at a time, so a single bad pair can't sink the rest.
- */
 export async function confirmHighConfidenceSetups(
   setups: TradeSetup[],
   screenshots: ScreenshotResult[],
 ): Promise<TradeSetup[]> {
   const result: TradeSetup[] = [];
-
   for (const setup of setups) {
     const chart = findChartForPair(setup.pair, "H4");
     const screenshot = chart
-      ? screenshots.find(
-          (s) =>
-            s.chart.symbol === chart.symbol &&
-            (!s.chart.timeframe || s.chart.timeframe === "H4"),
-        )
+      ? screenshots.find((item) => item.chart.symbol === chart.symbol && item.chart.timeframe === "H4")
       : undefined;
-    if (!screenshot || !chart) {
+    if (!screenshot) {
       result.push(setup);
       continue;
     }
 
     try {
+      logger.info(`  -> Verifying ${setup.pair} with ${VERIFY_MODEL}...`);
+      const verification = await verifySetup(setup, screenshot.buffer);
       logger.info(
-        `  -> Verifying ${setup.pair} with ${VERIFY_MODEL_PRIMARY} (fallback ${VERIFY_MODEL_CLAUDE})...`,
-      );
-      const verification = await verifySetupWithGemini(setup, chart);
-      logger.info(
-        `  ${verification.confirmed ? "✓" : "✗"} ${setup.pair}: ${verification.verifiedBy} ${
-          verification.confirmed ? "confirmed" : "rejected"
-        } (${verification.confidence}%) - ${verification.comment}`,
+        `  ${verification.confirmed ? "✓" : "✗"} ${setup.pair}: ${verification.confirmed ? "confirmed" : "rejected"} (${verification.confidence}%) - ${verification.comment}`,
       );
       result.push({
         ...setup,
@@ -500,87 +167,146 @@ export async function confirmHighConfidenceSetups(
         verifiedBy: verification.verifiedBy,
       });
     } catch (error) {
-      logger.warn(
-        `  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`,
-      );
+      logger.warn(`  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`);
       result.push(setup);
     }
   }
-
   return result;
 }
 
-export async function analyzeAllCharts(
-  screenshots: ScreenshotResult[],
-): Promise<AnalysisResult> {
-  const threshold = getConfiguredChartSignalConfidenceThreshold();
-  const groupedScreenshots = groupScreenshotsByPair(screenshots);
-  const useNoSetupReasonPrefix = groupedScreenshots.length > 1;
-  logger.info(`  -> Trying ${ANALYSIS_MODEL} per pair...`, {
-    pairs: groupedScreenshots.length,
-  });
+function toText(value: unknown, fallback = ""): string {
+  return value === null || value === undefined ? fallback : String(value);
+}
 
+function toArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((v) => String(v));
+  if (typeof value === "string") return [value];
+  return [];
+}
+
+function detectImageMimeType(buffer: Buffer): "image/png" | "image/jpeg" {
+  return buffer.length >= 8 &&
+    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+    buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    ? "image/png"
+    : "image/jpeg";
+}
+
+export function parseAnalysisResponse(text: string): {
+  summaries: PairSummary[];
+  setups: TradeSetup[];
+  noSetupReason: string;
+} {
+  try {
+    const parsed = JSON.parse(extractJsonObject(text)) as Partial<{
+      summaries: unknown;
+      setups: unknown;
+      noSetupReason: string;
+    }>;
+    const threshold = getConfiguredChartSignalConfidenceThreshold();
+    const rawSetups = Array.isArray(parsed.setups) ? parsed.setups : [];
+    const normalizedSetups: TradeSetup[] = rawSetups
+      .filter((s): s is Record<string, unknown> => s !== null && typeof s === "object")
+      .map((s) => ({
+        ...s,
+        reasons: toArray(s.reasons),
+        risks: toArray(s.risks),
+      } as unknown as TradeSetup))
+      .filter((setup) => (setup.confidence ?? 0) >= threshold);
+    return {
+      summaries: Array.isArray(parsed.summaries) ? parsed.summaries : [],
+      setups: normalizedSetups,
+      noSetupReason: toText(parsed.noSetupReason),
+    };
+  } catch {
+    return { summaries: [], setups: [], noSetupReason: "Failed to parse AI response. Raw: " + text.slice(0, 300) };
+  }
+}
+
+async function analyzeWithOpenRouter(screenshots: ScreenshotResult[]): Promise<string> {
+  const threshold = getConfiguredChartSignalConfidenceThreshold();
+  const userContent: OpenRouterRequest["userContent"] = [];
+  const ordered = [...screenshots].sort((left, right) => {
+    const pairOrder = left.chart.symbol.localeCompare(right.chart.symbol);
+    return pairOrder !== 0
+      ? pairOrder
+      : ["D1", "H4", "M15"].indexOf(left.chart.timeframe) - ["D1", "H4", "M15"].indexOf(right.chart.timeframe);
+  });
+  for (const screenshot of ordered) {
+    const mime = detectImageMimeType(screenshot.buffer);
+    userContent.push({
+      type: "image_url",
+      image_url: { url: `data:${mime};base64,${screenshot.buffer.toString("base64")}` },
+    });
+    userContent.push({
+      type: "text",
+      text: `[PAIR=${getPairName(screenshot)}; TIMEFRAME=${screenshot.chart.timeframe}]`,
+    });
+  }
+  userContent.push({ type: "text", text: buildUserPrompt(threshold) });
+
+  const result = await withRetry(
+    () => callOpenRouter({
+      model: ANALYSIS_MODEL,
+      systemPrompt: buildSystemPrompt(threshold),
+      userContent,
+      maxTokens: 4000,
+      temperature: 0.2,
+      responseFormat: { type: "json_object" },
+    }),
+    {
+      onRetry: (error, attempt, maxAttempts, delayMs) =>
+        logger.warn(
+          `  ! OpenRouter main analysis temporary error (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
+        ),
+    },
+  );
+  void recordOpenRouterUsage(result, { model: ANALYSIS_MODEL, source: "chart" });
+  return result.text;
+}
+
+export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise<AnalysisResult> {
+  const threshold = getConfiguredChartSignalConfidenceThreshold();
+  const groups = groupScreenshotsByPair(screenshots);
+  const prefixReasons = groups.length > 1;
+  logger.info(`  -> Trying ${ANALYSIS_MODEL} per pair...`, { pairs: groups.length });
   const summaries: PairSummary[] = [];
   const setups: TradeSetup[] = [];
   const noSetupReasons: string[] = [];
   const failedPairs: string[] = [];
 
-  for (const group of groupedScreenshots) {
+  for (const group of groups) {
     try {
       logger.info(`  -> Analyzing ${group.pair} with ${ANALYSIS_MODEL}...`);
-      const rawResponse = await analyzeWithGemini(group.screenshots);
-      const parsed = parseAnalysisResponse(rawResponse);
+      const parsed = parseAnalysisResponse(await analyzeWithOpenRouter(group.screenshots));
       summaries.push(...parsed.summaries);
       setups.push(...parsed.setups);
       if (parsed.noSetupReason.trim()) {
-        noSetupReasons.push(
-          useNoSetupReasonPrefix
-            ? `[${group.pair}] ${parsed.noSetupReason.trim()}`
-            : parsed.noSetupReason.trim(),
-        );
+        noSetupReasons.push(prefixReasons ? `[${group.pair}] ${parsed.noSetupReason.trim()}` : parsed.noSetupReason.trim());
       }
       logger.info(`  ✓ Analyzed ${group.pair} by ${ANALYSIS_MODEL}`);
     } catch (error) {
       failedPairs.push(group.pair);
-      logger.warn(
-        `  ! Gemini main analysis failed for ${group.pair} (${group.screenshots.length} screenshots): ${
-          error instanceof Error ? error.message : error
-        }`,
-      );
+      logger.warn(`  ! OpenRouter main analysis failed for ${group.pair} (${group.screenshots.length} screenshots): ${error instanceof Error ? error.message : error}`);
     }
   }
-
   if (summaries.length === 0 && setups.length === 0) {
     throw new Error(
       failedPairs.length > 0
-        ? `Gemini main analysis failed for all pairs: ${failedPairs.join(", ")}`
-        : "Gemini main analysis returned no usable results.",
+        ? `OpenRouter main analysis failed for all pairs: ${failedPairs.join(", ")}`
+        : "OpenRouter main analysis returned no usable results.",
     );
   }
 
-  const useTimeframeFilter = screenshots.every((s) =>
-    Boolean(s.chart.timeframe),
-  );
   const availableTimeframes = new Map<string, Set<string>>();
   for (const screenshot of screenshots) {
-    const pair = getPairName(screenshot);
-    const timeframes = availableTimeframes.get(pair) ?? new Set<string>();
+    const timeframes = availableTimeframes.get(getPairName(screenshot)) ?? new Set<string>();
     timeframes.add(screenshot.chart.timeframe);
-    availableTimeframes.set(pair, timeframes);
+    availableTimeframes.set(getPairName(screenshot), timeframes);
   }
-  const confluenceSetups = useTimeframeFilter
-    ? setups.filter((setup) => {
-        const timeframes = availableTimeframes.get(setup.pair);
-        return (
-          timeframes &&
-          ["D1", "H4", "M15"].every((timeframe) => timeframes.has(timeframe))
-        );
-      })
+  const confluenceSetups = screenshots.every((s) => Boolean(s.chart.timeframe))
+    ? setups.filter((setup) => ["D1", "H4", "M15"].every((tf) => availableTimeframes.get(setup.pair)?.has(tf)))
     : setups;
-  const noSetupReason = noSetupReasons.join("\n").trim();
-  logger.info(
-    `  ✓ ${summaries.length} pairs scanned, ${confluenceSetups.length} complete multi-timeframe setup(s) >=${threshold}% confidence`,
-  );
-
-  return { summaries, setups: confluenceSetups, noSetupReason, screenshots };
+  logger.info(`  ✓ ${summaries.length} pairs scanned, ${confluenceSetups.length} complete multi-timeframe setup(s) >=${threshold}% confidence`);
+  return { summaries, setups: confluenceSetups, noSetupReason: noSetupReasons.join("\n").trim(), screenshots };
 }

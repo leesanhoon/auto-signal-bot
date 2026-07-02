@@ -56,7 +56,7 @@ export function isRetryableError(error: unknown): boolean {
   if (/UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(message))
     return true;
   if (
-    /ETIMEDOUT|ECONNRESET|fetch failed|network error|socket hang up/i.test(
+    /ETIMEDOUT|ECONNRESET|fetch failed|network error|socket hang up|aborted|timeout|empty content/i.test(
       message,
     )
   )

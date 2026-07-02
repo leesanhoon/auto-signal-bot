@@ -5,7 +5,7 @@ import { vnDateStr } from "./vn-time.js";
 
 const logger = createLogger("shared:ai-usage");
 
-export type AiProvider = "gemini" | "claude";
+export type AiProvider = "gemini" | "claude" | "openrouter";
 export type AiUsageSource = "chart" | "betting" | "lottery" | "test";
 
 export type AiUsageRecord = {
@@ -56,6 +56,10 @@ export type ClaudeUsageResponseLike = {
   };
 };
 
+export type OpenRouterUsageResponseLike = {
+  usage?: { promptTokens?: number; completionTokens?: number };
+};
+
 export type AiUsageInput = {
   provider: AiProvider;
   model: string;
@@ -86,6 +90,13 @@ const DEFAULT_RATES: Record<AiProvider, Record<string, Rate>> = {
   },
   claude: {
     "claude-sonnet-4-6": { inputPerMillionUsd: 3, outputPerMillionUsd: 15 },
+  },
+  openrouter: {
+    "xiaomi/mimo-v2.5": { inputPerMillionUsd: 0.105, outputPerMillionUsd: 0.28 },
+    "deepseek/deepseek-v4-flash": { inputPerMillionUsd: 0.09, outputPerMillionUsd: 0.18 },
+    "minimax/minimax-m3": { inputPerMillionUsd: 0.3, outputPerMillionUsd: 1.2 },
+    "meta-llama/llama-3.3-70b-instruct": { inputPerMillionUsd: 0.12, outputPerMillionUsd: 0.34 },
+    "moonshotai/kimi-k2.6": { inputPerMillionUsd: 0.3, outputPerMillionUsd: 1.2 },
   },
 };
 
@@ -118,7 +129,9 @@ function getDefaultRate(provider: AiProvider, model: string): Rate {
     DEFAULT_RATES[provider][normalizedModel] ??
     (provider === "gemini"
       ? DEFAULT_RATES.gemini["gemini-3.5-flash"]
-      : DEFAULT_RATES.claude["claude-sonnet-4-6"])
+      : provider === "claude"
+        ? DEFAULT_RATES.claude["claude-sonnet-4-6"]
+        : DEFAULT_RATES.openrouter["xiaomi/mimo-v2.5"])
   );
 }
 
@@ -169,6 +182,13 @@ export function extractClaudeUsage(response: ClaudeUsageResponseLike): { inputTo
   return {
     inputTokens: normalizeCount(response.usage?.input_tokens),
     outputTokens: normalizeCount(response.usage?.output_tokens),
+  };
+}
+
+export function extractOpenRouterUsage(response: OpenRouterUsageResponseLike): { inputTokens: number; outputTokens: number } {
+  return {
+    inputTokens: normalizeCount(response.usage?.promptTokens),
+    outputTokens: normalizeCount(response.usage?.completionTokens),
   };
 }
 
@@ -312,7 +332,7 @@ export async function loadAiUsageRecords(sinceDate?: string): Promise<AiUsageRec
     return (data ?? []).map((row: Record<string, unknown>) => ({
       recordedAt: String(row.recorded_at ?? new Date().toISOString()),
       usageDate: String(row.usage_date ?? vnDateStr(Date.now())),
-      provider: row.provider === "claude" ? "claude" : "gemini",
+      provider: row.provider === "openrouter" ? "openrouter" : row.provider === "claude" ? "claude" : "gemini",
       model: String(row.model ?? ""),
       source: row.source === "betting" || row.source === "lottery" || row.source === "test" ? row.source : "chart",
       inputTokens: normalizeCount(row.input_tokens),
@@ -410,6 +430,22 @@ export async function recordClaudeUsage(
   const usage = extractClaudeUsage(response);
   await recordAiUsage({
     provider: "claude",
+    model: input.model,
+    source: input.source,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    recordedAt: input.recordedAt,
+    metadata: input.metadata,
+  });
+}
+
+export async function recordOpenRouterUsage(
+  response: OpenRouterUsageResponseLike,
+  input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & { provider?: "openrouter" },
+): Promise<void> {
+  const usage = extractOpenRouterUsage(response);
+  await recordAiUsage({
+    provider: "openrouter",
     model: input.model,
     source: input.source,
     inputTokens: usage.inputTokens,

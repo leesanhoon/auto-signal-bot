@@ -10,8 +10,6 @@ import type { PerformanceReport } from "../charts/performance-tracking.js";
 import { getConfiguredChartSignalConfidenceThreshold } from "../charts/chart-config-env.js";
 
 const logger = createLogger("shared:telegram");
-const CHART_VERIFY_MODEL_PRIMARY = process.env.CHART_VERIFY_MODEL_PRIMARY?.trim() || "gemini-2.5-pro";
-const CHART_VERIFY_MODEL_CLAUDE = process.env.CHART_VERIFY_MODEL_CLAUDE?.trim() || "claude-sonnet-4-6";
 export type InlineKeyboardMarkup = {
   inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
 };
@@ -263,22 +261,10 @@ function buildCopyableSetup(setup: TradeSetup): string {
     "",
     `💡 ${setup.summary}`,
     "",
-    buildConfirmationLine(setup),
     setup.autoTracked === true
       ? "✅ Bot đã tự động lưu vị thế và sẽ tiếp tục theo dõi để báo khi cần đóng."
       : "",
   ].join("\n");
-}
-
-function buildConfirmationLine(setup: TradeSetup): string {
-  if (setup.verifiedConfirmed === true) {
-    const verifiedBy =
-      setup.verifiedBy === CHART_VERIFY_MODEL_CLAUDE
-        ? CHART_VERIFY_MODEL_CLAUDE
-        : CHART_VERIFY_MODEL_PRIMARY;
-    return `✅ *Đã xác nhận bởi ${verifiedBy}* (${setup.verifiedConfidence}%)${setup.verifiedComment ? ` — ${setup.verifiedComment}` : ""}`;
-  }
-  return `⚠️ _Chưa xác nhận bởi ${CHART_VERIFY_MODEL_PRIMARY} (lỗi xác minh, fallback ${CHART_VERIFY_MODEL_CLAUDE})_`;
 }
 
 export function buildPositionDecisionMessage(
@@ -435,19 +421,10 @@ export async function sendAllAnalyses(
     return;
   }
 
-  const geminiHighConfSetups = result.setups.filter(
-    (s) => (s.confidence ?? 0) > threshold,
+  const highConfSetups = result.setups.filter(
+    (s) => (s.confidence ?? 0) >= threshold,
   );
-  const rejectedByVerified = geminiHighConfSetups.filter(
-    (s) => s.verifiedConfirmed === false,
-  );
-  const highConfSetups = geminiHighConfSetups.filter(
-    (s) => s.verifiedConfirmed !== false,
-  );
-  const headerSuffix =
-    geminiHighConfSetups.length > 0
-      ? ` (>${threshold}%, đã đối chiếu ${CHART_VERIFY_MODEL_PRIMARY} -> ${CHART_VERIFY_MODEL_CLAUDE})`
-      : ` (>${threshold}%)`;
+  const headerSuffix = ` (≥${threshold}%)`;
 
   // Header
   await notifier.sendMessage(
@@ -455,10 +432,7 @@ export async function sendAllAnalyses(
   );
 
   if (highConfSetups.length === 0) {
-    const reason =
-      geminiHighConfSetups.length === 0
-        ? `Không tìm thấy setup nào >${threshold}% (chỉ có ${result.setups.length} setup ở mức >=${threshold}%).`
-        : `Tìm thấy ${geminiHighConfSetups.length} setup >${threshold}%, nhưng ${CHART_VERIFY_MODEL_PRIMARY} -> ${CHART_VERIFY_MODEL_CLAUDE} đã *từ chối* tất cả ${rejectedByVerified.length} setup đó sau khi đối chiếu độc lập.`;
+    const reason = `Không tìm thấy setup nào đạt ${threshold}%.`;
     await notifier.sendMessage(
       `⏸ ${reason}\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
     );
@@ -488,6 +462,6 @@ export async function sendAllAnalyses(
   }
 
   await notifier.sendMessage(
-    `✅ *Scan hoàn tất* — ${highConfSetups.length} setup(s) >${threshold}%\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
+    `✅ *Scan hoàn tất* — ${highConfSetups.length} setup(s) ≥${threshold}%\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
   );
 }

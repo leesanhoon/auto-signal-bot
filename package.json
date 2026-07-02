@@ -13,7 +13,6 @@
         "betting-backtest": "tsx src/betting/betting-backtest-runner.ts",
         "performance-report": "tsx src/charts/performance-report-runner.ts",
         "test-analyze": "tsx src/charts/test-analyze.ts",
-        "test-model-compare": "tsx src/charts/test-model-compare.ts",
         "setup:telegram-menu": "tsx src/scripts/setup-telegram-menu-v2.ts",
         "match-odds": "tsx src/betting/betting-index.ts",
         "fetch-matches-list": "tsx src/betting/fetch-matches-list-index.ts",
@@ -25,8 +24,6 @@
         "lottery-verify": "tsx src/lottery/lottery-verify-index.ts"
     },
     "dependencies": {
-        "@anthropic-ai/sdk": "^0.105.0",
-        "@google/genai": "^2.9.0",
         "@supabase/supabase-js": "^2.108.2",
         "@types/ws": "^8.18.1",
         "pino": "^10.3.1",
