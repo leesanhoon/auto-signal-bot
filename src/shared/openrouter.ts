@@ -10,6 +10,7 @@ export type OpenRouterRequest = {
   maxTokens?: number;
   temperature?: number;
   responseFormat?: { type: "json_object" };
+  timeoutMs?: number;
   reasoning?: {
     effort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
     exclude?: boolean;
@@ -20,6 +21,7 @@ export type OpenRouterRequest = {
 export type OpenRouterResponse = {
   text: string;
   usage: { promptTokens: number; completionTokens: number };
+  finishReason?: string;
 };
 
 type ApiResponse = {
@@ -62,7 +64,11 @@ export async function callOpenRouter(
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
           },
-          signal: AbortSignal.timeout(getRequestTimeoutMs()),
+          signal: AbortSignal.timeout(
+            input.timeoutMs && Number.isFinite(input.timeoutMs) && input.timeoutMs > 0
+              ? input.timeoutMs
+              : getRequestTimeoutMs(),
+          ),
           body: JSON.stringify({
             model: input.model,
             messages,
@@ -83,6 +89,7 @@ export async function callOpenRouter(
 
       const choice = payload.choices?.[0];
       const content = choice?.message?.content;
+      const finishReason = choice?.finish_reason;
       const text =
         typeof content === "string"
           ? content
@@ -102,6 +109,7 @@ export async function callOpenRouter(
           promptTokens: Number(payload.usage?.prompt_tokens ?? 0),
           completionTokens: Number(payload.usage?.completion_tokens ?? 0),
         },
+        finishReason,
       };
     },
   );

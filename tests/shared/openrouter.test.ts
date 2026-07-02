@@ -27,6 +27,7 @@ describe("shared/openrouter", () => {
     })).resolves.toEqual({
       text: "{\"ok\":true}",
       usage: { promptTokens: 12, completionTokens: 7 },
+      finishReason: "stop",
     });
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
       reasoning: { effort: "none", exclude: true },

@@ -16,6 +16,7 @@ export type MatchAiAnalysis = {
   risks: string[];
   summary: string;
   picks?: Array<{
+    candidateId?: string;
     market: string;
     selection: string;
     odds: number;

@@ -23,6 +23,7 @@ vi.mock("../../src/betting/betting-gemini.js", () => ({
   analyzeMatchOdds: state.analyzeMatchOdds,
   reviseMatchAnalysis: state.reviseMatchAnalysis,
   verifyMatchAnalysis: state.verifyMatchAnalysis,
+  isStandAsideAnalysis: (value: string) => /đứng\s*ngoài/i.test(value),
 }));
 vi.mock("../../src/betting/betting-analysis-repository.js", () => ({
   saveBettingAnalysisSnapshot: state.saveBettingAnalysisSnapshot,
@@ -123,17 +124,210 @@ describe("betting/odds-runner", () => {
     state.saveBettingAnalysisSnapshot.mockResolvedValue(undefined);
   });
 
-  test("continues processing later matches when Telegram send fails for one match", async () => {
-    state.sendMessage.mockImplementationOnce(async () => undefined);
-    state.sendMessage.mockImplementationOnce(async () => {
-      throw new Error("telegram down");
+  test("processes matches independently", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+
+    const first = await oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    });
+    const second = await oddsRunner.processMatch({
+      gameId: "2",
+      home: "Team C",
+      away: "Team D",
+      kickoffUnix: 2000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
     });
 
-    await expect(oddsRunner.runOddsCheck()).resolves.toBeUndefined();
-
-    expect(state.saveBettingAnalysisSnapshot).toHaveBeenCalledTimes(2);
+    expect(first.analysis).not.toBeNull();
+    expect(second.analysis).not.toBeNull();
     expect(state.analyzeMatchOdds).toHaveBeenCalledTimes(2);
-    expect(state.sendMessage.mock.calls.some(([message]) => String(message).includes("Team C vs Team D"))).toBe(true);
+  });
+
+  test("skips verify and revise when analyze returns no picks", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    state.analyzeMatchOdds.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 60,
+      recommendation: "Đứng ngoài.",
+      confidence: 35,
+      keyPoints: ["Không có edge"],
+      risks: ["Mâu thuẫn"],
+      summary: "No bet",
+      picks: [],
+    });
+
+    await expect(oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    })).resolves.toMatchObject({
+      analysis: expect.objectContaining({ recommendation: "Đứng ngoài." }),
+    });
+
+    expect(state.verifyMatchAnalysis).not.toHaveBeenCalled();
+    expect(state.reviseMatchAnalysis).not.toHaveBeenCalled();
+  });
+
+  test("skips revise when verify returns hard invalid", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    state.analyzeMatchOdds.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 60,
+      recommendation: "Theo dõi",
+      confidence: 80,
+      keyPoints: ["Điểm mạnh"],
+      risks: ["Rủi ro"],
+      summary: "Tóm tắt",
+      picks: [{ candidateId: "P01", market: "1X2", selection: "Team A thắng", odds: 2.1 }],
+    });
+    state.verifyMatchAnalysis.mockResolvedValue({
+      confirmed: false,
+      confidence: 55,
+      reasonCode: "HARD_INVALID",
+      comment: "Sai cấu trúc",
+    });
+
+    await expect(oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    })).resolves.toMatchObject({
+      analysis: expect.objectContaining({ recommendation: "Đứng ngoài." }),
+    });
+
+    expect(state.verifyMatchAnalysis).toHaveBeenCalledTimes(1);
+    expect(state.reviseMatchAnalysis).not.toHaveBeenCalled();
+  });
+
+  test("revises exactly once for conflict-like verification failure", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    state.analyzeMatchOdds.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 60,
+      recommendation: "Theo dõi",
+      confidence: 80,
+      keyPoints: ["Điểm mạnh"],
+      risks: ["Rủi ro"],
+      summary: "Tóm tắt",
+      picks: [{ candidateId: "P01", market: "1X2", selection: "Team A thắng", odds: 2.1 }],
+    });
+    state.verifyMatchAnalysis.mockResolvedValue({
+      confirmed: false,
+      confidence: 60,
+      reasonCode: "CONFLICT",
+      comment: "Mâu thuẫn market",
+    });
+    state.reviseMatchAnalysis.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 55,
+      recommendation: "Theo dõi",
+      confidence: 70,
+      keyPoints: ["Đã chỉnh"],
+      risks: ["Rủi ro"],
+      summary: "Đã sửa",
+      picks: [{ candidateId: "P01", market: "1X2", selection: "Team A thắng", odds: 2.1 }],
+    });
+
+    await expect(oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    })).resolves.toMatchObject({
+      analysis: expect.objectContaining({ verificationStatus: "revised" }),
+    });
+
+    expect(state.verifyMatchAnalysis).toHaveBeenCalledTimes(1);
+    expect(state.reviseMatchAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([0, 1, 49])("fails closed when confirmed=true at confidence %i and revise throws", async (confidence) => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    state.analyzeMatchOdds.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 60,
+      recommendation: "Theo dõi",
+      confidence: 80,
+      keyPoints: ["Điểm mạnh"],
+      risks: ["Rủi ro"],
+      summary: "Tóm tắt",
+      picks: [{ candidateId: "P01", market: "1X2", selection: "Team A thắng", odds: 2.1 }],
+    });
+    state.verifyMatchAnalysis.mockResolvedValue({
+      confirmed: true,
+      confidence,
+      reasonCode: "OTHER",
+      comment: "ok",
+    });
+    state.reviseMatchAnalysis.mockRejectedValue(new Error("revise failed"));
+
+    const result = await oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    });
+
+    expect(state.reviseMatchAnalysis).toHaveBeenCalledTimes(1);
+    expect(result.analysis).toMatchObject({
+      recommendation: "Đứng ngoài.",
+      verificationStatus: "failed",
+      verifiedConfirmed: false,
+      verifiedConfidence: confidence,
+      picks: [],
+    });
+  });
+
+  test("accepts confirmed results at the confidence threshold", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    state.analyzeMatchOdds.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 60,
+      recommendation: "Theo dõi",
+      confidence: 80,
+      keyPoints: ["Điểm mạnh"],
+      risks: ["Rủi ro"],
+      summary: "Tóm tắt",
+      picks: [{ candidateId: "P01", market: "1X2", selection: "Team A thắng", odds: 2.1 }],
+    });
+    state.verifyMatchAnalysis.mockResolvedValue({
+      confirmed: true,
+      confidence: 50,
+      reasonCode: "OTHER",
+      comment: "ok",
+    });
+
+    const result = await oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    });
+
+    expect(state.reviseMatchAnalysis).not.toHaveBeenCalled();
+    expect(result.analysis).toMatchObject({
+      verificationStatus: "confirmed",
+      verifiedConfirmed: true,
+      verifiedConfidence: 50,
+      picks: [{ candidateId: "P01" }],
+    });
   });
 });
 
