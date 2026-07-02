@@ -1,4 +1,4 @@
-import type { AnalysisResult, PairSummary, ScreenshotResult, TradeSetup } from "./chart-types.js";
+import type { AnalysisResult, ChartOrderType, PairSummary, ScreenshotResult, TradeSetup } from "./chart-types.js";
 import { withRetry } from "../shared/retry.js";
 import { createLogger } from "../shared/logger.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
@@ -43,14 +43,22 @@ Analyze each instrument as one multi-timeframe package:
 - M15 refines entry timing and rejects entries with noisy, contradictory price action.
 - Volume must confirm a breakout or rejection. Treat weak or declining volume as a risk, never as confirmation.
 
-Only recommend TRADE when D1 and H4 direction agree, M15 does not contradict them, price is at or near H4 EMA 20 or has a clean buildup, and volume supports the move. Missing timeframes, conflicting trends, distant price without a pullback, flat EMA, weak volume, or poor risk/reward must reduce confidence. If fewer than two timeframes agree, or confidence is below ${threshold}%, conclude NO TRADE. Never invent unreadable price levels.`;
+Only recommend TRADE when D1 and H4 direction agree, M15 does not contradict them, price is at or near H4 EMA 20 or has a clean buildup, and volume supports the move. Missing timeframes, conflicting trends, distant price without a pullback, flat EMA, weak volume, or poor risk/reward must reduce confidence. If fewer than two timeframes agree, or confidence is below ${threshold}%, conclude NO TRADE. Never invent unreadable price levels.
+
+All user-facing text fields must be Vietnamese with accents.
+For every setup classify orderType as one of MARKET_NOW, BUY_STOP, SELL_STOP, BUY_LIMIT, SELL_LIMIT, WAIT_FOR_CONFIRMATION.
+- MARKET_NOW only if current price is still at or very near the suggested entry zone.
+- BUY_STOP/SELL_STOP for breakout confirmation above/below a trigger level.
+- BUY_LIMIT/SELL_LIMIT for pullback/retest entries.
+- WAIT_FOR_CONFIRMATION if the chart direction is promising but no safe executable entry exists now.
+Never present a pending trigger as an already-open trade.`
 }
 
 function buildUserPrompt(threshold: number): string {
   return `Analyze the attached chart packages. Each image label contains pair and timeframe. Return only JSON with keys summaries, setups, and noSetupReason.
 
 In summaries include every pair with pair, trend (describe D1/H4/M15 alignment), emaProximity (tại/gần/xa), status, and confidence.
-In setups include only confluence setups with confidence >=${threshold}%; include pair, direction, setup, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, and summary. Reasons must explicitly mention D1, H4, M15, and volume evidence. Provide levels from H4/M15. Omit surrounding text.`;
+In setups include only confluence setups with confidence >=${threshold}%; include pair, direction, setup, orderType, entryCondition, currentPriceContext, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, and summary. Reasons must explicitly mention D1, H4, M15, and volume evidence. Provide levels from H4/M15. All user-facing text fields must be Vietnamese with accents. orderType must be one of MARKET_NOW, BUY_STOP, SELL_STOP, BUY_LIMIT, SELL_LIMIT, WAIT_FOR_CONFIRMATION. entryCondition must clearly state whether this is a pending trigger, pullback limit, market-now, or wait-for-confirmation idea. Omit surrounding text.`;
 }
 
 export function cleanResponse(text: string): string {
@@ -76,6 +84,9 @@ Setup:
 - Pair: ${setup.pair}
 - Direction: ${setup.direction}
 - Pattern: ${setup.setup}
+- Order type: ${setup.orderType ?? ""}
+- Entry condition: ${setup.entryCondition ?? ""}
+- Current price context: ${setup.currentPriceContext ?? ""}
 - Entry: ${setup.entry}
 - Stop loss: ${setup.stopLoss}
 - Take profit 1: ${setup.takeProfit1}
@@ -83,8 +94,9 @@ Setup:
 - Proposed confidence: ${setup.confidence}%
 - Reasons: ${setup.reasons.slice(0, 3).join(" | ")}
 
+Reject if the order type is inconsistent with direction, current price context, or entry/SL/TP levels. Reject if the setup is described like an already-open trade while orderType is pending.
 Return only JSON with keys confirmed, confidence, comment.
-Keep comment short and specific.`;
+Keep comment short, specific, and in Vietnamese with accents.`;
 }
 
 function parseVerificationResponse(
@@ -142,46 +154,60 @@ export async function confirmHighConfidenceSetups(
   setups: TradeSetup[],
   screenshots: ScreenshotResult[],
 ): Promise<TradeSetup[]> {
-  const result: TradeSetup[] = [];
-  for (const setup of setups) {
-    const chart = findChartForPair(setup.pair, "H4");
-    const screenshot = chart
-      ? screenshots.find((item) => item.chart.symbol === chart.symbol && item.chart.timeframe === "H4")
-      : undefined;
-    if (!screenshot) {
-      result.push(setup);
-      continue;
-    }
+  return Promise.all(
+    setups.map(async (setup) => {
+      const chart = findChartForPair(setup.pair, "H4");
+      const screenshot = chart
+        ? screenshots.find((item) => item.chart.symbol === chart.symbol && item.chart.timeframe === "H4")
+        : undefined;
+      if (!screenshot) return setup;
 
-    try {
-      logger.info(`  -> Verifying ${setup.pair} with ${VERIFY_MODEL}...`);
-      const verification = await verifySetup(setup, screenshot.buffer);
-      logger.info(
-        `  ${verification.confirmed ? "✓" : "✗"} ${setup.pair}: ${verification.confirmed ? "confirmed" : "rejected"} (${verification.confidence}%) - ${verification.comment}`,
-      );
-      result.push({
-        ...setup,
-        verifiedConfirmed: verification.confirmed,
-        verifiedConfidence: verification.confidence,
-        verifiedComment: verification.comment,
-        verifiedBy: verification.verifiedBy,
-      });
-    } catch (error) {
-      logger.warn(`  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`);
-      result.push(setup);
-    }
-  }
-  return result;
+      try {
+        logger.info(`  -> Verifying ${setup.pair} with ${VERIFY_MODEL}...`);
+        const verification = await verifySetup(setup, screenshot.buffer);
+        logger.info(
+          `  ${verification.confirmed ? "✓" : "✗"} ${setup.pair}: ${verification.confirmed ? "confirmed" : "rejected"} (${verification.confidence}%) - ${verification.comment}`,
+        );
+        return {
+          ...setup,
+          verifiedConfirmed: verification.confirmed,
+          verifiedConfidence: verification.confidence,
+          verifiedComment: verification.comment,
+          verifiedBy: verification.verifiedBy,
+        };
+      } catch (error) {
+        logger.warn(`  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`);
+        return setup;
+      }
+    }),
+  );
 }
 
 function toText(value: unknown, fallback = ""): string {
-  return value === null || value === undefined ? fallback : String(value);
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  return text.length > 0 ? text : fallback;
 }
 
 function toArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((v) => String(v));
   if (typeof value === "string") return [value];
   return [];
+}
+
+function normalizeOrderType(value: unknown, direction: unknown): ChartOrderType {
+  const raw = String(value ?? "").trim().toUpperCase();
+  if (
+    raw === "MARKET_NOW" ||
+    raw === "BUY_STOP" ||
+    raw === "SELL_STOP" ||
+    raw === "BUY_LIMIT" ||
+    raw === "SELL_LIMIT" ||
+    raw === "WAIT_FOR_CONFIRMATION"
+  ) {
+    return raw;
+  }
+  return String(direction ?? "").toUpperCase() === "SHORT" ? "SELL_STOP" : "BUY_STOP";
 }
 
 function detectImageMimeType(buffer: Buffer): "image/png" | "image/jpeg" {
@@ -211,6 +237,15 @@ export function parseAnalysisResponse(text: string): {
         ...s,
         reasons: toArray(s.reasons),
         risks: toArray(s.risks),
+        orderType: normalizeOrderType(s.orderType, s.direction),
+        entryCondition: toText(
+          s.entryCondition,
+          "Chờ giá xác nhận đúng vùng entry trước khi vào lệnh.",
+        ),
+        currentPriceContext: toText(
+          s.currentPriceContext,
+          "Model chưa mô tả rõ vị trí giá hiện tại so với entry.",
+        ),
       } as unknown as TradeSetup))
       .filter((setup) => (setup.confidence ?? 0) >= threshold);
     return {
@@ -275,19 +310,29 @@ export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise
   const noSetupReasons: string[] = [];
   const failedPairs: string[] = [];
 
-  for (const group of groups) {
-    try {
-      logger.info(`  -> Analyzing ${group.pair} with ${ANALYSIS_MODEL}...`);
-      const parsed = parseAnalysisResponse(await analyzeWithOpenRouter(group.screenshots));
-      summaries.push(...parsed.summaries);
-      setups.push(...parsed.setups);
-      if (parsed.noSetupReason.trim()) {
-        noSetupReasons.push(prefixReasons ? `[${group.pair}] ${parsed.noSetupReason.trim()}` : parsed.noSetupReason.trim());
+  const analysisResults = await Promise.all(
+    groups.map(async (group) => {
+      try {
+        logger.info(`  -> Analyzing ${group.pair} with ${ANALYSIS_MODEL}...`);
+        const parsed = parseAnalysisResponse(await analyzeWithOpenRouter(group.screenshots));
+        logger.info(`  ✓ Analyzed ${group.pair} by ${ANALYSIS_MODEL}`);
+        return { kind: "ok" as const, pair: group.pair, summaries: parsed.summaries, setups: parsed.setups, noSetupReason: parsed.noSetupReason };
+      } catch (error) {
+        logger.warn(`  ! OpenRouter main analysis failed for ${group.pair} (${group.screenshots.length} screenshots): ${error instanceof Error ? error.message : error}`);
+        return { kind: "err" as const, pair: group.pair };
       }
-      logger.info(`  ✓ Analyzed ${group.pair} by ${ANALYSIS_MODEL}`);
-    } catch (error) {
-      failedPairs.push(group.pair);
-      logger.warn(`  ! OpenRouter main analysis failed for ${group.pair} (${group.screenshots.length} screenshots): ${error instanceof Error ? error.message : error}`);
+    }),
+  );
+
+  for (const result of analysisResults) {
+    if (result.kind === "ok") {
+      summaries.push(...result.summaries);
+      setups.push(...result.setups);
+      if (result.noSetupReason.trim()) {
+        noSetupReasons.push(prefixReasons ? `[${result.pair}] ${result.noSetupReason.trim()}` : result.noSetupReason.trim());
+      }
+    } else {
+      failedPairs.push(result.pair);
     }
   }
   if (summaries.length === 0 && setups.length === 0) {

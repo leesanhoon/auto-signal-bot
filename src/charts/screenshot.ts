@@ -8,8 +8,8 @@ import { createLogger } from "../shared/logger.js";
 const SCREENSHOT_DIR = join(process.cwd(), "screenshots");
 const VIEWPORT = { width: 1400, height: 900 };
 const CHART_LOAD_TIMEOUT = 30_000;
-const CHART_RENDER_DELAY = 8_000;
-const PARALLEL_TABS = 4;
+const CHART_RENDER_DELAY = 4_000;
+const PARALLEL_TABS = 8;
 const logger = createLogger("charts:screenshot");
 
 function getTimeframeRank(timeframe: ChartTimeframe): number {

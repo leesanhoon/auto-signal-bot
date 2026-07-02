@@ -1,5 +1,6 @@
 import { sendMessage } from "../shared/telegram.js";
 import { getConfiguredBookmaker } from "./betting-api.js";
+import type { MatchAiAnalysis, MatchOddsPayload } from "./betting-types.js";
 import { buildOddsPayload, pickNearestUpcomingDateMatches } from "./betting.js";
 import { analyzeMatchOdds, reviseMatchAnalysis, verifyMatchAnalysis } from "./betting-gemini.js";
 import { saveBettingAnalysisSnapshot } from "./betting-analysis-repository.js";
@@ -48,59 +49,87 @@ export async function runOddsCheck(): Promise<void> {
   if (!aiEnabled) await sendMessage(`⚠️ [${LABEL}] OPENROUTER_API_KEY chưa được cấu hình — sẽ gửi dữ liệu odds thô cho từng trận.`);
   logger.info(`\n📤 Gui tung tran len Telegram (${aiEnabled ? "OpenRouter analysis" : "raw odds fallback"})...`);
 
-  for (const match of payload) {
-    if (!aiEnabled) {
-      await sendMessage(formatOddsFallbackMessage(match, "thiếu OPENROUTER_API_KEY"));
-      continue;
-    }
-    try {
-      let analysis = await analyzeMatchOdds(match);
-      try {
-        const verification = await verifyMatchAnalysis(match, analysis);
-        if (verification.confirmed) {
-          analysis.verifiedConfirmed = true;
-          analysis.verifiedConfidence = verification.confidence;
-          analysis.verifiedComment = verification.comment;
-          analysis.verificationStatus = "confirmed";
-          logger.info(`  ✓ Verify ${match.home} vs ${match.away}: confirmed (${verification.confidence}%)`);
-        } else {
-          logger.info(`  ✗ Verify ${match.home} vs ${match.away}: rejected (${verification.confidence}%) - ${verification.comment}`);
-          analysis = await reviseMatchAnalysis(match, analysis, verification.comment);
-          analysis.verifiedConfirmed = false;
-          analysis.verifiedConfidence = verification.confidence;
-          analysis.verifiedComment = `Nhận định đã được điều chỉnh sau khi bị từ chối: ${verification.comment}`;
-          analysis.revisedAfterReject = true;
-          analysis.verificationStatus = "revised";
-          logger.info(`  ↻ Revised ${match.home} vs ${match.away} thanh nhan dinh moi`);
-        }
-      } catch (verifyError) {
-        analysis.verificationStatus = "failed";
-        analysis.verifiedComment = verifyError instanceof Error ? verifyError.message : String(verifyError);
-        logger.warn(
-          `  ⚠ Verify unavailable for ${match.home} vs ${match.away}; keeping primary analysis: ${verifyError instanceof Error ? verifyError.message : verifyError}`,
-        );
+  type MatchResult = {
+    match: MatchOddsPayload;
+    analysis: MatchAiAnalysis | null;
+    error: string | null;
+  };
+
+  const matchResults: MatchResult[] = await Promise.all(
+    payload.map(async (match) => {
+      if (!aiEnabled) {
+        return { match, analysis: null, error: null };
       }
-      await saveBettingAnalysisSnapshot({
-        gameId: match.gameId,
-        date: vnDateStr(match.kickoffUnix * 1000),
-        home: match.home,
-        away: match.away,
-        kickoffUnix: match.kickoffUnix,
-        odds: match.odds,
-        correctScore: match.correctScore ?? null,
-        analysis,
-        verifiedConfirmed: analysis.verifiedConfirmed ?? null,
-        verifiedConfidence: analysis.verifiedConfidence ?? null,
-        verifiedComment: analysis.verifiedComment ?? null,
-        revisedAfterReject: analysis.revisedAfterReject ?? false,
-      });
-      await sendMessage(formatMatchAnalysisMessage(match, analysis));
-      await sendMessage(formatOddsDataMessage(match));
-      logger.info(`  ✓ OpenRouter analyzed: ${match.home} vs ${match.away}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.warn(`  ⚠ OpenRouter failed for ${match.home} vs ${match.away}: ${message}`);
-      await sendMessage(formatOddsFallbackMessage(match, message.slice(0, 200)));
+      try {
+        let analysis = await analyzeMatchOdds(match);
+        try {
+          const verification = await verifyMatchAnalysis(match, analysis);
+          if (verification.confirmed) {
+            analysis.verifiedConfirmed = true;
+            analysis.verifiedConfidence = verification.confidence;
+            analysis.verifiedComment = verification.comment;
+            analysis.verificationStatus = "confirmed";
+            logger.info(`  ✓ Verify ${match.home} vs ${match.away}: confirmed (${verification.confidence}%)`);
+          } else {
+            logger.info(`  ✗ Verify ${match.home} vs ${match.away}: rejected (${verification.confidence}%) - ${verification.comment}`);
+            analysis = await reviseMatchAnalysis(match, analysis, verification.comment);
+            analysis.verifiedConfirmed = false;
+            analysis.verifiedConfidence = verification.confidence;
+            analysis.verifiedComment = `Nhận định đã được điều chỉnh sau khi bị từ chối: ${verification.comment}`;
+            analysis.revisedAfterReject = true;
+            analysis.verificationStatus = "revised";
+            logger.info(`  ↻ Revised ${match.home} vs ${match.away} thanh nhan dinh moi`);
+          }
+        } catch (verifyError) {
+          analysis.verificationStatus = "failed";
+          analysis.verifiedComment = verifyError instanceof Error ? verifyError.message : String(verifyError);
+          logger.warn(
+            `  ⚠ Verify unavailable for ${match.home} vs ${match.away}; keeping primary analysis: ${verifyError instanceof Error ? verifyError.message : verifyError}`,
+          );
+        }
+        return { match, analysis, error: null };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`  ⚠ OpenRouter failed for ${match.home} vs ${match.away}: ${message}`);
+        return { match, analysis: null, error: message };
+      }
+    }),
+  );
+
+  for (const { match, analysis, error } of matchResults) {
+    try {
+      if (!aiEnabled) {
+        await sendMessage(formatOddsFallbackMessage(match, "thiếu OPENROUTER_API_KEY"));
+      } else if (analysis) {
+        await saveBettingAnalysisSnapshot({
+          gameId: match.gameId,
+          date: vnDateStr(match.kickoffUnix * 1000),
+          home: match.home,
+          away: match.away,
+          kickoffUnix: match.kickoffUnix,
+          odds: match.odds,
+          correctScore: match.correctScore ?? null,
+          analysis,
+          verifiedConfirmed: analysis.verifiedConfirmed ?? null,
+          verifiedConfidence: analysis.verifiedConfidence ?? null,
+          verifiedComment: analysis.verifiedComment ?? null,
+          revisedAfterReject: analysis.revisedAfterReject ?? false,
+        });
+        await sendMessage(formatMatchAnalysisMessage(match, analysis));
+        await sendMessage(formatOddsDataMessage(match));
+        logger.info(`  ✓ OpenRouter analyzed: ${match.home} vs ${match.away}`);
+      } else {
+        await sendMessage(formatOddsFallbackMessage(match, error!.slice(0, 200)));
+      }
+    } catch (sendError) {
+      const message = sendError instanceof Error ? sendError.message : String(sendError);
+      logger.warn(`  ⚠ Telegram/snapshot failed for ${match.home} vs ${match.away}: ${message}`);
+      try {
+        await sendMessage(formatOddsFallbackMessage(match, `không gửi được kết quả phân tích: ${message.slice(0, 120)}`));
+      } catch (fallbackError) {
+        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        logger.warn(`  ⚠ Fallback message also failed for ${match.home} vs ${match.away}: ${fallbackMessage}`);
+      }
     }
   }
   logger.info(`\n✅ Da gui ${payload.length} tran dau len Telegram.`);

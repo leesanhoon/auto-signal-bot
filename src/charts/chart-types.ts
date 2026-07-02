@@ -1,5 +1,13 @@
 export type ChartTimeframe = "M15" | "H4" | "D1";
 
+export type ChartOrderType =
+  | "MARKET_NOW"
+  | "BUY_STOP"
+  | "SELL_STOP"
+  | "BUY_LIMIT"
+  | "SELL_LIMIT"
+  | "WAIT_FOR_CONFIRMATION";
+
 export type ChartConfig = {
   name: string;
   symbol: string;
@@ -36,6 +44,9 @@ export type TradeSetup = {
   takeProfit2: string;
   riskReward: string;
   summary: string;
+  orderType?: ChartOrderType;
+  entryCondition?: string;
+  currentPriceContext?: string;
   verifiedConfirmed?: boolean;
   verifiedConfidence?: number;
   verifiedComment?: string;

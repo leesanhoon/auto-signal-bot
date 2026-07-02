@@ -70,6 +70,17 @@ function clampRiskReward(value: number): number {
   return Math.max(0, Math.round(value * 100) / 100);
 }
 
+function validateOrderTypeForDirection(setup: Pick<TradeSetup, "direction"> & { orderType?: TradeSetup["orderType"] }): string | null {
+  if (!setup.orderType) return null;
+  if (setup.direction === "LONG" && setup.orderType.startsWith("SELL")) {
+    return "Loai lenh SELL khong phu hop voi huong LONG.";
+  }
+  if (setup.direction === "SHORT" && setup.orderType.startsWith("BUY")) {
+    return "Loai lenh BUY khong phu hop voi huong SHORT.";
+  }
+  return null;
+}
+
 export function getConfiguredMinRiskRewardRatio(): number {
   const raw = process.env.POSITION_MIN_RISK_REWARD_RATIO?.trim();
   if (!raw) return 1.5;
@@ -134,9 +145,16 @@ export function calculateRiskRewardPlan(
 }
 
 export function validateTradeSetupForOpen(
-  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2">,
+  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2"> & {
+    orderType?: TradeSetup["orderType"];
+  },
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
 ): OpenPositionValidation {
+  const orderTypeError = validateOrderTypeForDirection(setup);
+  if (orderTypeError) {
+    return { accepted: false, reason: orderTypeError, plan: null };
+  }
+
   const plan = calculateRiskRewardPlan(setup, options);
   if (!plan) {
     return {

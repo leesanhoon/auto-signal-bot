@@ -30,5 +30,8 @@ describe("charts/position-decision", () => {
     }, { chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("chart"), filepath: "/tmp/chart.jpg" });
     expect(result).toMatchObject({ decision: "CLOSE", confidence: 87, comment: "Trend failed" });
     expect(state.call).toHaveBeenCalledTimes(1);
+    expect(state.call.mock.calls[0][0].systemPrompt).toContain("All user-facing text must be Vietnamese with accents.");
+    expect(state.call.mock.calls[0][0].userContent[1].text).toContain("- Pair: EUR/USD");
+    expect(state.call.mock.calls[0][0].userContent[1].text).not.toContain("|-");
   });
 });

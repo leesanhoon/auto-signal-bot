@@ -352,11 +352,10 @@ export function formatMatchAnalysisMessage(
         ? "⭐⭐⭐⭐"
         : analysis.confidence >= 50
           ? "⭐⭐⭐"
-          : analysis.confidence >= 35
-            ? "⭐⭐"
-            : "⭐";
+      : analysis.confidence >= 35
+        ? "⭐⭐"
+        : "⭐";
   const picks = (analysis.picks ?? []).slice(0, 3);
-  const marketViews = (analysis.marketViews ?? []).slice(0, 5);
   const verifyLabel =
     analysis.verificationStatus === "confirmed"
       ? "✅ *Thẩm định:* đạt"
@@ -391,17 +390,6 @@ export function formatMatchAnalysisMessage(
   sections.push(
     `⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`,
   );
-  if (marketViews.length > 0) {
-    sections.push(
-      [
-        "📋 *NHẬN ĐỊNH THỊ TRƯỜNG*",
-        ...marketViews.map(
-          (view) =>
-            `• *${compact(view.market, 30)}:* ${compact(view.assessment, 75)}${view.odds === null ? "" : `  \`@${view.odds}\``}`,
-        ),
-      ].join("\n"),
-    );
-  }
 
   if (keyPoints.length > 0)
     sections.push(`🔎 *Nhận định:* ${compact(keyPoints[0])}`);

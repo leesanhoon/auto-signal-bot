@@ -19,6 +19,30 @@ describe("charts/position-engine", () => {
     expect(result.reason).toContain("R:R");
   });
 
+  test("rejects SELL order types for LONG setups and BUY order types for SHORT setups", () => {
+    expect(
+      validateTradeSetupForOpen({
+        direction: "LONG",
+        orderType: "SELL_STOP",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+      }).accepted,
+    ).toBe(false);
+
+    expect(
+      validateTradeSetupForOpen({
+        direction: "SHORT",
+        orderType: "BUY_LIMIT",
+        entry: "1.1000",
+        stopLoss: "1.1020",
+        takeProfit1: "1.0960",
+        takeProfit2: "1.0920",
+      }).accepted,
+    ).toBe(false);
+  });
+
   test("builds open-position payload with partial TP config and risk-reward", () => {
     const row = buildOpenPositionInsertRow({
       pair: "EUR/USD",

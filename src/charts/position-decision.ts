@@ -69,6 +69,7 @@ Trade:
 - Take profit 2: ${position.takeProfit2 ?? ""}
 - Reasons: ${(position.reasons ?? []).slice(0, 4).join(" | ")}
 
+All user-facing fields must be Vietnamese with accents. The comment must be Vietnamese, concise, and directly explain HOLD/CLOSE/STOP.
 Return only JSON with keys decision, managementAction, partialClosePercent, newStopLoss, confidence, comment.
 decision must be one of HOLD, CLOSE, STOP.
 managementAction must be one of NONE, PARTIAL_TP1, MOVE_SL_TO_BE, TRAIL_SL, TP2_CLOSE.
@@ -80,7 +81,7 @@ Comment should be short and practical.`;
   const response = await withRetry(
     () => callOpenRouter({
       model: MODEL,
-      systemPrompt: "You manage open trades from chart evidence. Answer only with concise JSON.",
+      systemPrompt: "You manage open trades from chart evidence. Answer only with concise JSON. All user-facing text must be Vietnamese with accents.",
       userContent: [
         { type: "image_url", image_url: { url: `data:${mime};base64,${screenshot.buffer.toString("base64")}` } },
         { type: "text", text: prompt },

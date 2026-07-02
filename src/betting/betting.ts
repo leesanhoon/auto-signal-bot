@@ -36,11 +36,8 @@ export type OddsFailure = { match: MatchInfo; message: string };
 export async function buildOddsPayload(
   matches: MatchInfo[],
 ): Promise<{ payload: MatchOddsPayload[]; failures: OddsFailure[] }> {
-  const payload: MatchOddsPayload[] = [];
-  const failures: OddsFailure[] = [];
-
-  for (const match of matches) {
-    try {
+  const results = await Promise.allSettled(
+    matches.map(async (match) => {
       const fixtureOdds = await fetchFixtureOdds(match.gameId);
       if (!fixtureOdds || fixtureOdds.bets.length === 0) {
         throw new Error("Không có bookmaker nào cung cấp odds cho trận này");
@@ -49,15 +46,24 @@ export async function buildOddsPayload(
       const odds = compactOdds(fixtureOdds.bets, fixtureOdds.updateIso, match);
       const correctScore = extractCorrectScore(fixtureOdds.bets);
 
-      payload.push({ ...match, odds, ...(correctScore.length > 0 ? { correctScore } : {}) });
       logger.info(
         `  ✓ Lấy kèo (${odds.markets.length} market${correctScore.length > 0 ? " + Correct Score" : ""}) ` +
           `từ ${fixtureOdds.bookmakerName}: ${match.home} vs ${match.away}`,
       );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.warn(`  ⚠ Lỗi lấy kèo cho ${match.home} vs ${match.away}: ${message}`);
-      failures.push({ match, message });
+      return { ...match, odds, ...(correctScore.length > 0 ? { correctScore } : {}) } as MatchOddsPayload;
+    }),
+  );
+
+  const payload: MatchOddsPayload[] = [];
+  const failures: OddsFailure[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === "fulfilled") {
+      payload.push(result.value);
+    } else {
+      const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      logger.warn(`  ⚠ Lỗi lấy kèo cho ${matches[i].home} vs ${matches[i].away}: ${message}`);
+      failures.push({ match: matches[i], message });
     }
   }
 

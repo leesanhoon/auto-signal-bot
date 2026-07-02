@@ -38,7 +38,8 @@ describe("formatMatchAnalysisMessage", () => {
     expect(message).toContain("1. *Belgium -0.25*  `@1.81`");
     expect(message).toContain("_Chap Chau A_");
     expect(message).toContain("🔄 *Thẩm định:* đã hiệu chỉnh");
-    expect(message).toContain("*GG/NG:* Nghieng GG  `@1.69`");
+    expect(message).not.toContain("NHẬN ĐỊNH THỊ TRƯỜNG");
+    expect(message).not.toContain("*GG/NG:* Nghieng GG  `@1.69`");
     expect(message).toContain("Điểm chính 1");
     expect(message).not.toContain("Điểm chính 2");
     expect(message).not.toContain("Điểm thừa");

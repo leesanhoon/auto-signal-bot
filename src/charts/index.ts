@@ -7,10 +7,15 @@ import { sendAllAnalyses, notifyError } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
 import { validateTradeSetupForOpen } from "./position-engine.js";
 import { getConfiguredChartSignalConfidenceThreshold } from "./chart-config-env.js";
+import type { TradeSetup } from "./chart-types.js";
 
 const logger = createLogger("charts:index");
 const AI_VISION_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
 const AI_VERIFY_MODEL = process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
+
+function shouldAutoTrackAsOpen(setup: TradeSetup): boolean {
+  return setup.verifiedConfirmed === true && setup.orderType === "MARKET_NOW";
+}
 
 async function main(): Promise<void> {
   const startTime = Date.now();
@@ -38,7 +43,7 @@ async function main(): Promise<void> {
   }
 
   for (const setup of result.setups) {
-    if (setup.verifiedConfirmed === true) {
+    if (shouldAutoTrackAsOpen(setup)) {
       try {
         const validation = validateTradeSetupForOpen(setup);
         if (!validation.accepted) {
@@ -55,6 +60,11 @@ async function main(): Promise<void> {
       } catch (error) {
         logger.error("Failed to auto-save open position", { pair: setup.pair, error });
       }
+    } else if (setup.verifiedConfirmed === true) {
+      logger.info("Skipped auto-save because setup is pending, not an open position", {
+        pair: setup.pair,
+        orderType: setup.orderType,
+      });
     }
   }
 

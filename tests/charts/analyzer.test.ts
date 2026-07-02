@@ -23,6 +23,26 @@ describe("charts/analyzer", () => {
     expect(parsed.setups[0].pair).toBe("EUR/USD");
   });
 
+  test("parseAnalysisResponse defaults order type for legacy setups", () => {
+    const parsed = analyzer.parseAnalysisResponse(
+      '{"summaries":[],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"BB","reasons":[],"risks":[],"confidence":80,"entry":"1.1000","stopLoss":"1.0950","takeProfit1":"1.1100","takeProfit2":"1.1200","riskReward":"1:2","summary":"Test"}],"noSetupReason":""}',
+    );
+
+    expect(parsed.setups[0].orderType).toBe("BUY_STOP");
+    expect(parsed.setups[0].entryCondition).toBe("Chờ giá xác nhận đúng vùng entry trước khi vào lệnh.");
+    expect(parsed.setups[0].currentPriceContext).toBe("Model chưa mô tả rõ vị trí giá hiện tại so với entry.");
+  });
+
+  test("parseAnalysisResponse falls back for blank explanatory fields", () => {
+    const parsed = analyzer.parseAnalysisResponse(
+      '{"summaries":[],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"BB","reasons":[],"risks":[],"confidence":80,"entry":"1.1000","stopLoss":"1.0950","takeProfit1":"1.1100","takeProfit2":"1.1200","riskReward":"1:2","summary":"Test","entryCondition":"   ","currentPriceContext":""}],"noSetupReason":"   "}',
+    );
+
+    expect(parsed.setups[0].entryCondition).toBe("Chờ giá xác nhận đúng vùng entry trước khi vào lệnh.");
+    expect(parsed.setups[0].currentPriceContext).toBe("Model chưa mô tả rõ vị trí giá hiện tại so với entry.");
+    expect(parsed.noSetupReason).toBe("");
+  });
+
   test("analyzeAllCharts sends data URLs and parses OpenRouter output", async () => {
     state.call.mockResolvedValueOnce({
       text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',

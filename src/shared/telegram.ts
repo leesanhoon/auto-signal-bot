@@ -231,6 +231,25 @@ function getPatternInfo(setup: string): string {
   return "";
 }
 
+function getOrderTypeLabel(orderType?: string): string {
+  switch (orderType) {
+    case "MARKET_NOW":
+      return "Market — chỉ vào nếu giá hiện tại còn quanh vùng entry";
+    case "BUY_STOP":
+      return "Buy Stop — lệnh chờ breakout lên vùng entry";
+    case "SELL_STOP":
+      return "Sell Stop — lệnh chờ breakdown xuống vùng entry";
+    case "BUY_LIMIT":
+      return "Buy Limit — lệnh chờ giá hồi về vùng entry";
+    case "SELL_LIMIT":
+      return "Sell Limit — lệnh chờ giá hồi lên vùng entry";
+    case "WAIT_FOR_CONFIRMATION":
+      return "Chờ xác nhận — chưa đặt lệnh ngay";
+    default:
+      return "Lệnh chờ xác nhận vùng entry";
+  }
+}
+
 function buildCopyableSetup(setup: TradeSetup): string {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
   const arrow = setup.direction === "LONG" ? "🟢" : "🔴";
@@ -243,10 +262,13 @@ function buildCopyableSetup(setup: TradeSetup): string {
     `${arrow} *${setup.pair} — ${setup.direction}* (${confidence}% ${confBar})${emaTag}`,
     `📋 *${setup.setup}*`,
     patternInfo,
+    setup.orderType ? `🧭 *Loại lệnh:* ${getOrderTypeLabel(setup.orderType)}` : "",
+    setup.entryCondition ? `⏳ *Điều kiện vào:* ${setup.entryCondition}` : "",
+    setup.currentPriceContext ? `📍 *Giá hiện tại:* ${setup.currentPriceContext}` : "",
     "",
     "```",
     `Direction : ${setup.direction}`,
-    `Entry     : ${setup.entry}`,
+    `Entry     : ${setup.entry} (${setup.orderType === "MARKET_NOW" ? "market nếu còn đúng vùng" : "trigger/pending"})`,
     `Stop Loss : ${setup.stopLoss}`,
     `TP1       : ${setup.takeProfit1}`,
     `TP2       : ${setup.takeProfit2}`,
@@ -263,7 +285,7 @@ function buildCopyableSetup(setup: TradeSetup): string {
     "",
     setup.autoTracked === true
       ? "✅ Bot đã tự động lưu vị thế và sẽ tiếp tục theo dõi để báo khi cần đóng."
-      : "",
+      : "ℹ️ Nếu đây là lệnh chờ, chỉ vào khi giá khớp đúng điều kiện trên.",
   ].join("\n");
 }
 
@@ -349,8 +371,8 @@ export function buildPositionDecisionMessage(
   if (position.reasons && position.reasons.length > 0) {
     lines.push(
       "",
-      "*Lý do gốc:*",
-      ...position.reasons.map((reason) => `• ${reason}`),
+      "*Lý do gốc khi mở lệnh:*",
+      ...position.reasons.slice(0, 2).map((reason) => `• ${reason}`),
     );
   }
 
