@@ -34,16 +34,16 @@ describe("formatMatchAnalysisMessage", () => {
 
     const message = formatMatchAnalysisMessage(payload, analysis);
 
-    expect(message).toContain("⭐ *Độ tin cậy: THẤP* ⭐");
+    expect(message).toContain("🏟 *Belgium (H) vs Senegal (A)*");
     expect(message).toContain("1. *Belgium -0.25*  [@1.81]");
     expect(message).toContain("_Chap Chau A_");
-    expect(message).toContain("🔄 *Thẩm định:* đã hiệu chỉnh");
     expect(message).toContain("Lý do");
-    expect(message).not.toContain("NHẬN ĐỊNH THỊ TRƯỜNG");
-    expect(message).not.toContain("*GG/NG:* Nghieng GG  `@1.69`");
-    expect(message).toContain("Điểm chính 1");
-    expect(message).not.toContain("Điểm chính 2");
-    expect(message).not.toContain("Điểm thừa");
+    expect(message).toContain("⚽ *Tỷ số dự đoán:* 1-0 _(36%)_");
+    expect(message).not.toContain("⭐ *Độ tin cậy:");
+    expect(message).not.toContain("Thẩm định:");
+    expect(message).not.toContain("🔎 *Nhận định:");
+    expect(message).not.toContain("⚠️ *Rủi ro:");
+    expect(message).not.toContain("Điểm chính 1");
     expect(message).not.toContain("Rủi ro thừa");
     expect(message).not.toContain("Lời từ chối cũ");
     expect(message).not.toContain("Phần tóm tắt");
@@ -77,7 +77,7 @@ describe("formatMatchAnalysisMessage", () => {
     );
 
     expect(message).not.toContain("KÈO ĐỀ XUẤT");
-    expect(message).toContain("⚠️ *Thẩm định:* lỗi model");
+    expect(message).not.toContain("Thẩm định:");
     expect(message).not.toContain("Internal");
     expect(message).toContain("⚽ *Tỷ số dự đoán:*");
   });

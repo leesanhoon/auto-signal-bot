@@ -443,47 +443,15 @@ export function formatMatchAnalysisMessage(
     /[dđ][uứ]ng\s*(ngo[aà]i|l[aạ]i)|kh[oô]ng\s+(c[oó]\s+)?(k[eè]o|edge)/i.test(
       analysis.recommendation,
     );
-  const confidenceLabel =
-    analysis.confidence >= 70
-      ? "CAO"
-      : analysis.confidence >= 40
-        ? "TRUNG BÌNH"
-        : "THẤP";
   const compact = (value: string, maxLength = 140): string => {
     const normalized = value.replace(/\s+/g, " ").trim();
     return normalized.length > maxLength
       ? `${normalized.slice(0, maxLength - 1).trimEnd()}…`
       : normalized;
   };
-  const keyPoints = analysis.keyPoints.filter(Boolean).slice(0, 2);
-  const risks = analysis.risks.filter(Boolean).slice(0, 2);
-  const confidenceStars =
-    analysis.confidence >= 80
-      ? "⭐⭐⭐⭐⭐"
-      : analysis.confidence >= 65
-        ? "⭐⭐⭐⭐"
-        : analysis.confidence >= 50
-          ? "⭐⭐⭐"
-          : analysis.confidence >= 35
-            ? "⭐⭐"
-            : "⭐";
   const picks = (analysis.picks ?? []).slice(0, 3);
-  const verifyLabel =
-    analysis.verificationStatus === "confirmed"
-      ? "✅ *Thẩm định:* đạt"
-      : analysis.verificationStatus === "revised"
-        ? "🔄 *Thẩm định:* đã hiệu chỉnh"
-        : analysis.verificationStatus === "failed"
-          ? "⚠️ *Thẩm định:* lỗi model"
-          : analysis.verificationStatus === "skipped"
-            ? "🤖 *Chế độ:* AI phân tích trực tiếp"
-            : "🤖 *Chế độ:* AI phân tích trực tiếp";
   const sections: string[] = [
-    [
-      `🏟 *${payload.home} (H) vs ${payload.away} (A)*`,
-      `⭐ *Độ tin cậy: ${confidenceLabel}* ${confidenceStars}`,
-      verifyLabel,
-    ].join("\n"),
+    `🏟 *${payload.home} (H) vs ${payload.away} (A)*`,
   ];
 
   if (picks.length > 0) {
@@ -519,10 +487,6 @@ export function formatMatchAnalysisMessage(
     `⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`,
   );
 
-  if (keyPoints.length > 0)
-    sections.push(`🔎 *Nhận định:* ${compact(keyPoints[0])}`);
-  if (risks.length > 0) sections.push(`⚠️ *Rủi ro:* ${compact(risks[0])}`);
-
   return sections.join("\n\n");
 }
 
@@ -541,24 +505,6 @@ export function formatOddsFallbackMessage(
 
 export function formatBettingPlanMessage(plan: BettingPlan): string {
   const sections: string[] = [];
-
-  // Match picks
-  for (const match of plan.matches) {
-    const picksText = match.topPicks
-      .map((p) => {
-        const badge =
-          p.suitability === "parlay"
-            ? " 🔗XIÊN"
-            : p.suitability === "single"
-              ? " 📌ĐƠN"
-              : p.suitability === "both"
-                ? " 🔗XIÊN+📌ĐƠN"
-                : "";
-        return `• ${p.market}: ${p.selection} @${p.odds}${badge} — ${p.reason}`;
-      })
-      .join("\n");
-    sections.push(`📅 *${match.matchLabel}* (${match.kickoff})\n${picksText}`);
-  }
 
   // Parlays grouped by type
   if (plan.parlays.length > 0) {
@@ -641,101 +587,15 @@ export function formatCombinedOddsMessage(
   const month = dateParts.find((p) => p.type === "month")?.value ?? "";
   const dateStr = `${day}/${month}`;
 
-  const lines: string[] = [];
-  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  lines.push(`📊 *PHÂN TÍCH KÈO — ${sorted.length} TRẬN NGÀY ${dateStr}*`);
-  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  const blockParts: string[] = [];
+  blockParts.push(`━━━━━━ DỮ LIỆU ODDS / ${dateStr} ────────`);
 
-    for (let i = 0; i < sorted.length; i++) {
-      const p = sorted[i];
-
-      // Time only (HH:MM)
-      const kickoffDate = new Date(p.kickoffUnix * 1000);
-      const timeParts = new Intl.DateTimeFormat("vi-VN", {
-        timeZone: "Asia/Ho_Chi_Minh",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }).formatToParts(kickoffDate);
-      const hour = timeParts.find((part) => part.type === "hour")?.value ?? "";
-      const minute =
-        timeParts.find((part) => part.type === "minute")?.value ?? "";
-      const timeStr = `${hour}:${minute}`;
-
-      lines.push("");
-      lines.push(`⏰ ${timeStr}`);
-      lines.push(`🏟 *${p.home} vs ${p.away}*`);
-
-      // 1X2
-      const h2h = findMarket(p, "h2h");
-      const h = findOutcome(h2h, "H")?.price;
-      const d = findOutcome(h2h, "D")?.price;
-      const a = findOutcome(h2h, "A")?.price;
-      if (h !== undefined && d !== undefined && a !== undefined) {
-        lines.push(`📊 1X2: 🏠 ${h}  🤝 ${d}  ✈️ ${a}`);
-      }
-
-      // Asian Handicap (1 main point)
-      const hcpMarket = findMarket(p, "asia_handicap");
-      const hcpPoint = pickMainPoint(hcpMarket);
-      if (hcpPoint !== undefined && hcpMarket) {
-        const hcpH = hcpMarket.outcomes.find(
-          (o) => o.name === "H" && o.point === hcpPoint,
-        );
-        const hcpA = hcpMarket.outcomes.find(
-          (o) => o.name === "A" && o.point === hcpPoint,
-        );
-        if (hcpH && hcpA) {
-          lines.push(
-            `📐 Chấp: 🏠 ${fmtSignedPoint(hcpPoint)} @${hcpH.price} / ✈️ ${fmtSignedPoint(-hcpPoint)} @${hcpA.price}`,
-          );
-        }
-      }
-
-      // EU Tài/Xỉu (1 main point)
-      const euTotMarket = findMarket(p, "eu_totals");
-      const totPoint = pickMainPoint(euTotMarket);
-      if (totPoint !== undefined && euTotMarket) {
-        const over = euTotMarket.outcomes.find(
-          (o) => o.name === "Over" && o.point === totPoint,
-        );
-        const under = euTotMarket.outcomes.find(
-          (o) => o.name === "Under" && o.point === totPoint,
-        );
-        if (over && under) {
-          lines.push(
-            `⚽ Tài/Xỉu: O${fmtNum(totPoint)} @${over.price} / U${fmtNum(totPoint)} @${under.price}`,
-          );
-        }
-      }
-
-      // GG/NG
-      const bttsMarket = findMarket(p, "btts");
-      const gg = findOutcome(bttsMarket, "GG")?.price;
-      const ng = findOutcome(bttsMarket, "NG")?.price;
-      if (gg !== undefined && ng !== undefined) {
-        lines.push(`🔄 GG/NG: ✅${gg} / ❌${ng}`);
-      }
-
-      // Correct Score (top 4)
-      if (p.correctScore?.length) {
-        const topCs = [...p.correctScore]
-          .filter((o) => Number.isFinite(o.price) && o.price > 0)
-          .sort((a, b) => a.price - b.price)
-          .slice(0, 4);
-        if (topCs.length > 0) {
-          lines.push(
-            `🎯 Tỉ số: ${topCs.map((cs) => `${cs.score}@${cs.price}`).join(" | ")}`,
-          );
-        }
-      }
-
-      // Separator between matches
-      if (i < sorted.length - 1) {
-        lines.push("");
-        lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      }
+  for (let i = 0; i < sorted.length; i++) {
+    blockParts.push(formatOddsText(sorted[i]));
+    if (i < sorted.length - 1) {
+      blockParts.push("──────────────");
     }
-
-    return lines.join("\n");
   }
+
+  return blockParts.join("\n\n");
+}

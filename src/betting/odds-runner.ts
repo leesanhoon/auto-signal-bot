@@ -142,15 +142,17 @@ export async function runOddsCheck(): Promise<void> {
     return;
   }
 
-  const analysisMessage = buildCombinedAnalysisMessage(payload, plan);
-  if (analysisMessage.trim()) {
-    await sendMessage(analysisMessage);
-  }
-
-  const hasBettingPlan =
-    plan.matches.length > 0 || plan.parlays.length > 0 || plan.remainingSingles.length > 0 || Boolean(plan.summary.trim());
-  if (hasBettingPlan) {
-    await sendMessage(`📋 *KẾ HOẠCH ĐẶT CƯỢC*\n${formatBettingPlanMessage(plan)}`);
+  // Gộp analysis + plan thành 1 message
+  const combinedMessage = buildCombinedAnalysisMessage(payload, plan);
+  const planBlock = formatBettingPlanMessage(plan);
+  if (combinedMessage.trim() || planBlock.trim()) {
+    const fullMessage = [
+      "📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC*",
+      "",
+      combinedMessage.trim(),
+      planBlock.trim(),
+    ].filter(Boolean).join("\n\n");
+    await sendMessage(fullMessage);
   }
 
   await saveCombinedAnalysisSnapshots(payload, plan);

@@ -142,12 +142,14 @@ describe("betting/odds-runner combined flow", () => {
     state.saveBettingAnalysisSnapshot.mockResolvedValue(undefined);
   });
 
-  test("sends raw odds, combined analysis, and plan", async () => {
+  test("sends raw odds then combined analysis+plan as single message", async () => {
     await oddsRunner.runOddsCheck();
 
+    expect(state.sendMessage).toHaveBeenCalledTimes(2);
     expect(state.sendMessage).toHaveBeenNthCalledWith(1, "RAW:2");
+    expect(state.sendMessage).toHaveBeenNthCalledWith(2, expect.stringContaining("📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC*"));
     expect(state.sendMessage).toHaveBeenNthCalledWith(2, expect.stringContaining("📋 *TỔNG QUAN*"));
-    expect(state.sendMessage).toHaveBeenNthCalledWith(3, "📋 *KẾ HOẠCH ĐẶT CƯỢC*\nPLAN");
+    expect(state.sendMessage).toHaveBeenNthCalledWith(2, expect.stringContaining("PLAN"));
     expect(state.generateCombinedAnalysis).toHaveBeenCalledTimes(1);
     expect(state.saveBettingAnalysisSnapshot).toHaveBeenCalledTimes(2);
     expect(formatCombinedOddsMessage).toHaveBeenCalledTimes(1);
