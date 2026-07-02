@@ -278,7 +278,7 @@ function mainHandicapText(
   const h = market?.outcomes.find((o) => o.name === "H" && o.point === point);
   const a = market?.outcomes.find((o) => o.name === "A" && o.point === point);
   if (!h || !a) return undefined;
-  return `Chap ${fmtSignedPoint(point)}: ${h.price}/${a.price}`;
+  return `Chấp ${fmtSignedPoint(point)}: ${h.price}/${a.price}`;
 }
 
 function mainTotalText(market: CompactMarket | undefined): string | undefined {
@@ -291,7 +291,7 @@ function mainTotalText(market: CompactMarket | undefined): string | undefined {
     (o) => o.name === "Under" && o.point === point,
   );
   if (!over || !under) return undefined;
-  return `Tai/Xiu ${fmtNum(point)}: ${over.price}/${under.price}`;
+  return `Tài/Xỉu ${fmtNum(point)}: ${over.price}/${under.price}`;
 }
 
 export function formatMainOddsSummary(
@@ -328,7 +328,7 @@ export function formatMatchAnalysisMessage(
   analysis: MatchAiAnalysis,
 ): string {
   const isStandAside =
-    /d[uứ]ng\s*(ngo[aà]i|l[aạ]i)|kh[oô]ng\s+(c[oó]\s+)?(k[eè]o|edge)/i.test(
+    /[dđ][uứ]ng\s*(ngo[aà]i|l[aạ]i)|kh[oô]ng\s+(c[oó]\s+)?(k[eè]o|edge)/i.test(
       analysis.recommendation,
     );
   const confidenceLabel =
@@ -359,12 +359,12 @@ export function formatMatchAnalysisMessage(
   const marketViews = (analysis.marketViews ?? []).slice(0, 5);
   const verifyLabel =
     analysis.verificationStatus === "confirmed"
-      ? "✅ *Verify:* đạt"
+      ? "✅ *Thẩm định:* đạt"
       : analysis.verificationStatus === "revised"
-        ? "🔄 *Verify:* đã hiệu chỉnh"
+        ? "🔄 *Thẩm định:* đã hiệu chỉnh"
         : analysis.verificationStatus === "failed"
-          ? "⚠️ *Verify:* lỗi model"
-          : "⚪ *Verify:* chưa chạy";
+          ? "⚠️ *Thẩm định:* lỗi model"
+          : "⚪ *Thẩm định:* chưa chạy";
   const sections: string[] = [
     [
       `🏟 *${payload.home} (H) vs ${payload.away} (A)*`,
@@ -416,14 +416,14 @@ export function formatOddsFallbackMessage(
 ): string {
   return [
     `*${payload.home} vs ${payload.away}*`,
-    `_AI tam thoi chua phan tich duoc tran nay: ${reason}_`,
+    `_AI tạm thời chưa phân tích được trận này: ${reason}_`,
     "",
     formatOddsDataMessage(payload),
   ].join("\n");
 }
 
 export function formatOddsDataMessage(payload: MatchOddsPayload): string {
-  return ["*Du lieu odds tho:*", "```", formatOddsText(payload), "```"].join(
+  return ["*Dữ liệu odds thô:*", "```", formatOddsText(payload), "```"].join(
     "\n",
   );
 }

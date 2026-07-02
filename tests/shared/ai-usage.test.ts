@@ -103,9 +103,9 @@ describe("shared/ai-usage", () => {
       },
     );
 
-    expect(message).toContain("AI usage alert");
-    expect(message).toContain("tokens 10000/10000");
-    expect(message).toContain("cost $1.8000/$2.0000");
+    expect(message).toContain("Cảnh báo mức dùng AI");
+    expect(message).toContain("token 10000/10000");
+    expect(message).toContain("chi phí $1.8000/$2.0000");
   });
 
   test("estimates cost from token counts", () => {

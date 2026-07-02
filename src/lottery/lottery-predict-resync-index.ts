@@ -32,9 +32,9 @@ function formatNumbers(numbers: Iterable<string>): string {
 }
 
 async function sendResyncSummary(lines: string[]): Promise<void> {
-  const header = "*Resync du doan*";
+  const header = "*Resync dự đoán*";
   if (lines.length === 0) {
-    await sendMessage(`${header}\n\nKhong co du doan nao can cap nhat. Rule moi da khop voi du lieu da luu.`);
+    await sendMessage(`${header}\n\nKhông có dự đoán nào cần cập nhật. Rule mới đã khớp với dữ liệu đã lưu.`);
     return;
   }
 
@@ -132,7 +132,7 @@ async function main(): Promise<void> {
   await sendResyncSummary(
     resynced.length === 0
       ? []
-      : [`Da cap nhat ${resynced.length} nhom du doan theo rule moi.`, "", ...resynced],
+      : [`Đã cập nhật ${resynced.length} nhóm dự đoán theo rule mới.`, "", ...resynced],
   );
 }
 

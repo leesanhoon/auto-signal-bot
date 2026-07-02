@@ -270,14 +270,14 @@ export function buildAiUsageAlertMessage(summary: AiUsageDailySummary, config: A
   if (config.dailyTokenLimit && config.dailyTokenLimit > 0) {
     const tokenRatio = summary.inputTokens + summary.outputTokens;
     if (tokenRatio >= config.dailyTokenLimit * ratio) {
-      thresholds.push(`tokens ${tokenRatio}/${config.dailyTokenLimit} (${((tokenRatio / config.dailyTokenLimit) * 100).toFixed(1)}%)`);
+      thresholds.push(`token ${tokenRatio}/${config.dailyTokenLimit} (${((tokenRatio / config.dailyTokenLimit) * 100).toFixed(1)}%)`);
     }
   }
 
   if (config.dailyCostLimitUsd && config.dailyCostLimitUsd > 0) {
     if (summary.estimatedCostUsd >= config.dailyCostLimitUsd * ratio) {
       thresholds.push(
-        `cost ${formatUsd(summary.estimatedCostUsd)}/${formatUsd(config.dailyCostLimitUsd)} (${((summary.estimatedCostUsd / config.dailyCostLimitUsd) * 100).toFixed(1)}%)`,
+        `chi phí ${formatUsd(summary.estimatedCostUsd)}/${formatUsd(config.dailyCostLimitUsd)} (${((summary.estimatedCostUsd / config.dailyCostLimitUsd) * 100).toFixed(1)}%)`,
       );
     }
   }
@@ -287,24 +287,24 @@ export function buildAiUsageAlertMessage(summary: AiUsageDailySummary, config: A
   }
 
   const lines = [
-    `⚠️ AI usage alert for ${summary.date}`,
-    `Requests: ${summary.requests}`,
-    `Tokens: ${summary.inputTokens + summary.outputTokens} in total`,
-    `Estimated cost: ${formatUsd(summary.estimatedCostUsd)}`,
-    `Thresholds hit: ${thresholds.join(" | ")}`,
+    `⚠️ Cảnh báo mức dùng AI ngày ${summary.date}`,
+    `Yêu cầu: ${summary.requests}`,
+    `Token: ${summary.inputTokens + summary.outputTokens} tổng cộng`,
+    `Chi phí ước tính: ${formatUsd(summary.estimatedCostUsd)}`,
+    `Ngưỡng chạm tới: ${thresholds.join(" | ")}`,
   ];
 
   if (summary.byProvider.length > 0) {
-    lines.push("", "By provider:");
+    lines.push("", "Theo provider:");
     for (const row of summary.byProvider) {
-      lines.push(`- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} tokens | ${formatUsd(row.estimatedCostUsd)}`);
+      lines.push(`- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} token | ${formatUsd(row.estimatedCostUsd)}`);
     }
   }
 
   if (summary.bySource.length > 0) {
-    lines.push("", "By source:");
+    lines.push("", "Theo nguồn:");
     for (const row of summary.bySource) {
-      lines.push(`- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} tokens | ${formatUsd(row.estimatedCostUsd)}`);
+      lines.push(`- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} token | ${formatUsd(row.estimatedCostUsd)}`);
     }
   }
 

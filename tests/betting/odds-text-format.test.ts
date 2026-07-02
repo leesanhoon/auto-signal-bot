@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatMatchAnalysisMessage, formatOddsAnalysisInput } from "../../src/betting/odds-text-format.js";
+import { formatMainOddsSummary, formatMatchAnalysisMessage, formatOddsAnalysisInput, formatOddsFallbackMessage, formatOddsDataMessage } from "../../src/betting/odds-text-format.js";
 import type { MatchAiAnalysis, MatchOddsPayload } from "../../src/betting/betting-types.js";
 
 describe("formatMatchAnalysisMessage", () => {
@@ -37,7 +37,7 @@ describe("formatMatchAnalysisMessage", () => {
     expect(message).toContain("⭐ *Độ tin cậy: THẤP* ⭐");
     expect(message).toContain("1. *Belgium -0.25*  `@1.81`");
     expect(message).toContain("_Chap Chau A_");
-    expect(message).toContain("🔄 *Verify:* đã hiệu chỉnh");
+    expect(message).toContain("🔄 *Thẩm định:* đã hiệu chỉnh");
     expect(message).toContain("*GG/NG:* Nghieng GG  `@1.69`");
     expect(message).toContain("Điểm chính 1");
     expect(message).not.toContain("Điểm chính 2");
@@ -61,7 +61,7 @@ describe("formatMatchAnalysisMessage", () => {
         match: "Belgium vs Senegal",
         preferredScoreline: "2-1",
         scoreConfidence: 45,
-        recommendation: "Dung ngoai",
+        recommendation: "Đứng ngoài",
         confidence: 38,
         keyPoints: ["Odds chu nha nhinh hon.", "Tong ban chua ro."],
         risks: ["Tin hieu xung dot.", "Ti so phan tan."],
@@ -74,8 +74,8 @@ describe("formatMatchAnalysisMessage", () => {
       },
     );
 
-    expect(message).not.toContain("KHUYẾN NGHỊ");
-    expect(message).toContain("⚠️ *Verify:* lỗi model");
+    expect(message).not.toContain("KÈO ĐỀ XUẤT");
+    expect(message).toContain("⚠️ *Thẩm định:* lỗi model");
     expect(message).not.toContain("Internal");
     expect(message).toContain("⚽ *Tỷ số dự đoán:*");
   });
@@ -113,5 +113,53 @@ describe("formatMatchAnalysisMessage", () => {
     expect(input).not.toContain("result_total_goals");
     expect(input).not.toContain("long legend");
     expect(input.match(/=1[0-9]/g)).toHaveLength(8);
+  });
+});
+
+describe("odds Telegram messages Vietnamese output", () => {
+  const payload: MatchOddsPayload = {
+    gameId: "1",
+    home: "Việt Nam",
+    away: "Thái Lan",
+    kickoffUnix: 0,
+    odds: {
+      updatedUnix: 0,
+      legend: "",
+      markets: [
+        {
+          key: "asia_handicap",
+          outcomes: [
+            { name: "H", point: -0.25, price: 1.91 },
+            { name: "A", point: -0.25, price: 1.99 },
+          ],
+        },
+        {
+          key: "asia_totals",
+          outcomes: [
+            { name: "Over", point: 2.5, price: 1.87 },
+            { name: "Under", point: 2.5, price: 2.01 },
+          ],
+        },
+      ],
+    },
+  };
+
+  test("formatMainOddsSummary uses accented labels", () => {
+    const summary = formatMainOddsSummary(payload);
+    expect(summary).toContain("Chấp -0.25");
+    expect(summary).toContain("Tài/Xỉu 2.5");
+  });
+
+  test("formatOddsFallbackMessage uses accented fallback text", () => {
+    const fallback = formatOddsFallbackMessage(payload, "thiếu OPENROUTER_API_KEY");
+    expect(fallback).toContain("AI tạm thời chưa phân tích được trận này");
+    expect(fallback).not.toContain("tam thoi");
+    expect(fallback).not.toContain("tran nay");
+  });
+
+  test("formatOddsDataMessage uses accented data header", () => {
+    const dataMessage = formatOddsDataMessage(payload);
+    expect(dataMessage).toContain("Dữ liệu odds thô");
+    expect(dataMessage).not.toContain("Du lieu odds tho");
   });
 });

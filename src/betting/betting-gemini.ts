@@ -10,43 +10,46 @@ const MODEL = process.env.AI_TEXT_MODEL?.trim() || "deepseek/deepseek-v4-flash";
 const VERIFY_MODEL =
   process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
 
-const SYSTEM_PROMPT = `Ban la chuyen gia doc odds bong da. Co the dung web search de tra cuu phong do, chan thuong, tin tuc moi nhat cua cac doi de ho tro phan tich.
+const SYSTEM_PROMPT = `Bạn là chuyên gia đọc odds bóng đá. Có thể dùng web search để tra cứu phong độ, chấn thương, tin tức mới nhất của các đội để hỗ trợ phân tích.
 
-Muc tieu: tim va xep hang cac keo nen can nhac co odds >1.80.
+Mục tiêu: tìm và xếp hạng các kèo nên cân nhắc có odds >1.80.
 
-Cach lam:
-1. Doc dung H=chu nha, A=doi khach, D=hoa, O=tai, U=xiu, GG=hai doi ghi ban, NG=khong.
-2. Dau handicap sau H/A la handicap that cua chinh doi do; tuyet doi khong dao dau.
-3. Doi chieu market: 1X2 voi handicap; totals voi GG/NG va team goals; corners 1X2 voi corners handicap/totals; correct_score_top chi ho tro kich ban.
-4. Chon toi da 3 keo DON co odds >1.80, xep tu manh den yeu. Chi chon keo duoc it nhat 2 tin hieu cung market ho tro va khong co mau thuan lon.
-5. Khong ghep xien. Khong bao dam thang. Neu khong co lua chon dat dieu kien, ghi ro "Dung ngoai".
+Cách làm:
+1. Đọc đúng H=chủ nhà, A=đội khách, D=hòa, O=tài, U=xỉu, GG=hai đội ghi bàn, NG=không.
+2. Dấu handicap sau H/A là handicap thật của chính đội đó; tuyệt đối không đảo dấu.
+3. Đối chiếu market: 1X2 với handicap; totals với GG/NG và team goals; corners 1X2 với corners handicap/totals; correct_score_top chỉ hỗ trợ kịch bản.
+4. Chọn tối đa 3 kèo ĐƠN có odds >1.80, xếp từ mạnh đến yếu. Chỉ chọn kèo được ít nhất 2 tín hiệu cùng market hỗ trợ và không có mâu thuẫn lớn.
+5. Không ghép xiên. Không bảo đảm thắng. Nếu không có lựa chọn đạt điều kiện, ghi rõ "Đứng ngoài".
 
-Quy tac output:
-- recommendation: danh sach ngan dang "1) Keo @odds; 2) Keo @odds". Odds phai ton tai chinh xac trong snapshot.
-- confidence: do tin cay chung cua danh sach, 0-100; khong ha confidence chi vi odds >=1.80.
-- preferredScoreline la mot ti so tham khao phu hop cac keo ban thang.
-- keyPoints gom dung 2 bang chung odds quan trong nhat; risks gom dung 2 mau thuan/rui ro.
-- Khong goi chenh lech odds la value chac chan; chi goi la tin hieu phu hop.
+Quy tắc output:
+- Tất cả field dạng text phải viết tiếng Việt có dấu, ngắn gọn, không markdown; không viết không dấu kiểu "Dung ngoai", "Khong co", "Nhan dinh".
+- recommendation: danh sách ngắn dạng "1) Kèo @odds; 2) Kèo @odds". Odds phải tồn tại chính xác trong snapshot.
+- confidence: độ tin cậy chung của danh sách, 0-100; không hạ confidence chỉ vì odds >=1.80.
+- preferredScoreline là một tỷ số tham khảo phù hợp các kèo bàn thắng.
+- keyPoints gồm đúng 2 bằng chứng odds quan trọng nhất; risks gồm đúng 2 mâu thuẫn/rủi ro.
+- Không gọi chênh lệch odds là value chắc chắn; chỉ gọi là tín hiệu phù hợp.
 
-Tra duy nhat JSON: {"match":string,"preferredScoreline":string,"scoreConfidence":number,"recommendation":string,"confidence":number,"picks":[{"market":string,"selection":string,"odds":number}],"marketViews":[{"market":string,"assessment":string,"odds":number|null}],"keyPoints":string[2],"risks":string[2],"summary":string}.
-Moi pick phai la mot keo trong recommendation; market la ten ngan nhu "Chap Chau A", "Tai/Xiu", "GG/NG", "1X2", "Phat goc".
-marketViews phai tom tat 4-5 nhom neu co du lieu: "Chap Chau A", "GG/NG", "Tong ban", "Ty so", "Phat goc". assessment ngan gon; odds la gia cua lua chon duoc nhac, hoac null neu khong co huong ro. marketViews van phai co khi picks rong.
-Viet tieng Viet, ngan gon, khong markdown.`;
+Trả duy nhất JSON: {"match":string,"preferredScoreline":string,"scoreConfidence":number,"recommendation":string,"confidence":number,"picks":[{"market":string,"selection":string,"odds":number}],"marketViews":[{"market":string,"assessment":string,"odds":number|null}],"keyPoints":string[2],"risks":string[2],"summary":string}.
+Mỗi pick phải là một kèo trong recommendation; market là tên ngắn như "Chấp Châu Á", "Tài/Xỉu", "GG/NG", "1X2", "Phạt góc".
+marketViews phải tóm tắt 4-5 nhóm nếu có dữ liệu: "Chấp Châu Á", "GG/NG", "Tổng bàn", "Tỷ số", "Phạt góc". assessment ngắn gọn; odds là giá của lựa chọn được nhắc, hoặc null nếu không có hướng rõ. marketViews vẫn phải có khi picks rỗng.
+Viết tiếng Việt có dấu, ngắn gọn, không markdown.`;
 
-const VERIFY_PROMPT = `Ban tham dinh doc lap danh sach keo tu snapshot odds va co the dung web search de kiem tra thong tin thuc te (phong do, chan thuong).
-Xac nhan khi tat ca dieu sau dung:
-1. Moi keo de xuat co odds >1.80 va odds khop chinh xac snapshot.
-2. Khong sai side, sai dau handicap, nham keo ban thang voi keo corners, hoac ghep xien.
-3. Moi keo co it nhat 2 tin hieu lien quan ho tro, khong mau thuan lon voi market doi chieu.
-4. Toi da 3 keo va confidence khong overclaim.
-Bac bo neu chi vi odds cao ma chon, odds/line khong ton tai, hoac logic market mau thuan.
-Tra duy nhat JSON {"confirmed":boolean,"confidence":number,"comment":string}; comment mot cau ngan, neu bac bo chi ro keo va loi quan trong nhat.`;
+const VERIFY_PROMPT = `Bạn thẩm định độc lập danh sách kèo từ snapshot odds và có thể dùng web search để kiểm tra thông tin thực tế (phong độ, chấn thương).
+Xác nhận khi tất cả điều sau đúng:
+1. Mỗi kèo đề xuất có odds >1.80 và odds khớp chính xác snapshot.
+2. Không sai side, sai dấu handicap, nhầm kèo bàn thắng với kèo corners, hoặc ghép xiên.
+3. Mỗi kèo có ít nhất 2 tín hiệu liên quan hỗ trợ, không mâu thuẫn lớn với market đối chiếu.
+4. Tối đa 3 kèo và confidence không overclaim.
+Bác bỏ nếu chỉ vì odds cao mà chọn, odds/line không tồn tại, hoặc logic market mâu thuẫn.
+Tất cả field dạng text phải viết tiếng Việt có dấu; không dùng tiếng Việt không dấu.
+Trả duy nhất JSON {"confirmed":boolean,"confidence":number,"comment":string}; comment một câu ngắn, nếu bác bỏ chỉ rõ kèo và lỗi quan trọng nhất.`;
 
-const REVISE_PROMPT = `Sua danh sach keo bi bac bo, dung snapshot, ly do tham dinh, va co the dung web search de tra cuu thong tin bo sung.
-Loai keo sai thay vi bat buoc chon keo nguoc lai. Danh sach moi toi da 3 keo don, moi keo odds >1.80, odds/line phai ton tai trong snapshot va co it nhat 2 tin hieu ho tro.
-Neu khong con keo dat dieu kien, recommendation la "Dung ngoai".
-Ket qua phai la mot phan tich doc lap cho nguoi dung: khong nhac den buoc verify/tham dinh, nhan dinh cu, viec bi bac bo, hay loi cua vong truoc trong bat ky field nao.
-Tra duy nhat JSON cung schema phan tich: match, preferredScoreline, scoreConfidence, recommendation, confidence, picks, marketViews, keyPoints[2], risks[2], summary. Neu dung ngoai thi picks la mang rong nhung marketViews van tom tat 4-5 nhom thi truong. Viet ngan gon.`;
+const REVISE_PROMPT = `Sửa danh sách kèo bị bác bỏ, dùng snapshot, lý do thẩm định, và có thể dùng web search để tra cứu thông tin bổ sung.
+Loại kèo sai thay vì bắt buộc chọn kèo ngược lại. Danh sách mới tối đa 3 kèo đơn, mỗi kèo odds >1.80, odds/line phải tồn tại trong snapshot và có ít nhất 2 tín hiệu hỗ trợ.
+Nếu không còn kèo đạt điều kiện, recommendation là "Đứng ngoài".
+Kết quả phải là một phân tích độc lập cho người dùng: không nhắc đến bước verify/thẩm định, nhận định cũ, việc bị bác bỏ, hay lỗi của vòng trước trong bất kỳ field nào.
+Tất cả field dạng text phải viết tiếng Việt có dấu; không dùng tiếng Việt không dấu.
+Trả duy nhất JSON cùng schema phân tích: match, preferredScoreline, scoreConfidence, recommendation, confidence, picks, marketViews, keyPoints[2], risks[2], summary. Nếu đứng ngoài thì picks là mảng rỗng nhưng marketViews vẫn tóm tắt 4-5 nhóm thị trường. Viết ngắn gọn.`;
 
 function cleanResponse(text: string): string {
   return text
@@ -150,27 +153,27 @@ function buildFallbackRevisedAnalysis(
 ): MatchAiAnalysis {
   const shortReason =
     rejectionComment.trim() ||
-    "Nhan dinh truoc do khong vuot qua buoc tham dinh.";
+    "Nhận định trước đó không vượt qua bước thẩm định.";
   const trimmedReason =
     shortReason.length > 160 ? `${shortReason.slice(0, 157)}...` : shortReason;
   return {
     match: `${payload.home} vs ${payload.away}`,
     preferredScoreline: original.preferredScoreline || "1-1",
     scoreConfidence: Math.min(original.scoreConfidence || 0, 45),
-    recommendation: "Khong co edge ro rang, nen dung ngoai va theo doi them.",
+    recommendation: "Không có edge rõ ràng, nên đứng ngoài và theo dõi thêm.",
     confidence: Math.min(original.confidence || 0, 45),
     keyPoints: [
-      "Buoc tham dinh doc lap da bac bo nhan dinh ban dau.",
-      "Odds hien tai chua cho thay mot edge ro rang de vao keo.",
-      "Uu tien ky luat va cho them du lieu truoc khi hanh dong.",
+      "Bước thẩm định độc lập đã bác bỏ nhận định ban đầu.",
+      "Odds hiện tại chưa cho thấy một edge rõ ràng để vào kèo.",
+      "Ưu tiên kỷ luật và chờ thêm dữ liệu trước khi hành động.",
     ],
     risks: [
       trimmedReason,
-      "Nhan dinh thay the duoc ha muc tin cay de tranh overclaim.",
-      "Thi truong hien tai co the dang can bang hoac xung dot giua cac market.",
+      "Nhận định thay thế được hạ mức tin cậy để tránh overclaim.",
+      "Thị trường hiện tại có thể đang cân bằng hoặc xung đột giữa các market.",
     ],
     summary:
-      "Nhan dinh goc bi tu choi trong buoc tham dinh doc lap. Ban thay the nay chuyen sang goc nhin bao thu vi odds chua cho edge ro rang.",
+      "Nhận định gốc bị từ chối trong bước thẩm định độc lập. Bản thay thế này chuyển sang góc nhìn bảo thủ vì odds chưa cho edge rõ ràng.",
   };
 }
 
@@ -186,23 +189,23 @@ export function parseMatchAnalysisResponse(
     return {
       match: String(parsed.match || `${payload.home} vs ${payload.away}`),
       preferredScoreline: String(
-        parsed.preferredScoreline || "Chua co ti so uu tien",
+        parsed.preferredScoreline || "Chưa có tỷ số ưu tiên",
       ),
       scoreConfidence: clampConfidence(parsed.scoreConfidence),
-      recommendation: String(parsed.recommendation || "Dung ngoai."),
+      recommendation: String(parsed.recommendation || "Đứng ngoài."),
       confidence,
       picks: sanitizePicks(parsed.picks),
       marketViews: sanitizeMarketViews(parsed.marketViews),
       keyPoints: sanitizeStringList(
         parsed.keyPoints,
-        "Khong tach duoc cac diem odds noi bat.",
+        "Không tách được các điểm odds nổi bật.",
       ),
       risks: sanitizeStringList(
         parsed.risks,
-        "Can than vi du lieu odds chua cho thay mot edge ro rang.",
+        "Cẩn thận vì dữ liệu odds chưa cho thấy một edge rõ ràng.",
       ),
       summary: String(
-        parsed.summary || "Khong co du thong tin de rut ra ket luan on dinh.",
+        parsed.summary || "Không có đủ thông tin để rút ra kết luận ổn định.",
       ),
     };
   } catch {

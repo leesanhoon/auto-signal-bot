@@ -362,25 +362,25 @@ export function buildPerformanceReportMessage(
 ): string {
   const lines: string[] = [
     `📈 *Báo cáo hiệu suất ${report.periodLabel}*`,
-    `*Kỳ:* ${report.startAt} -> ${report.endAt}`,
+    `*Kỳ:* ${report.startAt} → ${report.endAt}`,
     "",
-    "*Tổng quan portfolio*",
-    `Lenh dong: ${report.portfolio.trades}`,
-    `Win rate: ${report.portfolio.winRate}% (${report.portfolio.wins}W/${report.portfolio.losses}L/${report.portfolio.breakevens}BE)`,
-    `Tong R thuc te: ${report.portfolio.totalRealizedRiskReward.toFixed(2)}R`,
-    `R trung binh: ${report.portfolio.averageRealizedRiskReward.toFixed(2)}R/lenh`,
+    "*Tổng quan danh mục*",
+    `Lệnh đóng: ${report.portfolio.trades}`,
+    `Win-rate: ${report.portfolio.winRate}% (${report.portfolio.wins}W/${report.portfolio.losses}L/${report.portfolio.breakevens}BE)`,
+    `Tổng R thực tế: ${report.portfolio.totalRealizedRiskReward.toFixed(2)}R`,
+    `R trung bình: ${report.portfolio.averageRealizedRiskReward.toFixed(2)}R/lệnh`,
     `Max drawdown: ${report.portfolio.maxDrawdown.toFixed(2)}R`,
   ];
 
   if (report.byPair.length > 0) {
-    lines.push("", "*Theo cap tien*");
+    lines.push("", "*Theo cặp tiền*");
     for (const pair of report.byPair) {
       lines.push(
-        `${pair.label}: ${pair.trades} lenh | WR ${pair.winRate}% | Tong ${pair.totalRealizedRiskReward.toFixed(2)}R | Avg ${pair.averageRealizedRiskReward.toFixed(2)}R | DD ${pair.maxDrawdown.toFixed(2)}R`,
+        `${pair.label}: ${pair.trades} lệnh | WR ${pair.winRate}% | Tổng ${pair.totalRealizedRiskReward.toFixed(2)}R | Avg ${pair.averageRealizedRiskReward.toFixed(2)}R | DD ${pair.maxDrawdown.toFixed(2)}R`,
       );
     }
   } else {
-    lines.push("", "_Khong co lenh dong trong ky bao cao nay._");
+    lines.push("", "_Không có lệnh đóng trong kỳ báo cáo này._");
   }
 
   return lines.join("\n");
