@@ -22,6 +22,10 @@ export type MatchAiAnalysis = {
     odds: number;
     reason?: string;
     confidence?: number;
+    /** "parlay" = phù hợp xiên, "single" = kèo đơn, "both" = cả hai, undefined = mặc định */
+    suitability?: "parlay" | "single" | "both";
+    /** Gợi ý ghép xiên: "cùng cửa với trận X" hoặc "ngược cửa trận Y" */
+    parlayNote?: string;
   }>;
   marketViews?: Array<{
     market: string;
@@ -33,6 +37,59 @@ export type MatchAiAnalysis = {
   verifiedConfidence?: number;
   verifiedComment?: string;
   revisedAfterReject?: boolean;
+};
+
+export type BettingPlanPick = {
+  market: string;
+  selection: string;
+  odds: number;
+  reason: string;
+  suitability?: "parlay" | "single" | "both";
+};
+
+export type BettingParlayLeg = {
+  matchIndex: number;
+  matchLabel: string;
+  pick: BettingPlanPick;
+};
+
+export type BettingParlay = {
+  type: string; // "xiên N" | "xiên 2" | "xiên tỉ số"
+  legs: BettingParlayLeg[];
+  combinedOdds: number;
+  stake: number;
+  potentialWin: number;
+};
+
+export type BettingPlanSingle = {
+  matchIndex: number;
+  matchLabel: string;
+  betType: string; // "Tỷ số chính xác" | "Main"
+  pick: BettingPlanPick;
+  stake: number;
+  potentialWin: number;
+};
+
+export type BettingPlanMatch = {
+  matchIndex: number;
+  matchLabel: string;
+  kickoff: string;
+  analysis: string;
+  topPicks: BettingPlanPick[];
+};
+
+export type BettingPlan = {
+  matches: BettingPlanMatch[];
+  parlays: BettingParlay[];
+  remainingSingles: BettingPlanSingle[];
+  summary: string;
+};
+
+export type CombinedAnalysisPlan = {
+  summary: string;
+  matches: CombinedAnalysisPlanMatch[];
+  parlays: BettingParlay[];
+  remainingSingles: BettingPlanSingle[];
 };
 
 export type MatchInfo = {
@@ -74,4 +131,16 @@ export type MatchOddsPayload = {
   odds: CompactOdds;
   /** Market "Exact Score" (Correct Score) tu API-Football. */
   correctScore?: CorrectScoreOutcome[];
+};
+
+export type CombinedAnalysisPlanMatch = {
+  matchIndex: number;
+  matchLabel: string;
+  kickoff: string;
+  analysis: string;
+  preferredScoreline: string;
+  scoreConfidence: number;
+  topPicks: BettingPlanPick[];
+  keyPoints: string[];
+  risks: string[];
 };

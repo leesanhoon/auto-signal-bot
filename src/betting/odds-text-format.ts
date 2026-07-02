@@ -3,6 +3,7 @@ import type {
   CompactOutcome,
   MatchAiAnalysis,
   MatchOddsPayload,
+  BettingPlan,
 } from "./betting-types.js";
 
 function findMarket(
@@ -216,6 +217,7 @@ export function formatOddsAnalysisInput(payload: MatchOddsPayload): string {
     "asia_handicap",
     "asia_totals",
     "eu_totals",
+    "result_total_goals",
     "btts",
     "team_goals_home",
     "team_goals_away",
@@ -228,19 +230,21 @@ export function formatOddsAnalysisInput(payload: MatchOddsPayload): string {
   for (const key of marketKeys) {
     const market = findMarket(payload, key);
     if (!market) continue;
-    const outcomes = market.outcomes.map((outcome) => {
-      const normalizedPoint =
-        key.includes("handicap") &&
-        outcome.name === "A" &&
-        outcome.point !== undefined
-          ? -outcome.point
-          : outcome.point;
-      const point =
-        normalizedPoint === undefined
-          ? ""
-          : `@${fmtSignedPoint(normalizedPoint)}`;
-      return `${outcome.name}${point}=${outcome.price}`;
-    });
+    const outcomes = market.outcomes
+      .filter((o) => Number.isFinite(o.price) && o.price > 0)
+      .map((outcome) => {
+        const normalizedPoint =
+          key.includes("handicap") &&
+          outcome.name === "A" &&
+          outcome.point !== undefined
+            ? -outcome.point
+            : outcome.point;
+        const point =
+          normalizedPoint === undefined
+            ? ""
+            : `@${fmtSignedPoint(normalizedPoint)}`;
+        return `${outcome.name}${point}=${outcome.price}`;
+      });
     if (outcomes.length > 0) lines.push(`${key}:${outcomes.join(",")}`);
   }
 
@@ -340,6 +344,97 @@ export function formatMainOddsSummary(
   return parts.length > 0 ? parts.join("  |  ") : undefined;
 }
 
+/**
+ * Format odds data with emoji sections — dễ đọc hơn code block cũ.
+ */
+export function formatOddsDataMessage(payload: MatchOddsPayload): string {
+  const lines: string[] = ["━━━━━━━━━━━━━━━━━━━━━━"];
+
+  // 1X2
+  const h2h = findMarket(payload, "h2h");
+  const h = findOutcome(h2h, "H")?.price;
+  const d = findOutcome(h2h, "D")?.price;
+  const a = findOutcome(h2h, "A")?.price;
+  if (h !== undefined && d !== undefined && a !== undefined) {
+    const fav = Math.min(h, a, d);
+    const favLabel = fav === h ? `${payload.home}🏠` : fav === a ? `${payload.away}✈️` : "Hòa🤝";
+    lines.push(`📊 *1X2*`);
+    lines.push(`🏠 ${payload.home}: ${h}  🤝 Hòa: ${d}  ✈️ ${payload.away}: ${a}`);
+    lines.push(`   👑 Ưu thế: ${favLabel} (ngắn nhất @${fav})`);
+  }
+
+  // Asian Handicap
+  const hcp = findMarket(payload, "asia_handicap");
+  if (hcp?.outcomes.length) {
+    lines.push(`📐 *Asian Handicap*`);
+    for (const o of hcp.outcomes) {
+      const label = o.name === "H" ? payload.home : payload.away;
+      const pt = o.point !== undefined ? fmtSignedPoint(o.point) : "";
+      const adjustedPt = o.name === "A" && o.point !== undefined ? fmtSignedPoint(-o.point) : pt;
+      lines.push(`   ${label} ${adjustedPt} @${o.price.toFixed(2)}`);
+    }
+  }
+
+  // European Total (mốc .5)
+  const euTot = findMarket(payload, "eu_totals");
+  if (euTot?.outcomes.length) {
+    lines.push(`⚽ *Tài/Xỉu (EU)*`);
+    for (const o of euTot.outcomes) {
+      const lbl = o.name === "Over" ? "🔴 Tài" : "🔵 Xỉu";
+      lines.push(`   ${lbl} ${o.point !== undefined ? fmtNum(o.point) : ""} @${o.price.toFixed(2)}`);
+    }
+  }
+
+  // Asian Total (mốc .25/.75)
+  const asiaTot = findMarket(payload, "asia_totals");
+  if (asiaTot?.outcomes.length) {
+    lines.push(`⚽ *Tài/Xỉu (Asian)*`);
+    for (const o of asiaTot.outcomes) {
+      const lbl = o.name === "Over" ? "🔴 Tài" : "🔵 Xỉu";
+      lines.push(`   ${lbl} ${o.point !== undefined ? fmtNum(o.point) : ""} @${o.price.toFixed(2)}`);
+    }
+  }
+
+  // BTTS
+  const bttsMarket = findMarket(payload, "btts");
+  const gg = findOutcome(bttsMarket, "GG")?.price;
+  const ng = findOutcome(bttsMarket, "NG")?.price;
+  if (gg !== undefined && ng !== undefined) {
+    lines.push(`🔄 *GG/NG*`);
+    lines.push(`   ✅ GG (cả 2 ghi bàn): @${gg.toFixed(2)}`);
+    lines.push(`   ❌ NG (1 đội trắng tay): @${ng.toFixed(2)}`);
+  }
+
+  // Correct Score (top 5)
+  if (payload.correctScore?.length) {
+    const topCs = [...payload.correctScore]
+      .filter((o) => Number.isFinite(o.price) && o.price > 0)
+      .sort((a, b) => a.price - b.price)
+      .slice(0, 6);
+    if (topCs.length > 0) {
+      lines.push(`🎯 *Tỉ số chính xác* (top odds ngắn)`);
+      for (const cs of topCs) {
+        lines.push(`   ${cs.score} @${cs.price.toFixed(2)}`);
+      }
+    }
+  }
+
+  // Corners summary
+  const corners = findMarket(payload, "corners_1x2");
+  if (corners?.outcomes.length) {
+    const ch = findOutcome(corners, "H")?.price;
+    const cd = findOutcome(corners, "D")?.price;
+    const ca = findOutcome(corners, "A")?.price;
+    if (ch !== undefined && cd !== undefined && ca !== undefined) {
+      lines.push(`🏁 *Phạt góc*`);
+      lines.push(`   🏠 ${payload.home}: ${ch}  🤝 Hòa: ${cd}  ✈️ ${payload.away}: ${ca}`);
+    }
+  }
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━");
+  return lines.join("\n");
+}
+
 export function formatMatchAnalysisMessage(
   payload: MatchOddsPayload,
   analysis: MatchAiAnalysis,
@@ -376,8 +471,8 @@ export function formatMatchAnalysisMessage(
   const verifyLabel =
     analysis.verificationStatus === "confirmed"
       ? "✅ *Thẩm định:* đạt"
-    : analysis.verificationStatus === "revised"
-            ? "🔄 *Thẩm định:* đã hiệu chỉnh"
+      : analysis.verificationStatus === "revised"
+        ? "🔄 *Thẩm định:* đã hiệu chỉnh"
         : analysis.verificationStatus === "failed"
           ? "⚠️ *Thẩm định:* lỗi model"
           : analysis.verificationStatus === "skipped"
@@ -396,17 +491,36 @@ export function formatMatchAnalysisMessage(
       [
         "🎯 *KÈO ĐỀ XUẤT*",
         ...picks.map((pick, index) => {
-          const reason = pick.reason ? `\n   _Lý do:_ ${compact(pick.reason, 100)}` : "";
-          return `${index + 1}. *${compact(pick.selection, 60)}*  \`@${pick.odds}\`\n   _${compact(pick.market, 35)}_${reason}`;
+          const reason = pick.reason
+            ? `\n   _Lý do:_ ${compact(pick.reason, 100)}`
+            : "";
+          // Badge xiên / đơn / cả hai
+          const badge =
+            pick.suitability === "parlay"
+              ? " 🔗XIÊN"
+              : pick.suitability === "single"
+                ? " 📌ĐƠN"
+                : pick.suitability === "both"
+                  ? " 🔗XIÊN+📌ĐƠN"
+                  : "";
+          const parlayNote = pick.parlayNote
+            ? `\n   💡 ${pick.parlayNote}`
+            : "";
+          return `${index + 1}. *${compact(pick.selection, 60)}*  [@${pick.odds}]${badge}\n   _${compact(pick.market, 35)}_${reason}${parlayNote}`;
         }),
       ].join("\n"),
     );
   } else if (!isStandAside) {
-    sections.push(`🎯 *KÈO ĐỀ XUẤT*\n• ${compact(analysis.recommendation, 120)}`);
+    sections.push(
+      `🎯 *KÈO ĐỀ XUẤT*\n• ${compact(analysis.recommendation, 120)}`,
+    );
   }
-  sections.push(`⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`);
+  sections.push(
+    `⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`,
+  );
 
-  if (keyPoints.length > 0) sections.push(`🔎 *Nhận định:* ${compact(keyPoints[0])}`);
+  if (keyPoints.length > 0)
+    sections.push(`🔎 *Nhận định:* ${compact(keyPoints[0])}`);
   if (risks.length > 0) sections.push(`⚠️ *Rủi ro:* ${compact(risks[0])}`);
 
   return sections.join("\n\n");
@@ -416,16 +530,212 @@ export function formatOddsFallbackMessage(
   payload: MatchOddsPayload,
   reason: string,
 ): string {
+  const oddsMsg = formatOddsDataMessage(payload);
   return [
     `*${payload.home} vs ${payload.away}*`,
     `_AI tạm thời chưa phân tích được trận này: ${reason}_`,
     "",
-    formatOddsDataMessage(payload),
+    oddsMsg,
   ].join("\n");
 }
 
-export function formatOddsDataMessage(payload: MatchOddsPayload): string {
-  return ["*Dữ liệu odds thô:*", "```", formatOddsText(payload), "```"].join(
-    "\n",
-  );
+export function formatBettingPlanMessage(plan: BettingPlan): string {
+  const sections: string[] = [];
+
+  // Match picks
+  for (const match of plan.matches) {
+    const picksText = match.topPicks
+      .map((p) => {
+        const badge =
+          p.suitability === "parlay"
+            ? " 🔗XIÊN"
+            : p.suitability === "single"
+              ? " 📌ĐƠN"
+              : p.suitability === "both"
+                ? " 🔗XIÊN+📌ĐƠN"
+                : "";
+        return `• ${p.market}: ${p.selection} @${p.odds}${badge} — ${p.reason}`;
+      })
+      .join("\n");
+    sections.push(`📅 *${match.matchLabel}* (${match.kickoff})\n${picksText}`);
+  }
+
+  // Parlays grouped by type
+  if (plan.parlays.length > 0) {
+    const grouped = new Map<string, typeof plan.parlays>();
+    for (const p of plan.parlays) {
+      const list = grouped.get(p.type) ?? [];
+      list.push(p);
+      grouped.set(p.type, list);
+    }
+
+    for (const [type, pList] of grouped) {
+      // Icon per parlay type
+      const typeIcon =
+        type.toLowerCase().includes("xiên tỉ số")
+          ? "🎯"
+          : type.toLowerCase().includes("xiên 2")
+            ? "🔗"
+            : type.toLowerCase().includes("xiên 3")
+              ? "⛓️"
+              : "📎";
+      const lines = pList.map((p) => {
+        const legText = p.legs
+          .map((l) => `  · ${l.matchLabel}: ${l.pick.selection} @${l.pick.odds}`)
+          .join("\n");
+        const winText = p.potentialWin.toLocaleString("vi-VN");
+        const stakeText = p.stake.toLocaleString("vi-VN");
+        return `${legText}\n  ➡️ ${p.combinedOdds.toFixed(2)} · ${stakeText}đ → ${winText}đ`;
+      });
+      // Capital management line
+      const totalStake = pList.reduce((s, p) => s + p.stake, 0);
+      sections.push(
+        `${typeIcon} *${type.toUpperCase()}* (mỗi xiên: ${pList[0].stake.toLocaleString("vi-VN")}đ · tổng: ${totalStake.toLocaleString("vi-VN")}đ)\n${lines.join("\n\n")}`,
+      );
+    }
+  }
+
+  // Singles
+  if (plan.remainingSingles.length > 0) {
+    const lines = plan.remainingSingles.map((s) => {
+      const winText = s.potentialWin.toLocaleString("vi-VN");
+      const stakeText = s.stake.toLocaleString("vi-VN");
+      return `• ${s.matchLabel}: ${s.pick.market} — ${s.pick.selection} @${s.pick.odds}\n  ${stakeText}đ → ${winText}đ`;
+    });
+    const totalStake = plan.remainingSingles.reduce((s, i) => s + i.stake, 0);
+    const totalPotential = plan.remainingSingles.reduce((s, i) => s + i.potentialWin, 0);
+    sections.push(
+      `📌 *KÈO ĐƠN* (tổng: ${totalStake.toLocaleString("vi-VN")}đ → ${totalPotential.toLocaleString("vi-VN")}đ)\n${lines.join("\n")}`,
+    );
+  }
+
+  // Summary
+  if (plan.summary) {
+    sections.push(`📝 ${plan.summary}`);
+  }
+
+  return sections.join("\n\n");
 }
+
+/**
+ * Format odds message for N matches in a combined view — dùng cho kèo ghép.
+ * Hiển thị: thời gian, 1X2, HCP (1 mốc chính), Tài/Xỉu EU, GG/NG, Correct Score (top 4).
+ * Sort theo kickoffUnix tăng dần.
+ */
+export function formatCombinedOddsMessage(
+  payloads: MatchOddsPayload[],
+): string {
+  if (payloads.length === 0) return "Không có dữ liệu odds.";
+
+  // Sort by kickoffUnix ascending
+  const sorted = [...payloads].sort((a, b) => a.kickoffUnix - b.kickoffUnix);
+
+  // Get date for header from first match
+  const firstDate = new Date(sorted[0].kickoffUnix * 1000);
+  const dateParts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+  }).formatToParts(firstDate);
+  const day = dateParts.find((p) => p.type === "day")?.value ?? "";
+  const month = dateParts.find((p) => p.type === "month")?.value ?? "";
+  const dateStr = `${day}/${month}`;
+
+  const lines: string[] = [];
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  lines.push(`📊 *PHÂN TÍCH KÈO — ${sorted.length} TRẬN NGÀY ${dateStr}*`);
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i];
+
+      // Time only (HH:MM)
+      const kickoffDate = new Date(p.kickoffUnix * 1000);
+      const timeParts = new Intl.DateTimeFormat("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).formatToParts(kickoffDate);
+      const hour = timeParts.find((part) => part.type === "hour")?.value ?? "";
+      const minute =
+        timeParts.find((part) => part.type === "minute")?.value ?? "";
+      const timeStr = `${hour}:${minute}`;
+
+      lines.push("");
+      lines.push(`⏰ ${timeStr}`);
+      lines.push(`🏟 *${p.home} vs ${p.away}*`);
+
+      // 1X2
+      const h2h = findMarket(p, "h2h");
+      const h = findOutcome(h2h, "H")?.price;
+      const d = findOutcome(h2h, "D")?.price;
+      const a = findOutcome(h2h, "A")?.price;
+      if (h !== undefined && d !== undefined && a !== undefined) {
+        lines.push(`📊 1X2: 🏠 ${h}  🤝 ${d}  ✈️ ${a}`);
+      }
+
+      // Asian Handicap (1 main point)
+      const hcpMarket = findMarket(p, "asia_handicap");
+      const hcpPoint = pickMainPoint(hcpMarket);
+      if (hcpPoint !== undefined && hcpMarket) {
+        const hcpH = hcpMarket.outcomes.find(
+          (o) => o.name === "H" && o.point === hcpPoint,
+        );
+        const hcpA = hcpMarket.outcomes.find(
+          (o) => o.name === "A" && o.point === hcpPoint,
+        );
+        if (hcpH && hcpA) {
+          lines.push(
+            `📐 Chấp: 🏠 ${fmtSignedPoint(hcpPoint)} @${hcpH.price} / ✈️ ${fmtSignedPoint(-hcpPoint)} @${hcpA.price}`,
+          );
+        }
+      }
+
+      // EU Tài/Xỉu (1 main point)
+      const euTotMarket = findMarket(p, "eu_totals");
+      const totPoint = pickMainPoint(euTotMarket);
+      if (totPoint !== undefined && euTotMarket) {
+        const over = euTotMarket.outcomes.find(
+          (o) => o.name === "Over" && o.point === totPoint,
+        );
+        const under = euTotMarket.outcomes.find(
+          (o) => o.name === "Under" && o.point === totPoint,
+        );
+        if (over && under) {
+          lines.push(
+            `⚽ Tài/Xỉu: O${fmtNum(totPoint)} @${over.price} / U${fmtNum(totPoint)} @${under.price}`,
+          );
+        }
+      }
+
+      // GG/NG
+      const bttsMarket = findMarket(p, "btts");
+      const gg = findOutcome(bttsMarket, "GG")?.price;
+      const ng = findOutcome(bttsMarket, "NG")?.price;
+      if (gg !== undefined && ng !== undefined) {
+        lines.push(`🔄 GG/NG: ✅${gg} / ❌${ng}`);
+      }
+
+      // Correct Score (top 4)
+      if (p.correctScore?.length) {
+        const topCs = [...p.correctScore]
+          .filter((o) => Number.isFinite(o.price) && o.price > 0)
+          .sort((a, b) => a.price - b.price)
+          .slice(0, 4);
+        if (topCs.length > 0) {
+          lines.push(
+            `🎯 Tỉ số: ${topCs.map((cs) => `${cs.score}@${cs.price}`).join(" | ")}`,
+          );
+        }
+      }
+
+      // Separator between matches
+      if (i < sorted.length - 1) {
+        lines.push("");
+        lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      }
+    }
+
+    return lines.join("\n");
+  }

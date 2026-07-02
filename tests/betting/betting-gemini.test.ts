@@ -50,7 +50,7 @@ describe("parseMatchAnalysisResponse", () => {
       expect.anything(),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          requestCount: 2,
+          requestCount: 3,
           fallbackUsed: true,
         }),
       }),
@@ -91,7 +91,7 @@ describe("parseMatchAnalysisResponse", () => {
       expect.anything(),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          requestCount: 2,
+          requestCount: 3,
           fallbackUsed: true,
         }),
       }),
@@ -129,7 +129,7 @@ describe("parseMatchAnalysisResponse", () => {
       expect.anything(),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          requestCount: 2,
+          requestCount: 3,
           fallbackUsed: false,
         }),
       }),
@@ -156,6 +156,119 @@ describe("parseMatchAnalysisResponse", () => {
     expect(firstContent.text).not.toContain("CANDIDATES:");
   });
 
+  test("generateCombinedAnalysis records real usage on primary success", async () => {
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Tong quan",
+        matches: [
+          {
+            matchIndex: 0,
+            matchLabel: "Belgium vs Senegal",
+            kickoff: "12:00",
+            analysis: "Phan tich",
+            preferredScoreline: "1-0",
+            scoreConfidence: 51,
+            topPicks: [
+              { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+            ],
+          },
+        ],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 12, completionTokens: 34 },
+      finishReason: "stop",
+    });
+
+    const result = await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.summary).toBe("Tong quan");
+    expect(callOpenRouter).toHaveBeenCalledTimes(1);
+    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
+    expect(recordOpenRouterUsage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          stage: "combined",
+          requestCount: 1,
+          fallbackUsed: false,
+          timeoutMs: 240_000,
+          inputTokens: 12,
+          outputTokens: 34,
+          finishReason: "stop",
+        }),
+      }),
+    );
+  });
+
+  test("generateCombinedAnalysis records real usage on fallback success", async () => {
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter
+      .mockRejectedValueOnce(new Error("timeout"))
+      .mockRejectedValueOnce(new Error("timeout"))
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          summary: "Tong quan",
+          matches: [
+            {
+              matchIndex: 0,
+              matchLabel: "Belgium vs Senegal",
+              kickoff: "12:00",
+              analysis: "Phan tich",
+              preferredScoreline: "1-0",
+              scoreConfidence: 51,
+              topPicks: [
+                { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+              ],
+            },
+          ],
+          parlays: [],
+          remainingSingles: [],
+        }),
+        usage: { promptTokens: 8, completionTokens: 16 },
+        finishReason: "stop",
+      });
+
+    const result = await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.summary).toBe("Tong quan");
+    expect(callOpenRouter).toHaveBeenCalledTimes(3);
+    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
+    expect(callOpenRouter.mock.calls[1][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
+    expect(callOpenRouter.mock.calls[2][0].plugins).toBeUndefined();
+    expect(recordOpenRouterUsage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          stage: "combined",
+          requestCount: 3,
+          fallbackUsed: true,
+          timeoutMs: 240_000,
+          inputTokens: 8,
+          outputTokens: 16,
+          finishReason: "stop",
+        }),
+      }),
+    );
+  });
+
   test("verify and revise requests do not use web search", () => {
     const payload = {
       gameId: "1",
@@ -166,11 +279,14 @@ describe("parseMatchAnalysisResponse", () => {
         updatedUnix: 0,
         legend: "",
         markets: [
-          { key: "h2h", outcomes: [
-            { name: "H", price: 2.16 },
-            { name: "D", price: 3.2 },
-            { name: "A", price: 3.76 },
-          ] },
+          {
+            key: "h2h",
+            outcomes: [
+              { name: "H", price: 2.16 },
+              { name: "D", price: 3.2 },
+              { name: "A", price: 3.76 },
+            ],
+          },
         ],
       },
     };

@@ -35,7 +35,7 @@ describe("formatMatchAnalysisMessage", () => {
     const message = formatMatchAnalysisMessage(payload, analysis);
 
     expect(message).toContain("⭐ *Độ tin cậy: THẤP* ⭐");
-    expect(message).toContain("1. *Belgium -0.25*  `@1.81`");
+    expect(message).toContain("1. *Belgium -0.25*  [@1.81]");
     expect(message).toContain("_Chap Chau A_");
     expect(message).toContain("🔄 *Thẩm định:* đã hiệu chỉnh");
     expect(message).toContain("Lý do");
@@ -148,9 +148,9 @@ describe("odds Telegram messages Vietnamese output", () => {
     expect(fallback).not.toContain("tran nay");
   });
 
-  test("formatOddsDataMessage uses accented data header", () => {
+  test("formatOddsDataMessage uses current compact output", () => {
     const dataMessage = formatOddsDataMessage(payload);
-    expect(dataMessage).toContain("Dữ liệu odds thô");
-    expect(dataMessage).not.toContain("Du lieu odds tho");
+    expect(dataMessage).toContain("Asian Handicap");
+    expect(dataMessage).not.toContain("Dữ liệu odds thô");
   });
 });

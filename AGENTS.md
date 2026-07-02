@@ -12,9 +12,9 @@ tasks/
 │   ├── review.md                 # [Lead] Final review across all subtasks
 │   ├── done.md                   # [Lead] Final approval
 │   ├── 01-<subtask-id>/          # [Lead] Independently assignable subtask
-│   │   ├── task.md               # [Lead] Specific executable task for one worker/subagent
-│   │   ├── result.md             # [Worker/Subagent] Execution results
-│   │   └── blocked.md            # [Worker/Subagent] Blocked — needs clarification
+│   │   ├── task.md               # [Lead] Specific executable task for one worker profile session
+│   │   ├── result.md             # [Worker] Execution results
+│   │   └── blocked.md            # [Worker] Blocked — needs clarification
 │   └── 02-<subtask-id>/
 │       ├── task.md
 │       ├── result.md
@@ -27,24 +27,24 @@ tasks/
 
 | Role | Model | Behavior |
 |------|-------|----------|
-| **Lead** | GPT-5.5 via OpenAI Codex | Plans, breaks work into subtasks, reviews, delegates via files/subagents. |
-| **Worker** | DeepSeek V4 Flash via OpenRouter (`deepseek/deepseek-v4-flash`) | Executes tasks exactly as specified. No deviations. |
+| **Lead** | GPT-5.5 via OpenAI Codex | Plans, breaks work into worker-ready subtasks, reviews, and coordinates via files. Does not auto-spawn subagents unless explicitly requested. |
+| **Worker** | DeepSeek V4 Flash via OpenRouter (`deepseek/deepseek-v4-flash`) | Executes assigned `tasks/<task-id>/<subtask-id>/task.md` exactly as specified. No deviations. |
 
 ### Workflow Steps
 
 ```
-Lead                                      Workers/Subagents
+Lead                                      Worker profile sessions
   │                                          
   ├── Writes parent plan.md
   ├── Breaks plan into subtasks
   ├── Creates 01-*/task.md, 02-*/task.md
   ├── Marks parallelizable/dependencies
   │                                          
-  │                                    ┌──── worker/subagent A reads 01-*/task.md
+  │                                    ┌──── worker A reads 01-*/task.md
   │                                    │     executes precisely
   │                                    ├──── writes 01-*/result.md
   │                                    │
-  │                                    ┌──── worker/subagent B reads 02-*/task.md
+  │                                    ┌──── worker B reads 02-*/task.md
   │                                    │     executes precisely
   │                                    ├──── writes 02-*/result.md
   │                                    │
@@ -78,9 +78,9 @@ Lead                                      Workers/Subagents
 
 | ID | Owner | Parallelizable | Dependencies | Allowed files | Output |
 |----|-------|----------------|--------------|---------------|--------|
-| 01-<name> | worker/subagent | yes/no | none / 02-... | path/glob list | tasks/<task-id>/01-<name>/result.md |
+| 01-<name> | worker | yes/no | none / 02-... | path/glob list | tasks/<task-id>/01-<name>/result.md |
 
-For each subtask, Lead must create `tasks/<task-id>/<subtask-id>/task.md`. Avoid assigning two parallel subtasks to touch the same file.
+For each subtask, Lead must create `tasks/<task-id>/<subtask-id>/task.md`. Assign each subtask to a `worker` profile session. Avoid assigning two parallel subtasks to touch the same file.
 
 ## Testing Strategy
 
@@ -168,10 +168,10 @@ hermes --profile worker
 
 ## Rules for Both Agents
 
-1. **Lead: every plan must include a `## Subtasks` table and one `task.md` per subtask**, unless the user explicitly requests a single-task plan
+1. **Lead: every plan must include a `## Subtasks` table and one `task.md` per worker subtask**, unless the user explicitly requests a single-task plan
 2. **Never modify files outside the task directory** unless the task explicitly says so
-3. **Worker/Subagent: never modify parent `done.md`** — only the Lead writes final approval
+3. **Worker: never modify parent `done.md`** — only the Lead writes final approval
 4. **Always read the full task before starting**
-5. **Worker/Subagent: if you're unsure, write blocked.md — never guess**
+5. **Worker: if you're unsure, write blocked.md — never guess**
 6. **Lead: always review code against plan.md and each subtask task.md — not just "does it run" but "does it match the architecture"**
 7. **Commit messages: Lead decides when and what to commit**

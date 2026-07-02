@@ -1,17 +1,41 @@
 import { withRetry } from "../shared/retry.js";
-import type { MatchAiAnalysis, MatchOddsPayload } from "./betting-types.js";
-import { formatFullOddsAnalysisInput, formatOddsAnalysisInput } from "./odds-text-format.js";
+import type {
+  BettingPlan,
+  CombinedAnalysisPlan,
+  MatchAiAnalysis,
+  MatchOddsPayload,
+} from "./betting-types.js";
+import {
+  formatFullOddsAnalysisInput,
+  formatOddsAnalysisInput,
+  formatMainOddsSummary,
+} from "./odds-text-format.js";
 import { createLogger } from "../shared/logger.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
-import { callOpenRouter, type OpenRouterRequest } from "../shared/openrouter.js";
+import {
+  callOpenRouter,
+  type OpenRouterRequest,
+} from "../shared/openrouter.js";
 
 const logger = createLogger("betting:betting-ai");
-const ANALYZE_MODEL = process.env.AI_TEXT_MODEL?.trim() || "deepseek/deepseek-v4-pro";
-const FALLBACK_MODEL = process.env.AI_TEXT_FALLBACK_MODEL?.trim() || "deepseek/deepseek-v4-flash";
-const VERIFY_MODEL = process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
-const ANALYZE_TIMEOUT_MS = parsePositiveEnv("BETTING_AI_ANALYZE_TIMEOUT_MS", 75_000);
-const VERIFY_TIMEOUT_MS = parsePositiveEnv("BETTING_AI_VERIFY_TIMEOUT_MS", 45_000);
-const REVISE_TIMEOUT_MS = parsePositiveEnv("BETTING_AI_REVISE_TIMEOUT_MS", 60_000);
+const ANALYZE_MODEL =
+  process.env.AI_TEXT_MODEL?.trim() || "deepseek/deepseek-v4-pro";
+const FALLBACK_MODEL =
+  process.env.AI_TEXT_FALLBACK_MODEL?.trim() || "deepseek/deepseek-v4-flash";
+const VERIFY_MODEL =
+  process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
+const ANALYZE_TIMEOUT_MS = parsePositiveEnv(
+  "BETTING_AI_ANALYZE_TIMEOUT_MS",
+  75_000,
+);
+const VERIFY_TIMEOUT_MS = parsePositiveEnv(
+  "BETTING_AI_VERIFY_TIMEOUT_MS",
+  45_000,
+);
+const REVISE_TIMEOUT_MS = parsePositiveEnv(
+  "BETTING_AI_REVISE_TIMEOUT_MS",
+  60_000,
+);
 const ANALYZE_WEB_RESULTS = 3;
 const MAX_ANALYZE_TOKENS = 1_400;
 const MAX_VERIFY_TOKENS = 400;
@@ -44,6 +68,7 @@ const MARKET_KEYS = [
   "asia_handicap",
   "asia_totals",
   "eu_totals",
+  "result_total_goals",
   "btts",
   "team_goals_home",
   "team_goals_away",
@@ -59,7 +84,10 @@ function parsePositiveEnv(name: string, fallback: number): number {
 }
 
 function cleanResponse(text: string): string {
-  return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  return text
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
 }
 
 function extractJsonObject(text: string): string {
@@ -81,7 +109,8 @@ function toText(value: unknown, fallback = ""): string {
 }
 
 function toArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  if (Array.isArray(value))
+    return value.map((item) => String(item).trim()).filter(Boolean);
   if (typeof value === "string") return value.trim() ? [value.trim()] : [];
   return [];
 }
@@ -105,9 +134,12 @@ function isTransientRetryableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const status =
     error && typeof error === "object"
-      ? (error as { status?: unknown; statusCode?: unknown; code?: unknown }).status ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown }).statusCode ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown }).code
+      ? ((error as { status?: unknown; statusCode?: unknown; code?: unknown })
+          .status ??
+        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
+          .statusCode ??
+        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
+          .code)
       : undefined;
 
   if (
@@ -118,7 +150,10 @@ function isTransientRetryableError(error: unknown): boolean {
     return true;
   }
 
-  if (typeof status === "string" && /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)) {
+  if (
+    typeof status === "string" &&
+    /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)
+  ) {
     return true;
   }
 
@@ -134,9 +169,12 @@ function isAnalyzeRetryableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const status =
     error && typeof error === "object"
-      ? (error as { status?: unknown; statusCode?: unknown; code?: unknown }).status ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown }).statusCode ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown }).code
+      ? ((error as { status?: unknown; statusCode?: unknown; code?: unknown })
+          .status ??
+        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
+          .statusCode ??
+        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
+          .code)
       : undefined;
 
   if (
@@ -147,7 +185,10 @@ function isAnalyzeRetryableError(error: unknown): boolean {
     return true;
   }
 
-  if (typeof status === "string" && /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)) {
+  if (
+    typeof status === "string" &&
+    /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)
+  ) {
     return true;
   }
 
@@ -183,6 +224,8 @@ function getMarketLabel(key: (typeof MARKET_KEYS)[number]): string {
       return "Tổng góc";
     case "corners_totals_eu":
       return "Tổng góc EU";
+    case "result_total_goals":
+      return "KQ+Tổng";
   }
 }
 
@@ -228,9 +271,7 @@ function describeSelection(
     case "eu_totals":
     case "corners_totals":
     case "corners_totals_eu":
-      return outcomeName === "Over"
-        ? `Tài${pointText}`
-        : `Xỉu${pointText}`;
+      return outcomeName === "Over" ? `Tài${pointText}` : `Xỉu${pointText}`;
     case "btts":
       return outcomeName === "GG"
         ? "Cả hai cùng ghi bàn"
@@ -253,6 +294,18 @@ function describeSelection(
       return outcomeName === "H"
         ? `${payload.home} chấp góc${pointText}`
         : `${payload.away} chấp góc${pointText}`;
+    case "result_total_goals": {
+      const resultCode = outcomeName.charAt(0);
+      const totalCode = outcomeName.charAt(1);
+      const resultText =
+        resultCode === "H"
+          ? payload.home
+          : resultCode === "A"
+            ? payload.away
+            : "Hòa";
+      const totalText = totalCode === "O" ? "Tài" : "Xỉu";
+      return `${resultText} & ${totalText}${pointText}`;
+    }
   }
 }
 
@@ -275,6 +328,23 @@ function buildCandidatePool(payload: MatchOddsPayload): OddsCandidate[] {
         odds: outcome.price,
       });
       index += 1;
+    }
+  }
+
+  // Correct Score candidates (từ payload.correctScore riêng, không nằm trong odds.markets)
+  if (payload.correctScore?.length) {
+    for (const outcome of payload.correctScore) {
+      if (!Number.isFinite(outcome.price) || outcome.price <= 0) continue;
+      const candidateId = `P${String(index).padStart(2, "0")}`;
+      candidates.push({
+        candidateId,
+        market: "Tỷ số chính xác",
+        marketKey: "correct_score",
+        selection: outcome.score,
+        odds: outcome.price,
+      });
+      index += 1;
+      if (index > 50) break; // safety limit
     }
   }
 
@@ -302,22 +372,38 @@ function buildAnalyzeSystemPrompt(): string {
   return [
     "Bạn là chuyên gia phân tích odds bóng đá.",
     "Chỉ dựa vào dữ liệu odds/correct score được cung cấp trong user message.",
-    "Hãy phân tích khách quan xu hướng odds, kèo đáng chú ý, rủi ro và nếu không rõ edge thì nói đứng ngoài.",
+    "Phân tích khách quan xu hướng odds, kèo đáng chú ý, rủi ro.",
+    "Nếu không rõ edge thì nói Đứng ngoài.",
+    "",
+    "HƯỚNG DẪN CHỌN KÈO XIÊN (PARLAY):",
+    "- Kèo xiên cần odds trung bình ~1.5–2.5 mỗi chân, không quá thấp (dưới 1.3) cũng không quá cao (trên 4.0).",
+    "- Ưu tiên: 1X2 (Home/Draw/Away), GG/NG, Tài/Xỉu (EU mốc .5) vì dễ ghép và thanh toán đơn giản.",
+    "- Tránh kèo Chấp Á .25/.75 cho xiên vì thanh toán nửa/nửa phức tạp.",
+    "- Có thể gợi ý ghép cùng cửa (ví dụ: all Home thắng) hoặc ngược cửa (mix) qua parlayNote.",
+    "- Kèo 'đơn' phù hợp khi odds cao (≥3.0) hoặc tỉ số chính xác (cược riêng, không ghép xiên).",
+    "",
+    "Với mỗi pick, set suitability='parlay' nếu kèo dễ ghép xiên, 'single' nếu chơi đơn, 'both' nếu chơi được cả hai.",
+    "Nếu có thể, thêm parlayNote gợi ý ghép: 'Ghép với [trận] cửa [X]'.",
+    "",
     "Không cần tự validate lại qua model khác. Không tự bịa dữ liệu ngoài input.",
     "Tất cả field text bằng tiếng Việt có dấu, ngắn gọn, không markdown, không URL.",
-  ].join(" ");
+  ].join("\n");
 }
 
 function buildAnalyzeUserPrompt(): string {
   return [
     "Trả duy nhất JSON với keys match, preferredScoreline, scoreConfidence, recommendation, confidence, picks, keyPoints, risks, summary.",
     "picks là mảng tối đa 3 kèo AI thấy đáng chú ý; mỗi pick gồm market, selection, odds, reason.",
+    'Mỗi pick CẦN có thêm: suitability ("parlay" | "single" | "both"), parlayNote (gợi ý ghép xiên, để trống nếu không có).',
     "Nếu không có kèo rõ, picks là [] và recommendation là Đứng ngoài.",
     "keyPoints và risks mỗi mảng 1-3 phần tử.",
   ].join(" ");
 }
 
-function buildVerificationPrompt(setup: MatchAiAnalysis, payload: MatchOddsPayload): string {
+function buildVerificationPrompt(
+  setup: MatchAiAnalysis,
+  payload: MatchOddsPayload,
+): string {
   return [
     `Kiểm tra kèo đã hydrate từ snapshot odds.`,
     `Match: ${payload.home} vs ${payload.away}`,
@@ -357,9 +443,12 @@ function buildRevisePrompt(
   ].join("\n");
 }
 
-function parseVerificationResponse(
-  text: string,
-): { confirmed: boolean; confidence: number; reasonCode: VerificationReasonCode; comment: string } | null {
+function parseVerificationResponse(text: string): {
+  confirmed: boolean;
+  confidence: number;
+  reasonCode: VerificationReasonCode;
+  comment: string;
+} | null {
   try {
     const parsed = JSON.parse(extractJsonObject(text)) as {
       confirmed?: unknown;
@@ -391,7 +480,9 @@ function getCandidateById(
   candidateId: string,
 ): OddsCandidate | undefined {
   const normalized = candidateId.trim().toUpperCase();
-  return candidatePool.find((candidate) => candidate.candidateId === normalized);
+  return candidatePool.find(
+    (candidate) => candidate.candidateId === normalized,
+  );
 }
 
 function parseDirectPicks(
@@ -413,6 +504,9 @@ function parseDirectPicks(
       odds?: unknown;
       reason?: unknown;
       confidence?: unknown;
+      /** "parlay" | "single" | "both" */
+      suitability?: unknown;
+      parlayNote?: unknown;
     };
 
     const candidateId = toText(raw.candidateId).toUpperCase();
@@ -426,11 +520,23 @@ function parseDirectPicks(
 
     const market = directMarket || candidate?.market || "";
     const selection = directSelection || candidate?.selection || "";
-    const odds = Number.isFinite(directOdds) && directOdds > 0 ? directOdds : candidate?.odds ?? 0;
+    const odds =
+      Number.isFinite(directOdds) && directOdds > 0
+        ? directOdds
+        : (candidate?.odds ?? 0);
     if (!market || !selection || !Number.isFinite(odds) || odds <= 0) continue;
 
     const resolvedId = candidate?.candidateId || candidateId || undefined;
     if (resolvedId && used.has(resolvedId)) continue;
+
+    const suitabilityRaw = raw.suitability;
+    const suitabilityVal =
+      suitabilityRaw === "parlay" ||
+      suitabilityRaw === "single" ||
+      suitabilityRaw === "both"
+        ? suitabilityRaw
+        : undefined;
+    const parlayNoteVal = toText(raw.parlayNote) || undefined;
 
     picks.push({
       candidateId: resolvedId,
@@ -438,7 +544,11 @@ function parseDirectPicks(
       selection,
       odds,
       reason: toText(raw.reason) || undefined,
-      confidence: Number.isFinite(Number(raw.confidence)) ? clampConfidence(raw.confidence) : undefined,
+      confidence: Number.isFinite(Number(raw.confidence))
+        ? clampConfidence(raw.confidence)
+        : undefined,
+      ...(suitabilityVal ? { suitability: suitabilityVal } : {}),
+      ...(parlayNoteVal ? { parlayNote: parlayNoteVal } : {}),
     });
     if (resolvedId) used.add(resolvedId);
     if (picks.length >= 3) break;
@@ -467,7 +577,10 @@ function resolveLegacyPick(
 async function callOpenRouterWithCount(
   request: OpenRouterRequest,
   isRetryable: (error: unknown) => boolean = isTransientRetryableError,
-): Promise<{ response: Awaited<ReturnType<typeof callOpenRouter>>; requestCount: number }> {
+): Promise<{
+  response: Awaited<ReturnType<typeof callOpenRouter>>;
+  requestCount: number;
+}> {
   let requestCount = 0;
   try {
     const response = await withRetry(
@@ -498,7 +611,10 @@ async function runOpenRouterStage(
   } = {},
 ): Promise<RequestRunResult> {
   try {
-    const { response, requestCount } = await callOpenRouterWithCount(request, isAnalyzeRetryableError);
+    const { response, requestCount } = await callOpenRouterWithCount(
+      request,
+      isAnalyzeRetryableError,
+    );
     return {
       response,
       usedFallback: false,
@@ -514,10 +630,11 @@ async function runOpenRouterStage(
       `  ! ${request.model} failed, retrying with fallback ${options.fallbackRequest.model}: ${error instanceof Error ? error.message : error}`,
     );
 
-    const { response: fallbackResponse, requestCount: fallbackCount } = await callOpenRouterWithCount(
-      options.fallbackRequest!,
-      isTransientRetryableError,
-    );
+    const { response: fallbackResponse, requestCount: fallbackCount } =
+      await callOpenRouterWithCount(
+        options.fallbackRequest!,
+        isTransientRetryableError,
+      );
     const primaryRequestCount = Number(
       (error as Error & { requestCount?: number }).requestCount ?? 0,
     );
@@ -532,7 +649,7 @@ async function runOpenRouterStage(
 }
 
 function recordStageUsage(
-  stage: "analyze" | "verify" | "revise",
+  stage: "analyze" | "verify" | "revise" | "combined",
   response: Awaited<ReturnType<typeof callOpenRouter>>,
   model: string,
   metadata: Record<string, unknown>,
@@ -550,7 +667,7 @@ function recordStageUsage(
 }
 
 function logStageMetrics(
-  stage: "analyze" | "verify" | "revise",
+  stage: "analyze" | "verify" | "revise" | "combined",
   payload: MatchOddsPayload,
   model: string,
   latencyMs: number,
@@ -563,34 +680,50 @@ function logStageMetrics(
   );
 }
 
-function buildAnalyzeRequest(payload: MatchOddsPayload, model: string): OpenRouterRequest {
+function buildAnalyzeRequest(
+  payload: MatchOddsPayload,
+  model: string,
+): OpenRouterRequest {
   return {
     model,
     systemPrompt: buildAnalyzeSystemPrompt(),
-    userContent: [{ type: "text", text: `${buildAnalyzeUserText(payload)}\n\n${buildAnalyzeUserPrompt()}` }],
+    userContent: [
+      {
+        type: "text",
+        text: `${buildAnalyzeUserText(payload)}\n\n${buildAnalyzeUserPrompt()}`,
+      },
+    ],
     maxTokens: MAX_ANALYZE_TOKENS,
     temperature: 0.2,
     responseFormat: { type: "json_object" },
     timeoutMs: ANALYZE_TIMEOUT_MS,
     reasoning: { effort: "none", exclude: true },
-    plugins: model === ANALYZE_MODEL ? [{ id: "web", max_results: ANALYZE_WEB_RESULTS }] : undefined,
+    plugins:
+      model === ANALYZE_MODEL
+        ? [{ id: "web", max_results: ANALYZE_WEB_RESULTS }]
+        : undefined,
   };
 }
 
-function buildVerifyRequest(payload: MatchOddsPayload, analysis: MatchAiAnalysis): OpenRouterRequest {
+function buildVerifyRequest(
+  payload: MatchOddsPayload,
+  analysis: MatchAiAnalysis,
+): OpenRouterRequest {
   return {
     model: VERIFY_MODEL,
     systemPrompt: "Bạn là bộ thẩm định odds độc lập. Chỉ trả JSON ngắn.",
     userContent: [
       {
         type: "text",
-        text: `${formatOddsAnalysisInput(payload)}\n\nanalysis=${JSON.stringify({
-          preferredScoreline: analysis.preferredScoreline,
-          scoreConfidence: analysis.scoreConfidence,
-          recommendation: analysis.recommendation,
-          confidence: analysis.confidence,
-          picks: analysis.picks ?? [],
-        })}\n\n${buildVerificationPrompt(analysis, payload)}`,
+        text: `${formatOddsAnalysisInput(payload)}\n\nanalysis=${JSON.stringify(
+          {
+            preferredScoreline: analysis.preferredScoreline,
+            scoreConfidence: analysis.scoreConfidence,
+            recommendation: analysis.recommendation,
+            confidence: analysis.confidence,
+            picks: analysis.picks ?? [],
+          },
+        )}\n\n${buildVerificationPrompt(analysis, payload)}`,
       },
     ],
     maxTokens: MAX_VERIFY_TOKENS,
@@ -612,13 +745,15 @@ function buildReviseRequest(
     userContent: [
       {
         type: "text",
-        text: `${formatOddsAnalysisInput(payload)}\n\n${buildCandidatePoolText(payload)}\n\nrejected=${JSON.stringify({
-          preferredScoreline: original.preferredScoreline,
-          scoreConfidence: original.scoreConfidence,
-          recommendation: original.recommendation,
-          confidence: original.confidence,
-          picks: original.picks ?? [],
-        })}\n\nreason=${rejectionComment}\n\n${buildRevisePrompt(payload, original, rejectionComment)}`,
+        text: `${formatOddsAnalysisInput(payload)}\n\n${buildCandidatePoolText(payload)}\n\nrejected=${JSON.stringify(
+          {
+            preferredScoreline: original.preferredScoreline,
+            scoreConfidence: original.scoreConfidence,
+            recommendation: original.recommendation,
+            confidence: original.confidence,
+            picks: original.picks ?? [],
+          },
+        )}\n\nreason=${rejectionComment}\n\n${buildRevisePrompt(payload, original, rejectionComment)}`,
       },
     ],
     maxTokens: MAX_REVISE_TOKENS,
@@ -634,7 +769,9 @@ function parseMatchAnalysisResponseInternal(
   payload: MatchOddsPayload,
 ): MatchAiAnalysis | null {
   try {
-    const parsed = JSON.parse(extractJsonObject(text)) as Partial<MatchAiAnalysis>;
+    const parsed = JSON.parse(
+      extractJsonObject(text),
+    ) as Partial<MatchAiAnalysis>;
     return normalizeAnalysisAfterHydration(parsed, payload);
   } catch {
     return null;
@@ -643,7 +780,10 @@ function parseMatchAnalysisResponseInternal(
 
 function sanitizeStringList(value: unknown, fallback: string): string[] {
   if (!Array.isArray(value)) return [fallback];
-  const items = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 2);
+  const items = value
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+    .slice(0, 2);
   return items.length > 0 ? items : [fallback];
 }
 
@@ -652,12 +792,15 @@ function normalizeAnalysisAfterHydration(
   payload: MatchOddsPayload,
 ): MatchAiAnalysis {
   const directPicks = parseDirectPicks(parsed.picks, payload);
-  const recommendation = toText(parsed.recommendation) || (
-    directPicks.length > 0 ? "Theo dõi các kèo AI đề xuất." : "Đứng ngoài."
-  );
+  const recommendation =
+    toText(parsed.recommendation) ||
+    (directPicks.length > 0 ? "Theo dõi các kèo AI đề xuất." : "Đứng ngoài.");
   return {
     match: toText(parsed.match, `${payload.home} vs ${payload.away}`),
-    preferredScoreline: toText(parsed.preferredScoreline, "Chưa có tỷ số ưu tiên"),
+    preferredScoreline: toText(
+      parsed.preferredScoreline,
+      "Chưa có tỷ số ưu tiên",
+    ),
     scoreConfidence: clampConfidence(parsed.scoreConfidence),
     recommendation,
     confidence: clampConfidence(parsed.confidence),
@@ -665,13 +808,24 @@ function normalizeAnalysisAfterHydration(
     marketViews: Array.isArray(parsed.marketViews)
       ? (parsed.marketViews as MatchAiAnalysis["marketViews"])
       : [],
-    keyPoints: sanitizeStringList(parsed.keyPoints, "Không tách được các điểm odds nổi bật."),
-    risks: sanitizeStringList(parsed.risks, "Cẩn thận vì dữ liệu odds chưa cho thấy edge rõ ràng."),
-    summary: toText(parsed.summary, "Không có đủ thông tin để rút ra kết luận ổn định."),
+    keyPoints: sanitizeStringList(
+      parsed.keyPoints,
+      "Không tách được các điểm odds nổi bật.",
+    ),
+    risks: sanitizeStringList(
+      parsed.risks,
+      "Cẩn thận vì dữ liệu odds chưa cho thấy edge rõ ràng.",
+    ),
+    summary: toText(
+      parsed.summary,
+      "Không có đủ thông tin để rút ra kết luận ổn định.",
+    ),
   };
 }
 
-export function buildAnalyzeMatchOddsRequest(payload: MatchOddsPayload): OpenRouterRequest {
+export function buildAnalyzeMatchOddsRequest(
+  payload: MatchOddsPayload,
+): OpenRouterRequest {
   return buildAnalyzeRequest(payload, ANALYZE_MODEL);
 }
 
@@ -690,7 +844,9 @@ export function buildReviseMatchAnalysisRequest(
   return buildReviseRequest(payload, original, rejectionComment);
 }
 
-export function buildMatchAnalysisCandidatePool(payload: MatchOddsPayload): Array<{
+export function buildMatchAnalysisCandidatePool(
+  payload: MatchOddsPayload,
+): Array<{
   candidateId: string;
   market: string;
   marketKey: string;
@@ -726,7 +882,15 @@ export async function analyzeMatchOdds(
     fallbackOnError: isProFallbackTrigger,
   });
   const latencyMs = Date.now() - startedAt;
-  logStageMetrics("analyze", payload, run.model, latencyMs, run.response, run.requestCount, run.usedFallback);
+  logStageMetrics(
+    "analyze",
+    payload,
+    run.model,
+    latencyMs,
+    run.response,
+    run.requestCount,
+    run.usedFallback,
+  );
   recordStageUsage("analyze", run.response, run.model, {
     latencyMs,
     requestCount: run.requestCount,
@@ -738,7 +902,9 @@ export async function analyzeMatchOdds(
   });
   const parsed = parseMatchAnalysisResponseInternal(run.response.text, payload);
   if (!parsed) {
-    throw new Error(`OpenRouter parse failed. Raw: ${run.response.text.slice(0, 300)}`);
+    throw new Error(
+      `OpenRouter parse failed. Raw: ${run.response.text.slice(0, 300)}`,
+    );
   }
   return parsed;
 }
@@ -746,13 +912,29 @@ export async function analyzeMatchOdds(
 export async function verifyMatchAnalysis(
   payload: MatchOddsPayload,
   analysis: MatchAiAnalysis,
-): Promise<{ confirmed: boolean; confidence: number; reasonCode: VerificationReasonCode; comment: string }> {
+): Promise<{
+  confirmed: boolean;
+  confidence: number;
+  reasonCode: VerificationReasonCode;
+  comment: string;
+}> {
   const startedAt = Date.now();
   const request = buildVerifyMatchAnalysisRequest(payload, analysis);
-  const { response, requestCount } = await callOpenRouterWithCount(request, isTransientRetryableError);
+  const { response, requestCount } = await callOpenRouterWithCount(
+    request,
+    isTransientRetryableError,
+  );
   const parsed = parseVerificationResponse(response.text);
   const latencyMs = Date.now() - startedAt;
-  logStageMetrics("verify", payload, request.model, latencyMs, response, requestCount, false);
+  logStageMetrics(
+    "verify",
+    payload,
+    request.model,
+    latencyMs,
+    response,
+    requestCount,
+    false,
+  );
   recordStageUsage("verify", response, request.model, {
     latencyMs,
     requestCount,
@@ -761,7 +943,9 @@ export async function verifyMatchAnalysis(
     reasonCode: parsed?.reasonCode ?? "OTHER",
   });
   if (!parsed) {
-    throw new Error(`OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`);
+    throw new Error(
+      `OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`,
+    );
   }
   return parsed;
 }
@@ -780,7 +964,8 @@ function buildFallbackRevisedAnalysis(
   rejectionComment: string,
 ): MatchAiAnalysis {
   const shortReason =
-    rejectionComment.trim() || "Nhận định trước đó không vượt qua bước thẩm định.";
+    rejectionComment.trim() ||
+    "Nhận định trước đó không vượt qua bước thẩm định.";
   const trimmedReason =
     shortReason.length > 160 ? `${shortReason.slice(0, 157)}...` : shortReason;
   return {
@@ -809,10 +994,25 @@ export async function reviseMatchAnalysis(
   rejectionComment: string,
 ): Promise<MatchAiAnalysis> {
   const startedAt = Date.now();
-  const request = buildReviseMatchAnalysisRequest(payload, original, rejectionComment);
-  const { response, requestCount } = await callOpenRouterWithCount(request, isTransientRetryableError);
+  const request = buildReviseMatchAnalysisRequest(
+    payload,
+    original,
+    rejectionComment,
+  );
+  const { response, requestCount } = await callOpenRouterWithCount(
+    request,
+    isTransientRetryableError,
+  );
   const latencyMs = Date.now() - startedAt;
-  logStageMetrics("revise", payload, request.model, latencyMs, response, requestCount, false);
+  logStageMetrics(
+    "revise",
+    payload,
+    request.model,
+    latencyMs,
+    response,
+    requestCount,
+    false,
+  );
   recordStageUsage("revise", response, request.model, {
     latencyMs,
     requestCount,
@@ -841,4 +1041,546 @@ export function parseMatchAnalysisResponse(
   payload: MatchOddsPayload,
 ): MatchAiAnalysis | null {
   return parseMatchAnalysisResponseInternal(text, payload);
+}
+
+// ── Betting Plan Generator ─────────────────────────────────
+
+const PLAN_MODEL =
+  process.env.AI_TEXT_MODEL?.trim() || "deepseek/deepseek-v4-pro";
+const PLAN_FALLBACK_MODEL =
+  process.env.AI_TEXT_FALLBACK_MODEL?.trim() || "deepseek/deepseek-v4-flash";
+const PLAN_TIMEOUT_MS = parsePositiveEnv("BETTING_AI_PLAN_TIMEOUT_MS", 180_000);
+const PLAN_TOKENS = 4_000;
+
+const COMBINED_TIMEOUT_MS = parsePositiveEnv(
+  "BETTING_AI_COMBINED_TIMEOUT_MS",
+  240_000,
+);
+const COMBINED_TOKENS = 6_000;
+
+function buildPlanSystemPrompt(matchCount: number): string {
+  const totalCapital = matchCount * 1_000_000;
+  const parlayStake = 50_000;
+  const pairCount = (matchCount * (matchCount - 1)) / 2;
+  const parlayBudget = parlayStake * (1 + pairCount + 1); // xiên all + xiên 2 + xiên tỉ số
+  const remaining = totalCapital - parlayBudget;
+  const perMatchSingle = Math.floor(remaining / (matchCount * 2)); // 1 main + 1 tỉ số per match
+
+  return [
+    "Bạn là chuyên gia lên kế hoạch đặt cược bóng đá.",
+    "Dựa vào odds và phân tích từng trận, hãy lên kế hoạch tổng thể.",
+    "",
+    "CHIẾN LƯỢC VỐN:",
+    `- Tổng vốn: ${totalCapital.toLocaleString("vi-VN")}đ (${matchCount}tr × ${matchCount} trận)`,
+    `- Mỗi xiên: ${parlayStake.toLocaleString("vi-VN")}đ`,
+    `- Xiên all ${matchCount} trận: ${parlayStake.toLocaleString("vi-VN")}đ`,
+    `- Xiên 2 (${pairCount} tổ hợp): ${(parlayStake * pairCount).toLocaleString("vi-VN")}đ`,
+    `- Xiên tỉ số: ${parlayStake.toLocaleString("vi-VN")}đ`,
+    `- Tổng xiên: ~${parlayBudget.toLocaleString("vi-VN")}đ`,
+    `- Còn lại: ${remaining.toLocaleString("vi-VN")}đ → chia đều ${matchCount} trận`,
+    `- Mỗi trận: 1 kèo main + 1 kèo tỉ số (${perMatchSingle.toLocaleString("vi-VN")}đ mỗi kèo)`,
+    "",
+    "QUY TẮC CHỌN KÈO CHO XIÊN:",
+    "- Xiên ALL: chọn 1 kèo CHẮC NHẤT mỗi trận (GG/NG, Tài/Xỉu EU, 1X2 ngắn). Odds mỗi chân ~1.3–2.0.",
+    "- Xiên 2: ghép 2 trận có cùng xu hướng (vd: cả 2 đội mạnh hơn đều thắng, hoặc cả 2 đều Under).",
+    "- Xiên tỉ số: chọn tỉ số chính xác mỗi trận mà AI tự tin nhất.",
+    "- Không ghép kèo Chấp Á mốc .25/.75 vào xiên (thanh toán nửa phức tạp).",
+    "- Mỗi xiên 2 nên chọn kèo từ 2 trận KHÁC NHAU.",
+    "- Chỉ ghép xiên khi edge rõ rệt từ odds.",
+    "",
+    "QUY TẮC KÈO ĐƠN (remainingSingles):",
+    "- Kèo main: odds > 1.80 (1X2, Châu Á, Tổng bàn, GG/NG).",
+    "- Kèo tỉ số chính xác: odds > 3.0.",
+    "- Chỉ chọn khi odds cho thấy edge rõ.",
+    "",
+    "Tất cả field text bằng tiếng Việt có dấu, ngắn gọn.",
+  ].join("\n");
+}
+
+function buildPlanUserPrompt(
+  payloads: MatchOddsPayload[],
+  analyses: MatchAiAnalysis[],
+): string {
+  const matchBlocks = payloads.map((payload, i) => {
+    const analysis = analyses[i];
+    const kickoff = new Date(payload.kickoffUnix * 1000).toLocaleString(
+      "vi-VN",
+      {
+        timeZone: "Asia/Ho_Chi_Minh",
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      },
+    );
+    const picksText = (analysis?.picks ?? [])
+      .map(
+        (p) =>
+          `  - ${p.market}: ${p.selection} @${p.odds}${p.reason ? ` (${p.reason})` : ""}`,
+      )
+      .join("\n");
+    return [
+      `--- TRẬN ${i + 1}: ${payload.home} vs ${payload.away} ---`,
+      `Giờ: ${kickoff}`,
+      `Phân tích: ${analysis?.recommendation ?? "N/A"} (conf: ${analysis?.confidence ?? 0}%)`,
+      `Tỉ số ưu tiên: ${analysis?.preferredScoreline ?? "N/A"}`,
+      analysis?.picks?.length
+        ? `Kèo nổi bật:\n${picksText}`
+        : "Kèo nổi bật: Không có",
+      `Odds chính: ${formatMainOddsSummary(payload) ?? "N/A"}`,
+    ].join("\n");
+  });
+
+  return [
+    "Dưới đây là dữ liệu odds và phân tích AI cho các trận hôm nay:",
+    "",
+    ...matchBlocks,
+    "",
+    "YÊU CẦU:",
+    "Trả JSON theo schema:",
+    `{
+  "matches": [
+    {
+      "matchIndex": 0,
+      "matchLabel": "Spain vs Austria",
+      "kickoff": "Th 5 03/07 19:00",
+      "analysis": "phân tích ngắn 1-2 câu",
+      "topPicks": [
+              {"market": "Tỷ số chính xác", "selection": "2-0", "odds": 6.5, "reason": "lý do ngắn", "suitability": "single"}
+            ]
+    }
+  ],
+  "parlays": [
+    {
+      "type": "xiên 3",
+      "legs": [
+        {"matchIndex": 0, "matchLabel": "Spain vs Austria", "pick": {"market": "GG/NG", "selection": "NG", "odds": 1.62, "reason": "ngắn"}}
+      ],
+      "combinedOdds": 4.5,
+      "stake": 50000,
+      "potentialWin": 225000
+    }
+  ],
+  "remainingSingles": [
+    {
+      "matchIndex": 0,
+      "matchLabel": "Spain vs Austria",
+      "betType": "Tỷ số chính xác",
+      "pick": {"market": "Tỷ số chính xác", "selection": "2-0", "odds": 6.5, "reason": "ngắn"},
+      "stake": 800000,
+      "potentialWin": 5200000
+    }
+  ],
+  "summary": "tổng kết ngắn tiếng Việt"
+}`,
+    "combinedOdds = tích odds các chân trong xiên. stake = tiền đặt. potentialWin = stake * combinedOdds.",
+    "Đảm bảo tổng stake của parlays + remainingSingles ≤ tổng vốn.",
+    "Nếu không có đủ kèo tốt thì parlays hoặc remainingSingles có thể là mảng rỗng.",
+  ].join("\n");
+}
+
+export function parseBettingPlanResponse(text: string): BettingPlan | null {
+  try {
+    const parsed = JSON.parse(extractJsonObject(text)) as Partial<BettingPlan>;
+    if (!Array.isArray(parsed.matches)) return null;
+    if (!Array.isArray(parsed.parlays)) return null;
+    if (!Array.isArray(parsed.remainingSingles)) return null;
+    return {
+      matches: parsed.matches,
+      parlays: parsed.parlays,
+      remainingSingles: parsed.remainingSingles,
+      summary: parsed.summary ?? "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function generateBettingPlan(
+  payloads: MatchOddsPayload[],
+  analyses: MatchAiAnalysis[],
+): Promise<BettingPlan | null> {
+  if (payloads.length === 0 || payloads.length !== analyses.length) return null;
+  const validAnalyses = analyses.filter(
+    (a): a is MatchAiAnalysis => a !== null,
+  );
+  if (validAnalyses.length === 0) return null;
+
+  const primaryRequest: OpenRouterRequest = {
+    model: PLAN_MODEL,
+    systemPrompt: buildPlanSystemPrompt(payloads.length),
+    userContent: [
+      { type: "text", text: buildPlanUserPrompt(payloads, validAnalyses) },
+    ],
+    maxTokens: PLAN_TOKENS,
+    temperature: 0.3,
+    responseFormat: { type: "json_object" },
+    timeoutMs: PLAN_TIMEOUT_MS,
+  };
+
+  const fallbackRequest: OpenRouterRequest = {
+    ...primaryRequest,
+    model: PLAN_FALLBACK_MODEL,
+  };
+
+  let request = primaryRequest;
+  let usedFallback = false;
+  try {
+    const { response } = await callOpenRouterWithCount(
+      primaryRequest,
+      isTransientRetryableError,
+    );
+    const plan = parseBettingPlanResponse(response.text);
+    if (!plan) {
+      logger.warn(
+        `  ! Plan parse failed for primary model. Raw (first 1000): ${response.text.slice(0, 1000)}`,
+      );
+    }
+    return plan;
+  } catch (primaryError) {
+    if (!isProFallbackTrigger(primaryError)) {
+      logger.warn(
+        `  ! Betting plan primary model failed (non-retryable): ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`,
+      );
+      return null;
+    }
+    logger.warn(
+      `  ! Primary plan model failed, trying fallback: ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`,
+    );
+    request = fallbackRequest;
+    usedFallback = true;
+  }
+
+  // Fallback attempt
+  try {
+    const { response } = await callOpenRouterWithCount(
+      request,
+      isTransientRetryableError,
+    );
+    const plan = parseBettingPlanResponse(response.text);
+    if (!plan) {
+      logger.warn(
+        `  ! Plan parse failed for fallback model. Raw (first 1000): ${response.text.slice(0, 1000)}`,
+      );
+    }
+    logger.info(
+      `  ✓ Betting plan generated with fallback model ${request.model}${usedFallback ? " (after primary timeout)" : ""}`,
+    );
+    return plan;
+  } catch (error) {
+    logger.warn(
+      `  ! Betting plan generation failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
+
+// ── Combined Analysis + Plan Generator (single prompt) ──
+
+function buildCombinedSystemPrompt(matchCount: number): string {
+  const totalCapital = matchCount * 1_000_000;
+  const parlayStake = 50_000;
+  const pairCount = (matchCount * (matchCount - 1)) / 2;
+  const parlayBudget = parlayStake * (1 + pairCount + 1);
+  const remaining = totalCapital - parlayBudget;
+  const perMatchSingle = Math.floor(remaining / (matchCount * 2));
+
+  return [
+    "Bạn là chuyên gia phân tích odds và lên kế hoạch đặt cược bóng đá.",
+    `Dưới đây là raw odds cho ${matchCount} trận đấu.`,
+    "Chỉ dựa vào dữ liệu odds/correct score được cung cấp.",
+    "Phân tích khách quan xu hướng odds, kèo đáng chú ý, rủi ro.",
+    "Nếu không rõ edge thì nói Đứng ngoài.",
+    "",
+    "YÊU CẦU:",
+    "1. Phân tích từng trận: nhận định ngắn, tỉ số dự đoán, kèo nổi bật.",
+    "2. Lên kế hoạch cược tổng thể với chiến lược vốn bên dưới.",
+    "",
+    "CHIẾN LƯỢC VỐN:",
+    `- Tổng vốn: ${totalCapital.toLocaleString("vi-VN")}đ (${matchCount}tr × 1 triệu)` +
+      ` - ${parlayStake.toLocaleString("vi-VN")}đ mỗi xiên`,
+    `- Xiên all ${matchCount} trận + xiên 2 (${pairCount} tổ hợp) + xiên tỉ số`,
+    `- Tổng xiên: ~${parlayBudget.toLocaleString("vi-VN")}đ`,
+    `- Mỗi trận: 1 kèo main + 1 kèo tỉ số (${perMatchSingle.toLocaleString("vi-VN")}đ mỗi kèo)`,
+    "",
+    "QUY TẮC CHỌN KÈO CHO XIÊN:",
+    "- Xiên ALL: chọn 1 kèo CHẮC NHẤT mỗi trận (GG/NG, Tài/Xỉu EU, 1X2 ngắn). Odds mỗi chân ~1.3–2.0.",
+    "- Xiên 2: ghép 2 trận có cùng xu hướng (vd: cả 2 đội mạnh hơn đều thắng, hoặc cả 2 đều Under).",
+    "- Xiên tỉ số: chọn tỉ số chính xác mỗi trận mà AI tự tin nhất.",
+    "- Không ghép kèo Chấp Á mốc .25/.75 vào xiên (thanh toán nửa phức tạp).",
+    "- Mỗi xiên 2 nên chọn kèo từ 2 trận KHÁC NHAU.",
+    "- Chỉ ghép xiên khi edge rõ rệt từ odds.",
+    "",
+    "QUY TẮC KÈO ĐƠN:",
+    "- Kèo main: odds > 1.80 (1X2, Châu Á, Tổng bàn, GG/NG).",
+    "- Kèo tỉ số chính xác: odds > 3.0.",
+    "- Chỉ chọn khi odds cho thấy edge rõ.",
+    "",
+    "HƯỚNG DẪN CHỌN KÈO XIÊN (PARLAY):",
+    "- Kèo xiên cần odds trung bình ~1.5–2.5 mỗi chân, không quá thấp (dưới 1.3) cũng không quá cao (trên 4.0).",
+    "- Ưu tiên: 1X2 (Home/Draw/Away), GG/NG, Tài/Xỉu (EU mốc .5) vì dễ ghép và thanh toán đơn giản.",
+    "- Tránh kèo Chấp Á .25/.75 cho xiên vì thanh toán nửa/nửa phức tạp.",
+    "- Có thể gợi ý ghép cùng cửa (ví dụ: all Home thắng) hoặc ngược cửa (mix) qua parlayNote.",
+    "- Kèo 'đơn' phù hợp khi odds cao (≥3.0) hoặc tỉ số chính xác (cược riêng, không ghép xiên).",
+    "",
+    "Nếu có thể, thêm parlayNote gợi ý ghép: 'Ghép với [trận] cửa [X]'.",
+    "Không cần tự validate lại qua model khác. Không tự bịa dữ liệu ngoài input.",
+    "Tất cả field text bằng tiếng Việt có dấu, ngắn gọn, không markdown, không URL.",
+  ].join("\n");
+}
+
+function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
+  const matchBlocks = payloads.map((payload, i) => {
+    const kickoff = new Date(payload.kickoffUnix * 1000).toLocaleString(
+      "vi-VN",
+      {
+        timeZone: "Asia/Ho_Chi_Minh",
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      },
+    );
+    const oddsText = formatOddsAnalysisInput(payload);
+    return [
+      `=== TRẬN ${i + 1}: ${payload.home} vs ${payload.away} (${kickoff}) ===`,
+      oddsText,
+    ].join("\n");
+  });
+
+  return [
+    ...matchBlocks,
+    "",
+    "YÊU CẦU:",
+    "Trả JSON duy nhất theo schema bên dưới.",
+    "Mỗi match trong matches cần có matchIndex, matchLabel, kickoff, analysis, preferredScoreline, scoreConfidence, topPicks, keyPoints, risks.",
+    "topPicks mỗi trận tối đa 3 kèo nổi bật, mỗi pick gồm market, selection, odds, suitability, reason.",
+    "Nếu không có kèo rõ, topPicks là [].",
+    "parlays và remainingSingles tuân theo cấu trúc BettingPlan (xiên + đơn).",
+    "Đảm bảo tổng stake ≤ tổng vốn.",
+    "```json",
+    JSON.stringify(
+      {
+        summary: "Tổng quan các trận...",
+        matches: [
+          {
+            matchIndex: 0,
+            matchLabel: "Portugal vs Croatia",
+            kickoff: "Th 6 03/07 06:00",
+            analysis: "Phân tích ngắn 1-2 câu",
+            preferredScoreline: "2-1",
+            scoreConfidence: 55,
+            topPicks: [
+              {
+                market: "1X2",
+                selection: "Portugal thắng",
+                odds: 1.72,
+                suitability: "parlay",
+                reason: "lý do ngắn",
+              },
+            ],
+            keyPoints: ["điểm 1", "điểm 2"],
+            risks: ["rủi ro 1"],
+          },
+        ],
+        parlays: [
+          {
+            type: "xiên 3",
+            legs: [
+              {
+                matchIndex: 0,
+                matchLabel: "Portugal vs Croatia",
+                pick: {
+                  market: "GG/NG",
+                  selection: "NG",
+                  odds: 1.62,
+                  reason: "ngắn",
+                },
+              },
+            ],
+            combinedOdds: 4.5,
+            stake: 50000,
+            potentialWin: 225000,
+          },
+        ],
+        remainingSingles: [
+          {
+            matchIndex: 0,
+            matchLabel: "Portugal vs Croatia",
+            betType: "Tỷ số chính xác",
+            pick: {
+              market: "Tỷ số chính xác",
+              selection: "2-0",
+              odds: 6.5,
+              reason: "ngắn",
+            },
+            stake: 800000,
+            potentialWin: 5200000,
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "```",
+    "combinedOdds = tích odds các chân trong xiên. stake = tiền đặt. potentialWin = stake * combinedOdds.",
+    "Nếu không có đủ kèo tốt thì parlays hoặc remainingSingles có thể là mảng rỗng.",
+  ].join("\n");
+}
+
+function parseCombinedAnalysisResponse(
+  text: string,
+  _payloads: MatchOddsPayload[],
+): CombinedAnalysisPlan | null {
+  try {
+    const cleaned = extractJsonObject(text);
+    const parsed = JSON.parse(cleaned) as Partial<CombinedAnalysisPlan>;
+
+    if (!Array.isArray(parsed.matches) || parsed.matches.length === 0) {
+      logger.warn(
+        `  ! Combined analysis parse failed: matches array missing or empty`,
+      );
+      return null;
+    }
+
+    for (const match of parsed.matches) {
+      if (
+        typeof match.matchIndex !== "number" ||
+        typeof match.analysis !== "string" ||
+        !Array.isArray(match.topPicks)
+      ) {
+        logger.warn(
+          `  ! Combined analysis parse failed: match missing required fields (matchIndex, analysis, topPicks)`,
+        );
+        return null;
+      }
+    }
+
+    return {
+      summary: parsed.summary ?? "",
+      matches: parsed.matches,
+      parlays: Array.isArray(parsed.parlays) ? parsed.parlays : [],
+      remainingSingles: Array.isArray(parsed.remainingSingles)
+        ? parsed.remainingSingles
+        : [],
+    };
+  } catch (err) {
+    logger.warn(
+      `  ! Combined analysis parse error: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
+export async function generateCombinedAnalysis(
+  payloads: MatchOddsPayload[],
+): Promise<CombinedAnalysisPlan | null> {
+  if (payloads.length === 0) return null;
+  const startedAt = Date.now();
+
+  const primaryRequest: OpenRouterRequest = {
+    model: ANALYZE_MODEL,
+    systemPrompt: buildCombinedSystemPrompt(payloads.length),
+    userContent: [{ type: "text", text: buildCombinedUserPrompt(payloads) }],
+    maxTokens: COMBINED_TOKENS,
+    temperature: 0.3,
+    responseFormat: { type: "json_object" },
+    timeoutMs: COMBINED_TIMEOUT_MS,
+    plugins: [{ id: "web", max_results: ANALYZE_WEB_RESULTS }],
+  };
+
+  const fallbackRequest: OpenRouterRequest = {
+    ...primaryRequest,
+    model: PLAN_FALLBACK_MODEL,
+    plugins: undefined,
+  };
+
+  try {
+    const { response, requestCount } = await callOpenRouterWithCount(
+      primaryRequest,
+      isTransientRetryableError,
+    );
+    const latencyMs = Date.now() - startedAt;
+    logStageMetrics(
+      "combined",
+      payloads[0],
+      primaryRequest.model,
+      latencyMs,
+      response,
+      requestCount,
+      false,
+    );
+    recordStageUsage("combined", response, primaryRequest.model, {
+      latencyMs,
+      requestCount,
+      fallbackUsed: false,
+      timeoutMs: COMBINED_TIMEOUT_MS,
+      finishReason: response.finishReason ?? "stop",
+    });
+
+    const plan = parseCombinedAnalysisResponse(response.text, payloads);
+    if (!plan) {
+      logger.warn(
+        `  ! Combined analysis parse failed for primary. Raw (first 1000): ${response.text.slice(0, 1000)}`,
+      );
+    }
+    return plan;
+  } catch (primaryError) {
+    if (!isProFallbackTrigger(primaryError)) {
+      logger.warn(
+        `  ! Combined analysis primary model failed (non-retryable): ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`,
+      );
+      return null;
+    }
+
+    logger.warn(
+      `  ! Primary combined analysis model failed, trying fallback: ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`,
+    );
+
+    const primaryRequestCount = Number(
+      (primaryError as Error & { requestCount?: number }).requestCount ?? 0,
+    );
+
+    try {
+      const { response, requestCount } = await callOpenRouterWithCount(
+        fallbackRequest,
+        isTransientRetryableError,
+      );
+      const totalRequestCount = primaryRequestCount + requestCount;
+      const latencyMs = Date.now() - startedAt;
+      logStageMetrics(
+        "combined",
+        payloads[0],
+        fallbackRequest.model,
+        latencyMs,
+        response,
+        totalRequestCount,
+        true,
+      );
+      recordStageUsage("combined", response, fallbackRequest.model, {
+        latencyMs,
+        requestCount: totalRequestCount,
+        fallbackUsed: true,
+        timeoutMs: COMBINED_TIMEOUT_MS,
+        finishReason: response.finishReason ?? "stop",
+      });
+
+      const plan = parseCombinedAnalysisResponse(response.text, payloads);
+      if (!plan) {
+        logger.warn(
+          `  ! Combined analysis parse failed for fallback. Raw (first 1000): ${response.text.slice(0, 1000)}`,
+        );
+      }
+      return plan;
+    } catch (error) {
+      logger.warn(
+        `  ! Combined analysis generation failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  }
 }
