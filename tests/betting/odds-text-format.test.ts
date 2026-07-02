@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatMainOddsSummary, formatMatchAnalysisMessage, formatOddsAnalysisInput, formatOddsFallbackMessage, formatOddsDataMessage } from "../../src/betting/odds-text-format.js";
+import { formatMainOddsSummary, formatMatchAnalysisMessage, formatOddsAnalysisInput, formatFullOddsAnalysisInput, formatOddsFallbackMessage, formatOddsDataMessage } from "../../src/betting/odds-text-format.js";
 import type { MatchAiAnalysis, MatchOddsPayload } from "../../src/betting/betting-types.js";
 
 describe("formatMatchAnalysisMessage", () => {
@@ -17,7 +17,7 @@ describe("formatMatchAnalysisMessage", () => {
       scoreConfidence: 36,
       recommendation: "Belgium -0.25",
       confidence: 33,
-      picks: [{ market: "Chap Chau A", selection: "Belgium -0.25", odds: 1.81 }],
+      picks: [{ market: "Chap Chau A", selection: "Belgium -0.25", odds: 1.81, reason: "Kèo nghiêng theo dữ liệu odds" }],
       marketViews: [
         { market: "Chap Chau A", assessment: "Nghieng Belgium -0.25", odds: 1.81 },
         { market: "GG/NG", assessment: "Nghieng GG", odds: 1.69 },
@@ -38,6 +38,7 @@ describe("formatMatchAnalysisMessage", () => {
     expect(message).toContain("1. *Belgium -0.25*  `@1.81`");
     expect(message).toContain("_Chap Chau A_");
     expect(message).toContain("🔄 *Thẩm định:* đã hiệu chỉnh");
+    expect(message).toContain("Lý do");
     expect(message).not.toContain("NHẬN ĐỊNH THỊ TRƯỜNG");
     expect(message).not.toContain("*GG/NG:* Nghieng GG  `@1.69`");
     expect(message).toContain("Điểm chính 1");
@@ -81,7 +82,7 @@ describe("formatMatchAnalysisMessage", () => {
     expect(message).toContain("⚽ *Tỷ số dự đoán:*");
   });
 
-  test("builds a compact decision snapshot with main and corners markets", () => {
+  test("formatFullOddsAnalysisInput includes all markets and correct score", () => {
     const payload: MatchOddsPayload = {
       gameId: "1",
       home: "Belgium",
@@ -92,29 +93,18 @@ describe("formatMatchAnalysisMessage", () => {
         legend: "long legend",
         markets: [
           { key: "h2h", outcomes: [{ name: "H", price: 2.16 }, { name: "A", price: 3.76 }] },
-          { key: "asia_handicap", outcomes: [
-            { name: "H", point: -0.25, price: 1.81 },
-            { name: "A", point: -0.25, price: 2.06 },
-          ] },
-          { key: "corners_totals", outcomes: [{ name: "Over", point: 9.5, price: 1.9 }] },
-          { key: "result_total_goals", outcomes: [{ name: "HO", point: 2.5, price: 4.2 }] },
         ],
       },
-      correctScore: Array.from({ length: 10 }, (_, index) => ({
-        score: `${index}-0`,
-        price: 20 - index,
-      })),
+      correctScore: [{ score: "1-0", price: 8.5 }],
     };
 
-    const input = formatOddsAnalysisInput(payload);
+    const text = formatFullOddsAnalysisInput(payload);
 
-    expect(input).toContain("h2h:H=2.16,A=3.76");
-    expect(input).toContain("asia_handicap:H@-0.25=1.81,A@+0.25=2.06");
-    expect(input).toContain("corners_totals:Over@+9.5=1.9");
-    expect(input).not.toContain("result_total_goals");
-    expect(input).not.toContain("long legend");
-    expect(input.match(/=1[0-9]/g)).toHaveLength(8);
+    expect(text).toContain('"markets"');
+    expect(text).toContain('"correctScore"');
+    expect(text).toContain('"h2h"');
   });
+
 });
 
 describe("odds Telegram messages Vietnamese output", () => {

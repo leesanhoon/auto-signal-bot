@@ -177,6 +177,8 @@ describe("betting/odds-runner", () => {
 
   test("skips revise when verify returns hard invalid", async () => {
     process.env.OPENROUTER_API_KEY = "test-key";
+    const originalVerify = process.env.BETTING_AI_VERIFY_ENABLED;
+    process.env.BETTING_AI_VERIFY_ENABLED = "true";
     state.analyzeMatchOdds.mockResolvedValue({
       match: "Team A vs Team B",
       preferredScoreline: "1-0",
@@ -207,10 +209,17 @@ describe("betting/odds-runner", () => {
 
     expect(state.verifyMatchAnalysis).toHaveBeenCalledTimes(1);
     expect(state.reviseMatchAnalysis).not.toHaveBeenCalled();
+    if (originalVerify === undefined) {
+      delete process.env.BETTING_AI_VERIFY_ENABLED;
+    } else {
+      process.env.BETTING_AI_VERIFY_ENABLED = originalVerify;
+    }
   });
 
   test("revises exactly once for conflict-like verification failure", async () => {
     process.env.OPENROUTER_API_KEY = "test-key";
+    const originalVerify = process.env.BETTING_AI_VERIFY_ENABLED;
+    process.env.BETTING_AI_VERIFY_ENABLED = "true";
     state.analyzeMatchOdds.mockResolvedValue({
       match: "Team A vs Team B",
       preferredScoreline: "1-0",
@@ -252,10 +261,16 @@ describe("betting/odds-runner", () => {
 
     expect(state.verifyMatchAnalysis).toHaveBeenCalledTimes(1);
     expect(state.reviseMatchAnalysis).toHaveBeenCalledTimes(1);
+    if (originalVerify === undefined) {
+      delete process.env.BETTING_AI_VERIFY_ENABLED;
+    } else {
+      process.env.BETTING_AI_VERIFY_ENABLED = originalVerify;
+    }
   });
 
   test.each([0, 1, 49])("fails closed when confirmed=true at confidence %i and revise throws", async (confidence) => {
     process.env.OPENROUTER_API_KEY = "test-key";
+    process.env.BETTING_AI_VERIFY_ENABLED = "true";
     state.analyzeMatchOdds.mockResolvedValue({
       match: "Team A vs Team B",
       preferredScoreline: "1-0",
@@ -295,6 +310,7 @@ describe("betting/odds-runner", () => {
 
   test("accepts confirmed results at the confidence threshold", async () => {
     process.env.OPENROUTER_API_KEY = "test-key";
+    process.env.BETTING_AI_VERIFY_ENABLED = "true";
     state.analyzeMatchOdds.mockResolvedValue({
       match: "Team A vs Team B",
       preferredScoreline: "1-0",
@@ -328,6 +344,83 @@ describe("betting/odds-runner", () => {
       verifiedConfidence: 50,
       picks: [{ candidateId: "P01" }],
     });
+  });
+  test("skips verify when BETTING_AI_VERIFY_ENABLED is unset (defaults to false)", async () => {
+    const original = process.env.BETTING_AI_VERIFY_ENABLED;
+    delete process.env.BETTING_AI_VERIFY_ENABLED;
+
+    state.analyzeMatchOdds.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 60,
+      recommendation: "Theo dõi",
+      confidence: 80,
+      keyPoints: ["Điểm mạnh"],
+      risks: ["Rủi ro"],
+      summary: "Tóm tắt",
+      picks: [{ candidateId: "P01", market: "1X2", selection: "Team A thắng", odds: 2.1 }],
+    });
+
+    const result = await oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    });
+
+    expect(state.verifyMatchAnalysis).not.toHaveBeenCalled();
+    expect(state.reviseMatchAnalysis).not.toHaveBeenCalled();
+    expect(result.analysis).toMatchObject({
+      verificationStatus: "skipped",
+      verifiedComment: "Bỏ qua verify theo BETTING_AI_VERIFY_ENABLED=false.",
+      picks: [{ candidateId: "P01" }],
+    });
+
+    if (original === undefined) {
+      delete process.env.BETTING_AI_VERIFY_ENABLED;
+    } else {
+      process.env.BETTING_AI_VERIFY_ENABLED = original;
+    }
+  });
+
+  test("skips verify and marks analysis as skipped when BETTING_AI_VERIFY_ENABLED=false", async () => {
+    const original = process.env.BETTING_AI_VERIFY_ENABLED;
+    process.env.BETTING_AI_VERIFY_ENABLED = "false";
+
+    state.analyzeMatchOdds.mockResolvedValue({
+      match: "Team A vs Team B",
+      preferredScoreline: "1-0",
+      scoreConfidence: 60,
+      recommendation: "Theo dõi",
+      confidence: 80,
+      keyPoints: ["Điểm mạnh"],
+      risks: ["Rủi ro"],
+      summary: "Tóm tắt",
+      picks: [{ candidateId: "P01", market: "1X2", selection: "Team A thắng", odds: 2.1 }],
+    });
+
+    const result = await oddsRunner.processMatch({
+      gameId: "1",
+      home: "Team A",
+      away: "Team B",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    });
+
+    expect(state.verifyMatchAnalysis).not.toHaveBeenCalled();
+    expect(state.reviseMatchAnalysis).not.toHaveBeenCalled();
+    expect(result.analysis).toMatchObject({
+      verificationStatus: "skipped",
+      verifiedComment: "Bỏ qua verify theo BETTING_AI_VERIFY_ENABLED=false.",
+      picks: [{ candidateId: "P01" }],
+    });
+
+    if (original === undefined) {
+      delete process.env.BETTING_AI_VERIFY_ENABLED;
+    } else {
+      process.env.BETTING_AI_VERIFY_ENABLED = original;
+    }
   });
 });
 

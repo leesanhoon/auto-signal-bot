@@ -1,9 +1,8 @@
-import type { AnalysisResult, ChartOrderType, PairSummary, ScreenshotResult, TradeSetup } from "./chart-types.js";
+import type { AnalysisResult, ChartOrderType, PairSummary, ScreenshotResult, TradeSetup, ChartAnalysisSource } from "./chart-types.js";
 import { withRetry } from "../shared/retry.js";
 import { createLogger } from "../shared/logger.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
 import { callOpenRouter, type OpenRouterRequest } from "../shared/openrouter.js";
-import { getConfiguredChartSignalConfidenceThreshold } from "./chart-config-env.js";
 import { findChartForPair } from "./screenshot.js";
 
 const logger = createLogger("charts:analyzer");
@@ -14,6 +13,53 @@ type PairScreenshotGroup = { pair: string; screenshots: ScreenshotResult[] };
 
 function getPairName(screenshot: ScreenshotResult): string {
   return screenshot.chart.name.replace(` ${screenshot.chart.timeframe}`, "");
+}
+
+function toChartAnalysisSource(screenshot: ScreenshotResult): ChartAnalysisSource {
+  return {
+    symbol: screenshot.chart.symbol,
+    timeframe: screenshot.chart.timeframe,
+    name: screenshot.chart.name,
+    filepath: screenshot.filepath,
+  };
+}
+
+function normalizePairKey(value: string): string {
+  return value.replace(/[\s\/_.:-]+/g, "").toUpperCase();
+}
+
+function findScreenshotByProvenance(
+  pair: string,
+  screenshots: ScreenshotResult[],
+  preferredSource?: ChartAnalysisSource,
+): ScreenshotResult | undefined {
+  if (preferredSource) {
+    const exactTriples = screenshots.find(
+      (s) =>
+        s.filepath === preferredSource.filepath &&
+        s.chart.symbol === preferredSource.symbol &&
+        s.chart.timeframe === preferredSource.timeframe,
+    );
+    if (exactTriples) return exactTriples;
+
+    const exactSymbolTimeframe = screenshots.find(
+      (s) =>
+        s.chart.symbol === preferredSource.symbol &&
+        s.chart.timeframe === preferredSource.timeframe,
+    );
+    if (exactSymbolTimeframe) return exactSymbolTimeframe;
+
+    if (preferredSource.filepath) {
+      const exactFilepath = screenshots.find((s) => s.filepath === preferredSource.filepath);
+      if (exactFilepath) return exactFilepath;
+    }
+  }
+
+  const preferredTimeframe = preferredSource?.timeframe ?? "H4";
+  const chart = findChartForPair(pair, preferredTimeframe);
+  return chart
+    ? screenshots.find((s) => s.chart.symbol === chart.symbol && s.chart.timeframe === chart.timeframe)
+    : undefined;
 }
 
 function groupScreenshotsByPair(screenshots: ScreenshotResult[]): PairScreenshotGroup[] {
@@ -34,31 +80,24 @@ function groupScreenshotsByPair(screenshots: ScreenshotResult[]): PairScreenshot
   }));
 }
 
-function buildSystemPrompt(threshold: number): string {
-  return `Act as a professional price-action trader using Bob Volman's methodology, EMA 20, and volume.
-
-Analyze each instrument as one multi-timeframe package:
-- D1 establishes the dominant trend and major support/resistance.
-- H4 identifies the Volman setup (RB, BB, ARB, FB, SB, DD, or IRB) and is the primary decision timeframe.
-- M15 refines entry timing and rejects entries with noisy, contradictory price action.
-- Volume must confirm a breakout or rejection. Treat weak or declining volume as a risk, never as confirmation.
-
-Only recommend TRADE when D1 and H4 direction agree, M15 does not contradict them, price is at or near H4 EMA 20 or has a clean buildup, and volume supports the move. Missing timeframes, conflicting trends, distant price without a pullback, flat EMA, weak volume, or poor risk/reward must reduce confidence. If fewer than two timeframes agree, or confidence is below ${threshold}%, conclude NO TRADE. Never invent unreadable price levels.
-
-All user-facing text fields must be Vietnamese with accents.
-For every setup classify orderType as one of MARKET_NOW, BUY_STOP, SELL_STOP, BUY_LIMIT, SELL_LIMIT, WAIT_FOR_CONFIRMATION.
-- MARKET_NOW only if current price is still at or very near the suggested entry zone.
-- BUY_STOP/SELL_STOP for breakout confirmation above/below a trigger level.
-- BUY_LIMIT/SELL_LIMIT for pullback/retest entries.
-- WAIT_FOR_CONFIRMATION if the chart direction is promising but no safe executable entry exists now.
-Never present a pending trigger as an already-open trade.`
+function buildSystemPrompt(): string {
+  return [
+    "Bạn là chuyên gia phân tích biểu đồ forex/kim loại.",
+    "Hãy đọc trực tiếp các ảnh chart được gửi, gồm pair và timeframe trong label.",
+    "Phân tích khách quan xu hướng, vùng giá quan trọng, setup nếu có, điểm vào/SL/TP nếu đủ rõ.",
+    "Nếu chart chưa rõ hoặc tín hiệu yếu, hãy nói không vào lệnh/chờ thêm xác nhận.",
+    "Không cần validate lại bằng model khác. Không bịa level nếu không đọc được trên chart.",
+    "Tất cả field text bằng tiếng Việt có dấu.",
+  ].join(" ");
 }
 
-function buildUserPrompt(threshold: number): string {
-  return `Analyze the attached chart packages. Each image label contains pair and timeframe. Return only JSON with keys summaries, setups, and noSetupReason.
-
-In summaries include every pair with pair, trend (describe D1/H4/M15 alignment), emaProximity (tại/gần/xa), status, and confidence.
-In setups include only confluence setups with confidence >=${threshold}%; include pair, direction, setup, orderType, entryCondition, currentPriceContext, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, and summary. Reasons must explicitly mention D1, H4, M15, and volume evidence. Provide levels from H4/M15. All user-facing text fields must be Vietnamese with accents. orderType must be one of MARKET_NOW, BUY_STOP, SELL_STOP, BUY_LIMIT, SELL_LIMIT, WAIT_FOR_CONFIRMATION. entryCondition must clearly state whether this is a pending trigger, pullback limit, market-now, or wait-for-confirmation idea. Omit surrounding text.`;
+function buildUserPrompt(): string {
+  return [
+    "Return only JSON with keys summaries, setups, and noSetupReason.",
+    "summaries: mỗi pair gồm pair, trend, emaProximity nếu thấy, status, confidence.",
+    "setups: chỉ các setup AI thấy đáng chú ý, gồm pair, direction, setup, orderType, entryCondition, currentPriceContext, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, summary.",
+    "Không cần ép đủ mọi rule; nếu không chắc thì giảm confidence và ghi rõ trong risks.",
+  ].join(" ");
 }
 
 export function cleanResponse(text: string): string {
@@ -156,10 +195,8 @@ export async function confirmHighConfidenceSetups(
 ): Promise<TradeSetup[]> {
   return Promise.all(
     setups.map(async (setup) => {
-      const chart = findChartForPair(setup.pair, "H4");
-      const screenshot = chart
-        ? screenshots.find((item) => item.chart.symbol === chart.symbol && item.chart.timeframe === "H4")
-        : undefined;
+      const preferredSource = setup.sourceCharts?.find((chart) => chart.timeframe === "H4") ?? setup.sourceCharts?.[0];
+      const screenshot = findScreenshotByProvenance(setup.pair, screenshots, preferredSource);
       if (!screenshot) return setup;
 
       try {
@@ -174,6 +211,7 @@ export async function confirmHighConfidenceSetups(
           verifiedConfidence: verification.confidence,
           verifiedComment: verification.comment,
           verifiedBy: verification.verifiedBy,
+          telegramChart: toChartAnalysisSource(screenshot),
         };
       } catch (error) {
         logger.warn(`  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`);
@@ -229,7 +267,6 @@ export function parseAnalysisResponse(text: string): {
       setups: unknown;
       noSetupReason: string;
     }>;
-    const threshold = getConfiguredChartSignalConfidenceThreshold();
     const rawSetups = Array.isArray(parsed.setups) ? parsed.setups : [];
     const normalizedSetups: TradeSetup[] = rawSetups
       .filter((s): s is Record<string, unknown> => s !== null && typeof s === "object")
@@ -246,8 +283,7 @@ export function parseAnalysisResponse(text: string): {
           s.currentPriceContext,
           "Model chưa mô tả rõ vị trí giá hiện tại so với entry.",
         ),
-      } as unknown as TradeSetup))
-      .filter((setup) => (setup.confidence ?? 0) >= threshold);
+      } as unknown as TradeSetup));
     return {
       summaries: Array.isArray(parsed.summaries) ? parsed.summaries : [],
       setups: normalizedSetups,
@@ -259,7 +295,6 @@ export function parseAnalysisResponse(text: string): {
 }
 
 async function analyzeWithOpenRouter(screenshots: ScreenshotResult[]): Promise<string> {
-  const threshold = getConfiguredChartSignalConfidenceThreshold();
   const userContent: OpenRouterRequest["userContent"] = [];
   const ordered = [...screenshots].sort((left, right) => {
     const pairOrder = left.chart.symbol.localeCompare(right.chart.symbol);
@@ -278,12 +313,12 @@ async function analyzeWithOpenRouter(screenshots: ScreenshotResult[]): Promise<s
       text: `[PAIR=${getPairName(screenshot)}; TIMEFRAME=${screenshot.chart.timeframe}]`,
     });
   }
-  userContent.push({ type: "text", text: buildUserPrompt(threshold) });
+  userContent.push({ type: "text", text: buildUserPrompt() });
 
   const result = await withRetry(
     () => callOpenRouter({
       model: ANALYSIS_MODEL,
-      systemPrompt: buildSystemPrompt(threshold),
+      systemPrompt: buildSystemPrompt(),
       userContent,
       maxTokens: 4000,
       temperature: 0.2,
@@ -301,9 +336,7 @@ async function analyzeWithOpenRouter(screenshots: ScreenshotResult[]): Promise<s
 }
 
 export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise<AnalysisResult> {
-  const threshold = getConfiguredChartSignalConfidenceThreshold();
   const groups = groupScreenshotsByPair(screenshots);
-  const prefixReasons = groups.length > 1;
   logger.info(`  -> Trying ${ANALYSIS_MODEL} per pair...`, { pairs: groups.length });
   const summaries: PairSummary[] = [];
   const setups: TradeSetup[] = [];
@@ -315,8 +348,15 @@ export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise
       try {
         logger.info(`  -> Analyzing ${group.pair} with ${ANALYSIS_MODEL}...`);
         const parsed = parseAnalysisResponse(await analyzeWithOpenRouter(group.screenshots));
+        const sourceCharts = group.screenshots.map(toChartAnalysisSource);
         logger.info(`  ✓ Analyzed ${group.pair} by ${ANALYSIS_MODEL}`);
-        return { kind: "ok" as const, pair: group.pair, summaries: parsed.summaries, setups: parsed.setups, noSetupReason: parsed.noSetupReason };
+        return {
+          kind: "ok" as const,
+          pair: group.pair,
+          summaries: parsed.summaries,
+          setups: parsed.setups.map((setup) => ({ ...setup, sourceCharts })),
+          noSetupReason: parsed.noSetupReason,
+        };
       } catch (error) {
         logger.warn(`  ! OpenRouter main analysis failed for ${group.pair} (${group.screenshots.length} screenshots): ${error instanceof Error ? error.message : error}`);
         return { kind: "err" as const, pair: group.pair };
@@ -329,7 +369,7 @@ export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise
       summaries.push(...result.summaries);
       setups.push(...result.setups);
       if (result.noSetupReason.trim()) {
-        noSetupReasons.push(prefixReasons ? `[${result.pair}] ${result.noSetupReason.trim()}` : result.noSetupReason.trim());
+        noSetupReasons.push(`[${result.pair}] ${result.noSetupReason.trim()}`);
       }
     } else {
       failedPairs.push(result.pair);
@@ -343,15 +383,6 @@ export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise
     );
   }
 
-  const availableTimeframes = new Map<string, Set<string>>();
-  for (const screenshot of screenshots) {
-    const timeframes = availableTimeframes.get(getPairName(screenshot)) ?? new Set<string>();
-    timeframes.add(screenshot.chart.timeframe);
-    availableTimeframes.set(getPairName(screenshot), timeframes);
-  }
-  const confluenceSetups = screenshots.every((s) => Boolean(s.chart.timeframe))
-    ? setups.filter((setup) => ["D1", "H4", "M15"].every((tf) => availableTimeframes.get(setup.pair)?.has(tf)))
-    : setups;
-  logger.info(`  ✓ ${summaries.length} pairs scanned, ${confluenceSetups.length} complete multi-timeframe setup(s) >=${threshold}% confidence`);
-  return { summaries, setups: confluenceSetups, noSetupReason: noSetupReasons.join("\n").trim(), screenshots };
+  logger.info(`  ✓ ${summaries.length} pairs scanned, ${setups.length} setup(s) returned by AI`);
+  return { summaries, setups, noSetupReason: noSetupReasons.join("\n").trim(), screenshots };
 }

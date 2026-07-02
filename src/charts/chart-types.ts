@@ -16,6 +16,13 @@ export type ChartConfig = {
   timeframe: ChartTimeframe;
 };
 
+export type ChartAnalysisSource = {
+  symbol: string;
+  timeframe: ChartTimeframe;
+  name: string;
+  filepath: string;
+};
+
 export type ScreenshotResult = {
   chart: ChartConfig;
   buffer: Buffer;
@@ -52,8 +59,9 @@ export type TradeSetup = {
   verifiedComment?: string;
   verifiedBy?: string;
   autoTracked?: boolean;
+  sourceCharts?: ChartAnalysisSource[];
+  telegramChart?: ChartAnalysisSource;
 };
-
 export type AnalysisResult = {
   summaries: PairSummary[];
   setups: TradeSetup[];

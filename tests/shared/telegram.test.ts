@@ -47,7 +47,7 @@ describe("shared/telegram", () => {
       setup: "Breakout",
       reasons: ["EMA 20 hỗ trợ"],
       risks: ["Nến giả phá"],
-      confidence: 92,
+      confidence: 35,
       entry: "1.1000",
       stopLoss: "1.0980",
       takeProfit1: "1.1040",
@@ -69,9 +69,95 @@ describe("shared/telegram", () => {
 
     await sendAllAnalyses(result, notifier);
 
+    expect(sends.join("\n")).toContain("tìm thấy *1* setup từ AI");
     expect(sends.join("\n")).toContain("Buy Stop — lệnh chờ breakout lên vùng entry");
     expect(sends.join("\n")).toContain("Điều kiện vào");
     expect(sends.join("\n")).toContain("trigger/pending");
     expect(sends.join("\n")).toContain("ℹ️ Nếu đây là lệnh chờ, chỉ vào khi giá khớp đúng điều kiện trên.");
+  });
+
+  test("sendAllAnalyses prefers exact provenance over fuzzy screenshot matching", async () => {
+    const sendPhoto = vi.fn(async () => undefined);
+    const sends: string[] = [];
+    const notifier = {
+      sendMessage: vi.fn(async (message: string) => {
+        sends.push(message);
+      }),
+      sendPhoto,
+    };
+
+    const exactBuffer = Buffer.from("exact-chart");
+    const fallbackBuffer = Buffer.from("fallback-chart");
+    const setup: TradeSetup = {
+      pair: "EUR/USD",
+      direction: "LONG",
+      setup: "Breakout",
+      reasons: ["EMA 20 hỗ trợ"],
+      risks: ["Nến giả phá"],
+      confidence: 92,
+      entry: "1.1000",
+      stopLoss: "1.0980",
+      takeProfit1: "1.1040",
+      takeProfit2: "1.1080",
+      riskReward: "1:2",
+      summary: "Chờ breakout rõ ràng",
+      orderType: "BUY_STOP",
+      entryCondition: "Chỉ vào khi phá lên 1.1000",
+      currentPriceContext: "Giá hiện tại vẫn nằm dưới entry",
+      verifiedConfirmed: true,
+      telegramChart: {
+        symbol: "OANDA:EURUSD",
+        timeframe: "H4",
+        name: "EUR/USD H4",
+        filepath: "/tmp/old.jpg",
+      },
+      sourceCharts: [
+        {
+          symbol: "OANDA:EURUSD",
+          timeframe: "H4",
+          name: "EUR/USD H4",
+          filepath: "/tmp/old.jpg",
+        },
+      ],
+    };
+
+    const result: AnalysisResult = {
+      summaries: [{ pair: "EUR/USD", trend: "Tăng", status: "OK", confidence: 92 }],
+      setups: [setup],
+      noSetupReason: "",
+      screenshots: [
+        {
+          chart: {
+            symbol: "OANDA:EURUSDX",
+            name: "EUR/USD H4",
+            timeframe: "H4",
+            interval: "240",
+            description: "",
+          },
+          buffer: fallbackBuffer,
+          filepath: "/tmp/fallback.jpg",
+        },
+        {
+          chart: {
+            symbol: "OANDA:EURUSD",
+            name: "EUR/USD H4",
+            timeframe: "H4",
+            interval: "240",
+            description: "",
+          },
+          buffer: exactBuffer,
+          filepath: "/tmp/exact.jpg",
+        },
+      ],
+    };
+
+    await sendAllAnalyses(result, notifier);
+
+    expect(sendPhoto).toHaveBeenCalled();
+    const calls = sendPhoto.mock.calls as unknown as Array<[Buffer, string]>;
+    expect(calls[0][0]).toBe(exactBuffer);
+    expect(calls[0][1]).toContain("OANDA:EURUSD H4");
+    expect(calls[0][1]).toContain("Nguồn ảnh: exact.jpg");
+    expect(sends.join("\n")).toContain("Buy Stop — lệnh chờ breakout lên vùng entry");
   });
 });

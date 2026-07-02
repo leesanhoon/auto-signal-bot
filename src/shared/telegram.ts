@@ -1,8 +1,10 @@
+import { basename } from "path";
 import type {
   AnalysisResult,
   TradeSetup,
   PairSummary,
   ScreenshotResult,
+  ChartAnalysisSource,
 } from "../charts/chart-types.js";
 import type { Notifier } from "./notifier.js";
 import { createLogger } from "./logger.js";
@@ -408,19 +410,53 @@ export function buildPerformanceReportMessage(
   return lines.join("\n");
 }
 
-function findScreenshot(
-  pair: string,
+function normalizeChartKey(value: string): string {
+  return value.replace(/[\s\/_.:-]+/g, "").toUpperCase();
+}
+
+function findScreenshotForSetup(
+  setup: TradeSetup,
   screenshots: ScreenshotResult[],
-): ScreenshotResult | undefined {
-  const normalized = pair.replace("/", "").toUpperCase();
-  return (
-    screenshots.find(
+): { screenshot?: ScreenshotResult; usedFallback: boolean } {
+  const exactTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
+  if (setup.telegramChart) exactTargets.push(setup.telegramChart);
+  if (setup.sourceCharts) exactTargets.push(...setup.sourceCharts.filter((chart) => chart.timeframe === "H4"));
+
+  for (const target of exactTargets) {
+    const exactTriple = screenshots.find(
       (s) =>
-        s.chart.symbol.toUpperCase().includes(normalized) &&
-        s.chart.timeframe === "H4",
-    ) ??
-    screenshots.find((s) => s.chart.symbol.toUpperCase().includes(normalized))
+        s.filepath === target.filepath &&
+        s.chart.symbol === target.symbol &&
+        s.chart.timeframe === target.timeframe,
+    );
+    if (exactTriple) return { screenshot: exactTriple, usedFallback: false };
+  }
+
+  for (const target of exactTargets) {
+    const exactSymbolTimeframe = screenshots.find(
+      (s) => s.chart.symbol === target.symbol && s.chart.timeframe === target.timeframe,
+    );
+    if (exactSymbolTimeframe) return { screenshot: exactSymbolTimeframe, usedFallback: false };
+  }
+
+  for (const target of exactTargets) {
+    if (!target.filepath) continue;
+    const exactFilepath = screenshots.find((s) => s.filepath === target.filepath);
+    if (exactFilepath) return { screenshot: exactFilepath, usedFallback: false };
+  }
+
+  const normalizedPair = normalizeChartKey(setup.pair);
+  const byPair = screenshots.find(
+    (s) =>
+      normalizeChartKey(s.chart.symbol).includes(normalizedPair) &&
+      s.chart.timeframe === "H4",
   );
+  if (byPair) return { screenshot: byPair, usedFallback: true };
+
+  return {
+    screenshot: screenshots.find((s) => normalizeChartKey(s.chart.symbol).includes(normalizedPair)),
+    usedFallback: true,
+  };
 }
 
 export const telegramNotifier: Notifier = { sendMessage, sendPhoto };
@@ -429,50 +465,38 @@ export async function sendAllAnalyses(
   result: AnalysisResult,
   notifier: Notifier = telegramNotifier,
 ): Promise<void> {
-  const threshold = getConfiguredChartSignalConfidenceThreshold();
   const timestamp = new Date().toLocaleString("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
   });
 
-  // No setups at all from analyzer (threshold)
   if (result.setups.length === 0) {
     await notifier.sendMessage(
-      `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp tiền (D1/H4/M15 + volume)\n\n⏸ Không có setup đạt yêu cầu (>${threshold}%)\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
+      `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp tiền (D1/H4/M15 + volume)\n\n⏸ Không có setup từ AI\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
     );
-    logger.info("  → No high-confidence setups. Notification sent.");
+    logger.info("  → No setups returned by AI. Notification sent.");
     return;
   }
 
-  const highConfSetups = result.setups.filter(
-    (s) => (s.confidence ?? 0) >= threshold,
-  );
-  const headerSuffix = ` (≥${threshold}%)`;
+  const setups = result.setups;
+  const headerSuffix = " từ AI";
 
-  // Header
   await notifier.sendMessage(
-    `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume) — tìm thấy *${highConfSetups.length}* setup${headerSuffix}`,
+    `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume) — tìm thấy *${setups.length}* setup${headerSuffix}`,
   );
 
-  if (highConfSetups.length === 0) {
-    const reason = `Không tìm thấy setup nào đạt ${threshold}%.`;
-    await notifier.sendMessage(
-      `⏸ ${reason}\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
-    );
-    logger.info(`  → ${reason}`);
-    return;
-  }
-
-  for (const setup of highConfSetups) {
+  for (const setup of setups) {
     const confidence = setup.confidence ?? 0;
-    const screenshot = findScreenshot(setup.pair, result.screenshots);
+    const { screenshot, usedFallback } = findScreenshotForSetup(setup, result.screenshots);
 
     if (screenshot) {
       try {
-        const caption = `📊 ${setup.pair} H4 — ${setup.direction} (${confidence}% 🔥)`;
+        const caption = `📊 ${screenshot.chart.symbol} ${screenshot.chart.timeframe} — ${setup.direction} (${confidence}% 🔥)\nNguồn ảnh: ${basename(screenshot.filepath)}`;
         await notifier.sendPhoto(screenshot.buffer, caption);
-        logger.info(
-          `  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`,
-        );
+        if (usedFallback) {
+          logger.warn(`  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`);
+        } else {
+          logger.info(`  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`);
+        }
       } catch (error) {
         logger.error(`  ✗ Failed to send chart ${setup.pair}:`, error);
       }
@@ -484,6 +508,6 @@ export async function sendAllAnalyses(
   }
 
   await notifier.sendMessage(
-    `✅ *Scan hoàn tất* — ${highConfSetups.length} setup(s) ≥${threshold}%\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
+    `✅ *Scan hoàn tất* — ${setups.length} setup(s) từ AI\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
   );
 }

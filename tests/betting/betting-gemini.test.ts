@@ -150,6 +150,10 @@ describe("parseMatchAnalysisResponse", () => {
     expect(request.plugins).toEqual([{ id: "web", max_results: 3 }]);
     expect(request.reasoning).toEqual({ effort: "none", exclude: true });
     expect(request.maxTokens).toBe(1400);
+    const firstContent = request.userContent[0] as { type: "text"; text: string };
+    expect(firstContent.text).toContain('"odds"');
+    expect(firstContent.text).toContain('"markets"');
+    expect(firstContent.text).not.toContain("CANDIDATES:");
   });
 
   test("verify and revise requests do not use web search", () => {
@@ -194,8 +198,9 @@ describe("parseMatchAnalysisResponse", () => {
     expect(reviseRequest.reasoning).toEqual({ effort: "none", exclude: true });
     expect(reviseRequest.maxTokens).toBe(1300);
     expect(reviseRequest.timeoutMs).toBe(60_000);
-    expect(String(reviseRequest.userContent[0].text)).toContain("CANDIDATES:");
-    expect(String(reviseRequest.userContent[0].text)).toContain("P01");
+    const reviseText = reviseRequest.userContent[0] as { type: "text"; text: string };
+    expect(reviseText.text).toContain("CANDIDATES:");
+    expect(reviseText.text).toContain("P01");
   });
 
   test("verifyMatchAnalysis records retry attempts", async () => {
@@ -378,11 +383,10 @@ describe("parseMatchAnalysisResponse", () => {
     );
 
     expect(parsed?.recommendation).toBe("Dat Belgium -0.25");
-    expect(parsed?.picks).toEqual([
-      { candidateId: "P01", market: "1X2", selection: "Belgium thắng", odds: 2.16 },
-      { candidateId: "P04", market: "Chấp Châu Á", selection: "Belgium -0.25", odds: 1.81 },
-      { candidateId: "P05", market: "Chấp Châu Á", selection: "Senegal +0.25", odds: 2.06 },
-    ]);
+    expect(parsed?.picks).toHaveLength(3);
+    expect(parsed?.picks?.[0]).toMatchObject({ candidateId: "P01", market: "1X2", selection: "Belgium thắng", odds: 2.16 });
+    expect(parsed?.picks?.[1]).toMatchObject({ candidateId: "P04", market: "Chấp Châu Á", selection: "Belgium -0.25", odds: 1.81 });
+    expect(parsed?.picks?.[2]).toMatchObject({ candidateId: "P05", market: "Chấp Châu Á", selection: "Senegal +0.25", odds: 2.06 });
     expect(parsed?.marketViews).toEqual([
       { market: "Chap Chau A", assessment: "Nghieng Belgium -0.25", odds: 1.81 },
     ]);
@@ -390,7 +394,7 @@ describe("parseMatchAnalysisResponse", () => {
     expect(parsed?.risks).toHaveLength(2);
   });
 
-  test("drops legacy picks at or below the odds threshold", () => {
+  test("keeps direct picks below the old odds threshold", () => {
     const parsed = bettingGemini.parseMatchAnalysisResponse(
       JSON.stringify({
         match: "Belgium vs Senegal",
@@ -398,7 +402,7 @@ describe("parseMatchAnalysisResponse", () => {
         scoreConfidence: 36,
         recommendation: "Theo dõi kèo này",
         confidence: 33,
-        picks: [{ market: "1X2", selection: "Belgium thắng", odds: 1.79 }],
+        picks: [{ market: "1X2", selection: "Belgium thắng", odds: 1.79, reason: "Edge nhẹ" }],
         keyPoints: ["Mot", "Hai"],
         risks: ["Bon", "Nam"],
         summary: "Tin hieu yeu.",
@@ -422,7 +426,13 @@ describe("parseMatchAnalysisResponse", () => {
       },
     );
 
-    expect(parsed?.picks).toEqual([]);
+    expect(parsed?.picks).toHaveLength(1);
+    expect(parsed?.picks?.[0]).toMatchObject({
+      market: "1X2",
+      selection: "Belgium thắng",
+      odds: 1.79,
+      reason: "Edge nhẹ",
+    });
   });
 
   test("caps hydrated picks at three unique valid selections", () => {
@@ -511,13 +521,39 @@ describe("parseMatchAnalysisResponse", () => {
     ]);
   });
 
-  test("falls back to stand aside when no valid picks survive validation", () => {
+  test("preserves recommendation when no picks survive validation", () => {
     const parsed = bettingGemini.parseMatchAnalysisResponse(
       JSON.stringify({
         match: "Belgium vs Senegal",
         preferredScoreline: "1-0",
         scoreConfidence: 36,
         recommendation: "Theo dõi kèo này",
+        confidence: 33,
+        picks: [{ candidateId: "P04" }],
+        keyPoints: ["Mot", "Hai"],
+        risks: ["Bon", "Nam"],
+        summary: "Tin hieu yeu.",
+      }),
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    );
+
+    expect(parsed?.recommendation).toBe("Theo dõi kèo này");
+    expect(parsed?.picks).toEqual([]);
+  });
+
+  test("falls back to stand aside when recommendation is empty and no valid picks", () => {
+    const parsed = bettingGemini.parseMatchAnalysisResponse(
+      JSON.stringify({
+        match: "Belgium vs Senegal",
+        preferredScoreline: "1-0",
+        scoreConfidence: 36,
+        recommendation: "",
         confidence: 33,
         picks: [{ candidateId: "P04" }],
         keyPoints: ["Mot", "Hai"],

@@ -257,6 +257,23 @@ export function formatOddsAnalysisInput(payload: MatchOddsPayload): string {
   return lines.join("\n");
 }
 
+export function formatFullOddsAnalysisInput(payload: MatchOddsPayload): string {
+  return JSON.stringify(
+    {
+      match: {
+        gameId: payload.gameId,
+        home: payload.home,
+        away: payload.away,
+        kickoffUnix: payload.kickoffUnix,
+      },
+      odds: payload.odds,
+      correctScore: payload.correctScore ?? [],
+    },
+    null,
+    2,
+  );
+}
+
 function pickMainPoint(market: CompactMarket | undefined): number | undefined {
   if (!market) return undefined;
   const points = [
@@ -352,18 +369,20 @@ export function formatMatchAnalysisMessage(
         ? "⭐⭐⭐⭐"
         : analysis.confidence >= 50
           ? "⭐⭐⭐"
-      : analysis.confidence >= 35
-        ? "⭐⭐"
-        : "⭐";
+          : analysis.confidence >= 35
+            ? "⭐⭐"
+            : "⭐";
   const picks = (analysis.picks ?? []).slice(0, 3);
   const verifyLabel =
     analysis.verificationStatus === "confirmed"
       ? "✅ *Thẩm định:* đạt"
-      : analysis.verificationStatus === "revised"
-        ? "🔄 *Thẩm định:* đã hiệu chỉnh"
+    : analysis.verificationStatus === "revised"
+            ? "🔄 *Thẩm định:* đã hiệu chỉnh"
         : analysis.verificationStatus === "failed"
           ? "⚠️ *Thẩm định:* lỗi model"
-          : "⚪ *Thẩm định:* chưa chạy";
+          : analysis.verificationStatus === "skipped"
+            ? "🤖 *Chế độ:* AI phân tích trực tiếp"
+            : "🤖 *Chế độ:* AI phân tích trực tiếp";
   const sections: string[] = [
     [
       `🏟 *${payload.home} (H) vs ${payload.away} (A)*`,
@@ -376,23 +395,18 @@ export function formatMatchAnalysisMessage(
     sections.push(
       [
         "🎯 *KÈO ĐỀ XUẤT*",
-        ...picks.map(
-          (pick, index) =>
-            `${index + 1}. *${compact(pick.selection, 60)}*  \`@${pick.odds}\`\n   _${compact(pick.market, 35)}_`,
-        ),
+        ...picks.map((pick, index) => {
+          const reason = pick.reason ? `\n   _Lý do:_ ${compact(pick.reason, 100)}` : "";
+          return `${index + 1}. *${compact(pick.selection, 60)}*  \`@${pick.odds}\`\n   _${compact(pick.market, 35)}_${reason}`;
+        }),
       ].join("\n"),
     );
   } else if (!isStandAside) {
-    sections.push(
-      `🎯 *KÈO ĐỀ XUẤT*\n• ${compact(analysis.recommendation, 120)}`,
-    );
+    sections.push(`🎯 *KÈO ĐỀ XUẤT*\n• ${compact(analysis.recommendation, 120)}`);
   }
-  sections.push(
-    `⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`,
-  );
+  sections.push(`⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`);
 
-  if (keyPoints.length > 0)
-    sections.push(`🔎 *Nhận định:* ${compact(keyPoints[0])}`);
+  if (keyPoints.length > 0) sections.push(`🔎 *Nhận định:* ${compact(keyPoints[0])}`);
   if (risks.length > 0) sections.push(`⚠️ *Rủi ro:* ${compact(risks[0])}`);
 
   return sections.join("\n\n");

@@ -20,13 +20,15 @@ export type MatchAiAnalysis = {
     market: string;
     selection: string;
     odds: number;
+    reason?: string;
+    confidence?: number;
   }>;
   marketViews?: Array<{
     market: string;
     assessment: string;
     odds: number | null;
   }>;
-  verificationStatus?: "confirmed" | "revised" | "failed";
+  verificationStatus?: "confirmed" | "revised" | "failed" | "skipped";
   verifiedConfirmed?: boolean;
   verifiedConfidence?: number;
   verifiedComment?: string;

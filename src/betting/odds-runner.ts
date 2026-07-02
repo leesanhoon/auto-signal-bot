@@ -19,6 +19,16 @@ const logger = createLogger("betting:odds-runner");
 const LABEL = "Match Odds";
 const MIN_VERIFY_CONFIDENCE = 50;
 
+function parseBooleanEnv(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return false;
+  return !(normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off");
+}
+
+export function isBettingVerifyEnabled(): boolean {
+  return parseBooleanEnv(process.env.BETTING_AI_VERIFY_ENABLED);
+}
+
 function formatKickoff(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleString("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
@@ -55,6 +65,14 @@ export async function processMatch(match: MatchOddsPayload): Promise<{ match: Ma
         analysis.recommendation = "Đứng ngoài.";
       }
       logger.info(`  ↷ Skip verify/revise for ${match.home} vs ${match.away}: no valid pick or stand-aside`);
+      return { match, analysis, error: null };
+    }
+
+    const verifyEnabled = isBettingVerifyEnabled();
+    if (!verifyEnabled) {
+      analysis.verificationStatus = "skipped";
+      analysis.verifiedComment = "Bỏ qua verify theo BETTING_AI_VERIFY_ENABLED=false.";
+      logger.info(`  ↷ Skip verify/revise for ${match.home} vs ${match.away}: BETTING_AI_VERIFY_ENABLED=false`);
       return { match, analysis, error: null };
     }
 

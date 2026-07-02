@@ -6,7 +6,7 @@ import { runCheckOpenTrades } from "./check-open-trades-runner.js";
 import { sendAllAnalyses, notifyError } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
 import { validateTradeSetupForOpen } from "./position-engine.js";
-import { getConfiguredChartSignalConfidenceThreshold } from "./chart-config-env.js";
+import { getConfiguredChartSignalConfidenceThreshold, getConfiguredChartVerifyEnabled } from "./chart-config-env.js";
 import type { TradeSetup } from "./chart-types.js";
 
 const logger = createLogger("charts:index");
@@ -33,13 +33,18 @@ async function main(): Promise<void> {
   logger.info("Analysis complete");
 
   const threshold = getConfiguredChartSignalConfidenceThreshold();
-  const highConfSetups = result.setups.filter((setup) => (setup.confidence ?? 0) > threshold);
-  if (highConfSetups.length > 0) {
+  const highConfSetups = result.setups.filter((setup) => (setup.confidence ?? 0) >= threshold);
+  const chartVerifyEnabled = getConfiguredChartVerifyEnabled();
+  if (highConfSetups.length > 0 && chartVerifyEnabled) {
     logger.info("Verifying high-confidence setups", { count: highConfSetups.length, model: AI_VERIFY_MODEL });
     const verified = await confirmHighConfidenceSetups(highConfSetups, screenshots);
     const verifiedByPair = new Map(verified.map((setup) => [setup.pair, setup]));
     result.setups = result.setups.map((setup) => verifiedByPair.get(setup.pair) ?? setup);
     logger.info("Verification complete");
+  } else if (highConfSetups.length > 0) {
+    logger.info("Skipped chart verification because CHART_AI_VERIFY_ENABLED=false", {
+      count: highConfSetups.length,
+    });
   }
 
   for (const setup of result.setups) {

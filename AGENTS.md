@@ -6,14 +6,19 @@ This project uses a **file-based task queue** to coordinate between a Lead/Plann
 
 ```
 tasks/
-├── <task-id>/              # kebab-case, e.g. "add-auth-middleware"
-│   ├── plan.md             # [Lead] Detailed architecture plan
-│   ├── task.md             # [Lead] Specific executable task for worker
-│   ├── context.md          # [Lead] Optional background / references
-│   ├── result.md           # [Worker] Execution results
-│   ├── review.md           # [Lead] Review findings / issues to fix
-│   ├── blocked.md          # [Worker] Blocked — needs clarification
-│   └── done.md             # [Lead] Final approval
+├── <task-id>/                    # kebab-case parent task, e.g. "add-auth-middleware"
+│   ├── plan.md                   # [Lead] Detailed architecture plan + subtask breakdown
+│   ├── context.md                # [Lead] Optional shared background / references
+│   ├── review.md                 # [Lead] Final review across all subtasks
+│   ├── done.md                   # [Lead] Final approval
+│   ├── 01-<subtask-id>/          # [Lead] Independently assignable subtask
+│   │   ├── task.md               # [Lead] Specific executable task for one worker/subagent
+│   │   ├── result.md             # [Worker/Subagent] Execution results
+│   │   └── blocked.md            # [Worker/Subagent] Blocked — needs clarification
+│   └── 02-<subtask-id>/
+│       ├── task.md
+│       ├── result.md
+│       └── blocked.md
 ```
 
 ## Protocol
@@ -22,31 +27,34 @@ tasks/
 
 | Role | Model | Behavior |
 |------|-------|----------|
-| **Lead** | Claude Sonnet (anthropic/claude-sonnet-4) | Plans, reviews, delegates via files. Uses `claude -p` for complex coding subtasks. |
-| **Worker** | DeepSeek V4 Flash (deepseek/deepseek-v4-flash) | Executes tasks exactly as specified. No deviations. |
+| **Lead** | GPT-5.5 via OpenAI Codex | Plans, breaks work into subtasks, reviews, delegates via files/subagents. |
+| **Worker** | DeepSeek V4 Flash via OpenRouter (`deepseek/deepseek-v4-flash`) | Executes tasks exactly as specified. No deviations. |
 
 ### Workflow Steps
 
 ```
-Lead                                      Worker
+Lead                                      Workers/Subagents
   │                                          
-  ├── Writes plan.md                        
-  ├── Writes task.md                        
-  ├── Writes context.md (optional)          
+  ├── Writes parent plan.md
+  ├── Breaks plan into subtasks
+  ├── Creates 01-*/task.md, 02-*/task.md
+  ├── Marks parallelizable/dependencies
   │                                          
-  │                                    ┌──── read task.md + context.md
-  │                                    │     execute precisely
-  │                                    ├──── write result.md
+  │                                    ┌──── worker/subagent A reads 01-*/task.md
+  │                                    │     executes precisely
+  │                                    ├──── writes 01-*/result.md
   │                                    │
-  ├── Reads result.md ◄────────────────┘
-  ├── Reviews against plan.md
-  ├── Writes review.md (APPROVED or ISSUES)
+  │                                    ┌──── worker/subagent B reads 02-*/task.md
+  │                                    │     executes precisely
+  │                                    ├──── writes 02-*/result.md
+  │                                    │
+  ├── Reads all subtask result.md ◄────┘
+  ├── Reviews against plan.md + task.md
+  ├── Writes parent review.md (APPROVED or ISSUES)
   │
-  │                                    ┌──── read review.md
-  │                                    │     if ISSUES → fix, update result.md
-  │                                    ├──── if APPROVED → done (wait)
-  │                                    │
-  ├── Reads updated result.md ◄────────┘
+  │                                    ┌──── workers fix only listed issues
+  │                                    ├──── update result.md
+  │
   ├── If all issues resolved → write done.md
   └── Done!
 ```
@@ -65,6 +73,14 @@ Lead                                      Worker
 - File list with responsibilities
 - Data flow
 - Interfaces/signatures
+
+## Subtasks
+
+| ID | Owner | Parallelizable | Dependencies | Allowed files | Output |
+|----|-------|----------------|--------------|---------------|--------|
+| 01-<name> | worker/subagent | yes/no | none / 02-... | path/glob list | tasks/<task-id>/01-<name>/result.md |
+
+For each subtask, Lead must create `tasks/<task-id>/<subtask-id>/task.md`. Avoid assigning two parallel subtasks to touch the same file.
 
 ## Testing Strategy
 
@@ -139,22 +155,23 @@ What I need from the Lead.
 ## Launch Commands
 
 ```bash
-# Launch as Lead (planner/reviewer) — loads claude-code skill
-lead -s claude-code
+# Launch as Lead (planner/reviewer)
+lead
 
 # Launch as Worker (executor)
 worker
 
 # Or with explicit profile flag:
-hermes --profile lead -s claude-code
+hermes --profile lead
 hermes --profile worker
 ```
 
 ## Rules for Both Agents
 
-1. **Never modify files outside the task directory** unless the task explicitly says so
-2. **Never modify tasks done.md** — only the Lead writes this
-3. **Always read the full task before starting**
-4. **Worker: if you're unsure, write blocked.md — never guess**
-5. **Lead: always review code against plan.md — not just "does it run" but "does it match the architecture"**
-6. **Commit messages: Lead decides when and what to commit**
+1. **Lead: every plan must include a `## Subtasks` table and one `task.md` per subtask**, unless the user explicitly requests a single-task plan
+2. **Never modify files outside the task directory** unless the task explicitly says so
+3. **Worker/Subagent: never modify parent `done.md`** — only the Lead writes final approval
+4. **Always read the full task before starting**
+5. **Worker/Subagent: if you're unsure, write blocked.md — never guess**
+6. **Lead: always review code against plan.md and each subtask task.md — not just "does it run" but "does it match the architecture"**
+7. **Commit messages: Lead decides when and what to commit**

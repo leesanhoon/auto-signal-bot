@@ -1,6 +1,6 @@
 import { withRetry } from "../shared/retry.js";
 import type { MatchAiAnalysis, MatchOddsPayload } from "./betting-types.js";
-import { formatOddsAnalysisInput } from "./odds-text-format.js";
+import { formatFullOddsAnalysisInput, formatOddsAnalysisInput } from "./odds-text-format.js";
 import { createLogger } from "../shared/logger.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
 import { callOpenRouter, type OpenRouterRequest } from "../shared/openrouter.js";
@@ -295,35 +295,25 @@ function buildCandidatePoolText(payload: MatchOddsPayload): string {
 }
 
 function buildAnalyzeUserText(payload: MatchOddsPayload): string {
-  return [
-    `match=${payload.home} vs ${payload.away}`,
-    `kickoff=${payload.kickoffUnix}`,
-    formatOddsAnalysisInput(payload),
-    buildCandidatePoolText(payload),
-  ].join("\n");
+  return formatFullOddsAnalysisInput(payload);
 }
 
 function buildAnalyzeSystemPrompt(): string {
   return [
-    "Bạn là chuyên gia đọc odds bóng đá.",
-    `Chỉ chọn kèo đơn odds > 1.80 và tối đa 3 kèo.`,
-    `Ưu tiên tín hiệu rõ từ snapshot; nếu không đủ edge thì ghi rõ "Đứng ngoài".`,
-    `Tất cả field text phải ngắn, có dấu tiếng Việt, không markdown, không URL, không citation.`,
-    `Không giải thích ngoài schema. Confidence phải phản ánh độ chắc chắn thật.`,
-    `Nếu không có kèo đạt chuẩn, picks phải là mảng rỗng.`,
-    `Không được tự bịa odds; chỉ trả candidateId trong picks.`,
+    "Bạn là chuyên gia phân tích odds bóng đá.",
+    "Chỉ dựa vào dữ liệu odds/correct score được cung cấp trong user message.",
+    "Hãy phân tích khách quan xu hướng odds, kèo đáng chú ý, rủi ro và nếu không rõ edge thì nói đứng ngoài.",
+    "Không cần tự validate lại qua model khác. Không tự bịa dữ liệu ngoài input.",
+    "Tất cả field text bằng tiếng Việt có dấu, ngắn gọn, không markdown, không URL.",
   ].join(" ");
 }
 
 function buildAnalyzeUserPrompt(): string {
   return [
-    `Trả duy nhất JSON với keys match, preferredScoreline, scoreConfidence, recommendation, confidence, picks, keyPoints, risks, summary.`,
-    `picks là mảng tối đa 3 phần tử, mỗi phần tử chỉ cần candidateId.`,
-    `candidateId phải lấy từ danh sách CANDIDATES trong snapshot.`,
-    `Không trả market, selection hay odds trong picks; code sẽ tự hydrate từ snapshot.`,
-    `Không cần marketViews.`,
-    `keyPoints và risks mỗi mảng đúng 2 phần tử, ngắn và cụ thể.`,
-    `recommendation: nếu không có kèo tốt thì phải là "Đứng ngoài".`,
+    "Trả duy nhất JSON với keys match, preferredScoreline, scoreConfidence, recommendation, confidence, picks, keyPoints, risks, summary.",
+    "picks là mảng tối đa 3 kèo AI thấy đáng chú ý; mỗi pick gồm market, selection, odds, reason.",
+    "Nếu không có kèo rõ, picks là [] và recommendation là Đứng ngoài.",
+    "keyPoints và risks mỗi mảng 1-3 phần tử.",
   ].join(" ");
 }
 
@@ -404,7 +394,7 @@ function getCandidateById(
   return candidatePool.find((candidate) => candidate.candidateId === normalized);
 }
 
-function hydratePicks(
+function parseDirectPicks(
   rawPicks: unknown,
   payload: MatchOddsPayload,
 ): NonNullable<MatchAiAnalysis["picks"]> {
@@ -421,24 +411,36 @@ function hydratePicks(
       market?: unknown;
       selection?: unknown;
       odds?: unknown;
+      reason?: unknown;
+      confidence?: unknown;
     };
-    const candidateId = toText(raw.candidateId).toUpperCase();
-    const candidate =
-      (candidateId && getCandidateById(candidatePool, candidateId)) ||
-      resolveLegacyPick(raw, candidatePool);
 
-    if (!candidate || used.has(candidate.candidateId) || candidate.odds <= 1.8) {
-      continue;
-    }
+    const candidateId = toText(raw.candidateId).toUpperCase();
+    const directMarket = toText(raw.market);
+    const directSelection = toText(raw.selection);
+    const directOdds = Number(raw.odds);
+    const candidate =
+      candidateId && getCandidateById(candidatePool, candidateId)
+        ? getCandidateById(candidatePool, candidateId)
+        : resolveLegacyPick(raw, candidatePool);
+
+    const market = directMarket || candidate?.market || "";
+    const selection = directSelection || candidate?.selection || "";
+    const odds = Number.isFinite(directOdds) && directOdds > 0 ? directOdds : candidate?.odds ?? 0;
+    if (!market || !selection || !Number.isFinite(odds) || odds <= 0) continue;
+
+    const resolvedId = candidate?.candidateId || candidateId || undefined;
+    if (resolvedId && used.has(resolvedId)) continue;
 
     picks.push({
-      candidateId: candidate.candidateId,
-      market: candidate.market,
-      selection: candidate.selection,
-      odds: candidate.odds,
+      candidateId: resolvedId,
+      market,
+      selection,
+      odds,
+      reason: toText(raw.reason) || undefined,
+      confidence: Number.isFinite(Number(raw.confidence)) ? clampConfidence(raw.confidence) : undefined,
     });
-    used.add(candidate.candidateId);
-
+    if (resolvedId) used.add(resolvedId);
     if (picks.length >= 3) break;
   }
 
@@ -633,29 +635,7 @@ function parseMatchAnalysisResponseInternal(
 ): MatchAiAnalysis | null {
   try {
     const parsed = JSON.parse(extractJsonObject(text)) as Partial<MatchAiAnalysis>;
-    const hydratedPicks = hydratePicks(parsed.picks, payload);
-    const rawRecommendation = toText(
-      parsed.recommendation,
-      hydratedPicks.length > 0 ? "Theo dõi các kèo đã lọc." : "Đứng ngoài.",
-    );
-    const recommendation =
-      hydratedPicks.length === 0 && !isStandAsideRecommendation(rawRecommendation)
-        ? "Đứng ngoài."
-        : rawRecommendation;
-    return {
-      match: toText(parsed.match, `${payload.home} vs ${payload.away}`),
-      preferredScoreline: toText(parsed.preferredScoreline, "Chưa có tỷ số ưu tiên"),
-      scoreConfidence: clampConfidence(parsed.scoreConfidence),
-      recommendation,
-      confidence: clampConfidence(parsed.confidence),
-      picks: isStandAsideRecommendation(recommendation) ? [] : hydratedPicks,
-      marketViews: Array.isArray(parsed.marketViews)
-        ? (parsed.marketViews as MatchAiAnalysis["marketViews"])
-        : [],
-      keyPoints: sanitizeStringList(parsed.keyPoints, "Không tách được các điểm odds nổi bật."),
-      risks: sanitizeStringList(parsed.risks, "Cẩn thận vì dữ liệu odds chưa cho thấy edge rõ ràng."),
-      summary: toText(parsed.summary, "Không có đủ thông tin để rút ra kết luận ổn định."),
-    };
+    return normalizeAnalysisAfterHydration(parsed, payload);
   } catch {
     return null;
   }
@@ -665,6 +645,30 @@ function sanitizeStringList(value: unknown, fallback: string): string[] {
   if (!Array.isArray(value)) return [fallback];
   const items = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 2);
   return items.length > 0 ? items : [fallback];
+}
+
+function normalizeAnalysisAfterHydration(
+  parsed: Partial<MatchAiAnalysis>,
+  payload: MatchOddsPayload,
+): MatchAiAnalysis {
+  const directPicks = parseDirectPicks(parsed.picks, payload);
+  const recommendation = toText(parsed.recommendation) || (
+    directPicks.length > 0 ? "Theo dõi các kèo AI đề xuất." : "Đứng ngoài."
+  );
+  return {
+    match: toText(parsed.match, `${payload.home} vs ${payload.away}`),
+    preferredScoreline: toText(parsed.preferredScoreline, "Chưa có tỷ số ưu tiên"),
+    scoreConfidence: clampConfidence(parsed.scoreConfidence),
+    recommendation,
+    confidence: clampConfidence(parsed.confidence),
+    picks: directPicks,
+    marketViews: Array.isArray(parsed.marketViews)
+      ? (parsed.marketViews as MatchAiAnalysis["marketViews"])
+      : [],
+    keyPoints: sanitizeStringList(parsed.keyPoints, "Không tách được các điểm odds nổi bật."),
+    risks: sanitizeStringList(parsed.risks, "Cẩn thận vì dữ liệu odds chưa cho thấy edge rõ ràng."),
+    summary: toText(parsed.summary, "Không có đủ thông tin để rút ra kết luận ổn định."),
+  };
 }
 
 export function buildAnalyzeMatchOddsRequest(payload: MatchOddsPayload): OpenRouterRequest {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import type { ScreenshotResult } from "../../src/charts/chart-types.js";
 
 const state = vi.hoisted(() => ({
   call: vi.fn(),
@@ -14,13 +15,13 @@ describe("charts/analyzer", () => {
     state.retry.mockClear();
   });
 
-  test("parseAnalysisResponse filters low-confidence setups", () => {
+  test("parseAnalysisResponse keeps low-confidence setups from AI", () => {
     const parsed = analyzer.parseAnalysisResponse(
-      '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"Trade","confidence":81}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Breakout","reasons":["A"],"risks":["B"],"confidence":72,"entry":"1.10","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"ok"},{"pair":"GBP/USD","direction":"SHORT","setup":"Reversal","reasons":["C"],"risks":["D"],"confidence":69,"entry":"1.25","stopLoss":"1.26","takeProfit1":"1.23","takeProfit2":"1.22","riskReward":"1:2","summary":"skip"}],"noSetupReason":"none"}',
+      '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"Trade","confidence":81}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Breakout","reasons":["A"],"risks":["B"],"confidence":72,"entry":"1.10","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"ok"},{"pair":"GBP/USD","direction":"SHORT","setup":"Reversal","reasons":["C"],"risks":["D"],"confidence":30,"entry":"1.25","stopLoss":"1.26","takeProfit1":"1.23","takeProfit2":"1.22","riskReward":"1:2","summary":"skip"}],"noSetupReason":"none"}',
     );
     expect(parsed.summaries).toHaveLength(1);
-    expect(parsed.setups).toHaveLength(1);
-    expect(parsed.setups[0].pair).toBe("EUR/USD");
+    expect(parsed.setups).toHaveLength(2);
+    expect(parsed.setups[1].pair).toBe("GBP/USD");
   });
 
   test("parseAnalysisResponse defaults order type for legacy setups", () => {
@@ -48,40 +49,61 @@ describe("charts/analyzer", () => {
       text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
       usage: { promptTokens: 10, completionTokens: 20 },
     });
-    const screenshots = [{ chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("image"), filepath: "/tmp/chart.jpg" }];
+    const screenshots: ScreenshotResult[] = [
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
+        buffer: Buffer.from("d1"),
+        filepath: "/tmp/chart-d1.jpg",
+      },
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
+        buffer: Buffer.from("h4"),
+        filepath: "/tmp/chart-h4.jpg",
+      },
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
+        buffer: Buffer.from("m15"),
+        filepath: "/tmp/chart-m15.jpg",
+      },
+    ];
     const result = await analyzer.analyzeAllCharts(screenshots);
     expect(result.setups[0].pair).toBe("EUR/USD");
+    expect(result.setups[0].sourceCharts).toEqual([
+      { symbol: "EURUSD", name: "EUR/USD D1", timeframe: "D1", filepath: "/tmp/chart-d1.jpg" },
+      { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", filepath: "/tmp/chart-h4.jpg" },
+      { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", filepath: "/tmp/chart-m15.jpg" },
+    ]);
     expect(result.screenshots).toBe(screenshots);
     expect(state.call.mock.calls[0][0].userContent[0].image_url.url).toMatch(/^data:image\/jpeg;base64,/);
   });
 
-  test("confirmHighConfidenceSetups attaches OpenRouter verification", async () => {
+  test("analyzeAllCharts keeps normalized setup pairs when screenshots use slash-form pair names", async () => {
     state.call.mockResolvedValueOnce({
-      text: '{"confirmed":true,"confidence":91,"comment":"aligned"}',
-      usage: { promptTokens: 0, completionTokens: 0 },
+      text: '{"summaries":[{"pair":"EURUSD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EURUSD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
+      usage: { promptTokens: 10, completionTokens: 20 },
     });
-    const setup = {
-      pair: "EUR/USD", direction: "LONG" as const, setup: "Pullback", reasons: ["EMA"],
-      risks: ["Noise"], confidence: 85, entry: "1.1", stopLoss: "1.09",
-      takeProfit1: "1.12", takeProfit2: "1.13", riskReward: "1:2", summary: "Valid",
-    };
-    const screenshots = [{
-      chart: { symbol: "OANDA:EURUSD", name: "EUR/USD H4", timeframe: "H4" as const },
-      buffer: Buffer.from("image"),
-      filepath: "/tmp/chart.jpg",
-    }];
+    const screenshots: ScreenshotResult[] = [
+      {
+        chart: { symbol: "EUR/USD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
+        buffer: Buffer.from("d1"),
+        filepath: "/tmp/chart-d1.jpg",
+      },
+      {
+        chart: { symbol: "EUR/USD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
+        buffer: Buffer.from("h4"),
+        filepath: "/tmp/chart-h4.jpg",
+      },
+      {
+        chart: { symbol: "EUR/USD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
+        buffer: Buffer.from("m15"),
+        filepath: "/tmp/chart-m15.jpg",
+      },
+    ];
 
-    const [verified] = await analyzer.confirmHighConfidenceSetups([setup], screenshots);
+    const result = await analyzer.analyzeAllCharts(screenshots);
 
-    expect(verified).toMatchObject({
-      verifiedConfirmed: true,
-      verifiedConfidence: 91,
-      verifiedBy: "moonshotai/kimi-k2.6",
-    });
-    expect(state.call.mock.calls[0][0].userContent[0]).toMatchObject({
-      type: "image_url",
-      image_url: { url: expect.stringMatching(/^data:image\/jpeg;base64,/) },
-    });
-    expect(state.call.mock.calls[0][0].userContent[1]).toMatchObject({ type: "text" });
+    expect(result.setups).toHaveLength(1);
+    expect(result.setups[0].pair).toBe("EURUSD");
+    expect(result.setups[0].sourceCharts).toHaveLength(3);
   });
 });
