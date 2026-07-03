@@ -8,10 +8,16 @@ import type {
 } from "./betting-types.js";
 import { buildOddsPayload, pickNearestUpcomingDateMatches } from "./betting.js";
 import { generateCombinedAnalysis } from "./betting-gemini.js";
-import { saveBettingAnalysisSnapshot } from "./betting-analysis-repository.js";
+import {
+  loadRecentSnapshotsByGameIds,
+  saveBettingAnalysisSnapshot,
+  savePlanCache,
+  loadRecentPlanCache,
+} from "./betting-analysis-repository.js";
 import { loadUpcomingMatches } from "./match-repository.js";
 import {
   formatBettingPlanMessage,
+  formatCachedAnalysisMessage,
   formatOddsText,
   formatPicksSummaryBlock,
   sortMatchOddsByKickoff,
@@ -123,10 +129,50 @@ export async function runOddsCheck(): Promise<void> {
     await sendMessage(formatOddsText(match));
   }
 
+  // Kiểm tra cache 30 phút trước khi gọi AI
   let plan: CombinedAnalysisPlan | null = null;
+  const gameIds = sortedPayload.map((p) => p.gameId);
+  const dateStr = vnDateStr(Date.now());
   try {
-    logger.info(`\n📤 Gui combined analysis len Telegram (${payload.length} tran)...`);
-    plan = await generateCombinedAnalysis(payload);
+    const cachedSnapshots = await loadRecentSnapshotsByGameIds(gameIds, 30 * 60 * 1000);
+    if (cachedSnapshots.length === gameIds.length) {
+      logger.info("↻ Dùng lại phân tích đã cache trong 30 phút gần nhất, bỏ qua gọi AI");
+      const cachedMessage = formatCachedAnalysisMessage(sortedPayload, cachedSnapshots);
+
+      // Cố tải plan cache để hiển thị kèo ghép
+      let planBlock = "";
+      try {
+        const cachedPlan = await loadRecentPlanCache(dateStr, gameIds, 30 * 60 * 1000);
+        if (cachedPlan) {
+          planBlock = formatBettingPlanMessage(cachedPlan);
+        } else {
+          planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Dữ liệu không còn, cần chạy phân tích lại để xem kèo ghép đề xuất.";
+        }
+      } catch {
+        planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Lỗi khi đọc dữ liệu, cần chạy phân tích lại.";
+      }
+
+      // Gộp message cache + plan
+      const fullMessage = [
+        "📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC (CACHE)*",
+        "",
+        cachedMessage.trim(),
+        "═══════════════════════",
+        planBlock.trim(),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      await sendMessage(fullMessage);
+      logger.info(`\n✅ Da phan tich xong ${sortedPayload.length} tran (cache).`);
+      return;
+    }
+  } catch {
+    // Lỗi khi đọc cache — coi như cache miss, fallback về gọi AI
+  }
+
+  try {
+    logger.info(`\n📤 Gui combined analysis len Telegram (${sortedPayload.length} tran)...`);
+    plan = await generateCombinedAnalysis(sortedPayload);
   } catch (error) {
     logger.warn(
       `  ⚠ Combined analysis failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -154,5 +200,17 @@ export async function runOddsCheck(): Promise<void> {
   }
 
   await saveCombinedAnalysisSnapshots(payload, plan);
+
+  // Lưu plan cache để tái sử dụng lần tới nếu cache hit
+  try {
+    const dateStr = vnDateStr(Date.now());
+    const gameIds = sortedPayload.map((p) => p.gameId);
+    await savePlanCache(dateStr, gameIds, plan);
+  } catch (cacheSaveError) {
+    logger.warn(
+      `  ⚠ Failed to save plan cache: ${cacheSaveError instanceof Error ? cacheSaveError.message : String(cacheSaveError)}`,
+    );
+  }
+
   logger.info(`\n✅ Da phan tich xong ${payload.length} tran (combined mode).`);
 }

@@ -10,6 +10,7 @@ import { sendMessage } from "../shared/telegram.js";
 import type { LotteryRegion } from "./lottery-types.js";
 import { createLogger } from "../shared/logger.js";
 import type { AiNumberPrediction } from "./lottery-ai-predict.js";
+import { loadDrawStatus, saveDrawStatus } from "./lottery-draw-status-repository.js";
 
 const logger = createLogger("lottery:lottery-predict-runner");
 const REGIONS: LotteryRegion[] = ["mien-nam", "mien-trung", "mien-bac"];
@@ -41,16 +42,30 @@ function vnDateOffset(offsetDays: number): {
   return { dateStr: vnNow.toISOString().slice(0, 10), weekday: vnNow.getDay() };
 }
 
-/** Đã có kết quả thật hôm nay của miền này chưa — kiểm tra trực tiếp bằng scrape, không đoán theo giờ cố định
- * (giờ quay xong thực tế dao động mỗi ngày, đoán bằng giờ cố định dễ sai như đã gặp với Miền Nam). */
+/** Đã có kết quả thật hôm nay của miền này chưa — dùng cache trước, scrape fallback.
+ * Cache lưu dạng (date, region) → drawn=true. Nếu chưa có kết quả KHÔNG cache false
+ * (vì giờ quay số dao động), để lần sau thử scrape lại. */
 async function hasDrawnToday(
   region: LotteryRegion,
   dateStr: string,
   weekday: number,
 ): Promise<boolean> {
+  // Thử cache trước
+  const cached = await loadDrawStatus(dateStr, region);
+  if (cached === true) {
+    logger.info(`↻ [${region}] Cache trả "đã có kết quả" cho ${dateStr} — bỏ qua scrape.`);
+    return true;
+  }
+
+  // Cache miss hoặc chưa có — scrape thật
   try {
     const records = await fetchActualRecords(region, dateStr, weekday);
-    return records.length > 0;
+    const drawn = records.length > 0;
+    if (drawn) {
+      // Chỉ cache khi biết chắc đã có kết quả
+      await saveDrawStatus(dateStr, region, true);
+    }
+    return drawn;
   } catch {
     return false;
   }
@@ -78,7 +93,7 @@ function formatReason(reason: string): string {
 const RANK_MEDAL = ["🥇", "🥈", "🥉"];
 
 /** Dự đoán AI top 3 số dễ ra mỗi miền — mỗi miền tự tính đúng ngày/thứ mục tiêu (hôm nay hoặc ngày mai nếu đã quay xong). */
-export async function runLotteryPredict(): Promise<void> {
+export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Promise<void> {
   const today = vnDateOffset(0);
   logger.info(
     `🔮 Lottery Predictor — chạy ngày ${today.dateStr} (${WEEKDAY_LABELS[today.weekday]})\n`,
@@ -96,7 +111,7 @@ export async function runLotteryPredict(): Promise<void> {
 
   const lines: string[] = ["🔮 *DỰ ĐOÁN XỔ SỐ*", ""];
   const regionResults = await Promise.allSettled(
-    REGIONS.map(async (region): Promise<RegionPredictionResult | null> => {
+    regions.map(async (region): Promise<RegionPredictionResult | null> => {
       const target = await targetForRegion(region, today);
       const weekdayLabel = WEEKDAY_LABELS[target.weekday];
       const history = await historyForWeekday(target.weekday);
@@ -175,14 +190,14 @@ export async function runLotteryPredict(): Promise<void> {
   );
 
   const resolvedResults: Array<RegionPredictionResult | null> = regionResults.map(
-    (result, index) => {
-      if (result.status === "fulfilled") return result.value;
-      logger.error(
-        `✗ [${REGIONS[index]}] AI dự đoán lỗi — bỏ qua miền này: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
-      );
-      return null;
-    },
-  );
+      (result, index) => {
+        if (result.status === "fulfilled") return result.value;
+        logger.error(
+          `✗ [${regions[index]}] AI dự đoán lỗi — bỏ qua miền này: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+        );
+        return null;
+      },
+    );
 
   let anyPrediction = false;
   for (const result of resolvedResults) {

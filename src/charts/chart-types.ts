@@ -1,3 +1,9 @@
+export type CandleRangeStats = {
+  high: number;
+  low: number;
+  lastClose: number | null;
+};
+
 export type ChartTimeframe = "M15" | "H4" | "D1";
 
 export type ChartOrderType =

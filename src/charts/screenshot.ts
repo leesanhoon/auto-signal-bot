@@ -2,7 +2,7 @@ import { chromium, type BrowserContext, type Frame } from "playwright";
 import { mkdir } from "fs/promises";
 import { join } from "path";
 import { CHARTS, buildChartHtml } from "./charts.config.js";
-import type { ChartTimeframe, ScreenshotResult } from "./chart-types.js";
+import type { CandleRangeStats, ChartTimeframe, ScreenshotResult } from "./chart-types.js";
 import { createLogger } from "../shared/logger.js";
 
 const SCREENSHOT_DIR = join(process.cwd(), "screenshots");
@@ -124,6 +124,94 @@ async function fetchFallbackLastPrice(symbol: string): Promise<number | null> {
   const closes = payload.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
   const lastClose = [...closes].reverse().find((value) => typeof value === "number" && Number.isFinite(value));
   return typeof lastClose === "number" ? lastClose : null;
+}
+
+export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Promise<CandleRangeStats | null> {
+  const fallbackSymbol = FALLBACK_SYMBOLS[symbol];
+  if (!fallbackSymbol) {
+    return null;
+  }
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(fallbackSymbol)}?interval=2m&range=1d`;
+  const response = await fetch(url, {
+    headers: { "user-agent": "Mozilla/5.0" },
+  });
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as {
+    chart?: {
+      result?: Array<{
+        timestamp?: number[];
+        indicators?: {
+          quote?: Array<{
+            high?: Array<number | null>;
+            low?: Array<number | null>;
+            close?: Array<number | null>;
+          }>;
+        };
+      }>;
+    };
+  };
+
+  const result = payload.chart?.result?.[0];
+  const quote = result?.indicators?.quote?.[0];
+  if (!quote) {
+    return null;
+  }
+
+  const timestamps = result?.timestamp ?? [];
+  const highs = quote.high ?? [];
+  const lows = quote.low ?? [];
+  const closes = quote.close ?? [];
+
+  // Yahoo Finance trả timestamp ở đơn vị epoch-seconds
+  // Chuyển sinceMs về seconds để so sánh
+  const sinceSec = Math.floor(sinceMs / 1000);
+
+  // Nếu không có timestamp, không thể lọc theo sinceMs — trả null để fallback về AI vision
+  if (timestamps.length === 0) {
+    return null;
+  }
+
+  // Nếu timestamps không khớp độ dài với highs/lows → dữ liệu không nhất quán, trả null
+  if (timestamps.length !== highs.length) {
+    return null;
+  }
+
+  // Lọc chỉ giữ các nến có timestamp >= sinceMs
+  const filteredHighs: number[] = [];
+  const filteredLows: number[] = [];
+  for (let i = 0; i < highs.length; i++) {
+    if (timestamps[i] < sinceSec) {
+      continue;
+    }
+    const h = highs[i];
+    const l = lows[i];
+    if (typeof h === "number" && Number.isFinite(h)) {
+      filteredHighs.push(h);
+    }
+    if (typeof l === "number" && Number.isFinite(l)) {
+      filteredLows.push(l);
+    }
+  }
+
+  if (filteredHighs.length === 0 || filteredLows.length === 0) {
+    return null;
+  }
+
+  const high = Math.max(...filteredHighs);
+  const low = Math.min(...filteredLows);
+
+  // lastClose lấy từ toàn bộ mảng gốc (giá đóng cửa gần nhất luôn có nghĩa)
+  const lastClose = [...closes].reverse().find((value) => typeof value === "number" && Number.isFinite(value));
+
+  return {
+    high,
+    low,
+    lastClose: typeof lastClose === "number" ? lastClose : null,
+  };
 }
 
 async function resolveLastPrice(

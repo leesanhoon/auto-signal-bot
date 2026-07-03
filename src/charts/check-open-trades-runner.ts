@@ -1,9 +1,10 @@
-import { captureVerificationChartScreenshot, findChartForPair } from "./screenshot.js";
+import { captureVerificationChartScreenshot, fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
 import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository.js";
 import { decidePosition } from "./position-decision.js";
 import { buildPositionDecisionMessage, sendMessage, sendPhoto } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine.js";
+import type { CandleRangeStats } from "./chart-types.js";
 
 const logger = createLogger("charts:check-open-trades");
 
@@ -19,9 +20,9 @@ function formatPrice(value: number): string {
 
 function resolvePositionByPrice(
   position: Awaited<ReturnType<typeof loadOpenPositions>>[number],
-  lastPrice: number | null,
+  stats: CandleRangeStats | null,
 ): PositionDecisionOutcome | null {
-  if (lastPrice === null || !Number.isFinite(lastPrice)) {
+  if (stats === null) {
     return null;
   }
 
@@ -35,11 +36,11 @@ function resolvePositionByPrice(
   const tp1AlreadyClosed = (position.tp1ClosedPercent ?? 0) > 0 || position.tradeStage === "tp1_partial";
 
   if (position.direction === "LONG") {
-    if (lastPrice <= stopLoss) {
+    if (stats.low <= stopLoss) {
       return {
         decision: "STOP",
         confidence: 99,
-        comment: `Giá thật ${formatPrice(lastPrice)} đã xuống dưới stop loss ${formatPrice(stopLoss)}.`,
+        comment: `Giá thấp nhất ${formatPrice(stats.low)} đã xuống dưới stop loss ${formatPrice(stopLoss)}.`,
         managementAction: "NONE",
         partialClosePercent: 0,
         newStopLoss: null,
@@ -51,11 +52,11 @@ function resolvePositionByPrice(
       };
     }
 
-    if (takeProfit2 !== null && lastPrice >= takeProfit2) {
+    if (takeProfit2 !== null && stats.high >= takeProfit2) {
       return {
         decision: "CLOSE",
         confidence: 99,
-        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
+        comment: `Giá cao nhất ${formatPrice(stats.high)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
         managementAction: "TP2_CLOSE",
         partialClosePercent: 0,
         newStopLoss: null,
@@ -67,11 +68,11 @@ function resolvePositionByPrice(
       };
     }
 
-    if (!tp1AlreadyClosed && lastPrice >= takeProfit1) {
+    if (!tp1AlreadyClosed && stats.high >= takeProfit1) {
       return {
         decision: "HOLD",
         confidence: 96,
-        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
+        comment: `Giá cao nhất ${formatPrice(stats.high)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
         managementAction: "PARTIAL_TP1",
         partialClosePercent: 50,
         newStopLoss: position.entry,
@@ -83,11 +84,11 @@ function resolvePositionByPrice(
       };
     }
   } else {
-    if (lastPrice >= stopLoss) {
+    if (stats.high >= stopLoss) {
       return {
         decision: "STOP",
         confidence: 99,
-        comment: `Giá thật ${formatPrice(lastPrice)} đã vượt stop loss ${formatPrice(stopLoss)}.`,
+        comment: `Giá cao nhất ${formatPrice(stats.high)} đã vượt stop loss ${formatPrice(stopLoss)}.`,
         managementAction: "NONE",
         partialClosePercent: 0,
         newStopLoss: null,
@@ -99,11 +100,11 @@ function resolvePositionByPrice(
       };
     }
 
-    if (takeProfit2 !== null && lastPrice <= takeProfit2) {
+    if (takeProfit2 !== null && stats.low <= takeProfit2) {
       return {
         decision: "CLOSE",
         confidence: 99,
-        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
+        comment: `Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
         managementAction: "TP2_CLOSE",
         partialClosePercent: 0,
         newStopLoss: null,
@@ -115,11 +116,11 @@ function resolvePositionByPrice(
       };
     }
 
-    if (!tp1AlreadyClosed && lastPrice <= takeProfit1) {
+    if (!tp1AlreadyClosed && stats.low <= takeProfit1) {
       return {
         decision: "HOLD",
         confidence: 96,
-        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
+        comment: `Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
         managementAction: "PARTIAL_TP1",
         partialClosePercent: 50,
         newStopLoss: position.entry,
@@ -150,7 +151,8 @@ async function processPosition(position: Awaited<ReturnType<typeof loadOpenPosit
   await sendPhoto(screenshot.buffer, `📊 ${position.pair} - kiểm tra vị thế (${chart.timeframe})`);
 
   const decision = await decidePosition(position, screenshot);
-  const priceDecision = resolvePositionByPrice(position, screenshot.lastPrice);
+  const stats = await fetchCandleRangeStats(chart.symbol, new Date(position.openedAt).getTime());
+  const priceDecision = resolvePositionByPrice(position, stats);
   const effectiveDecision = priceDecision ?? decision;
   const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, effectiveDecision);
   await updatePositionDecision(position.id, effectiveDecision, patch);

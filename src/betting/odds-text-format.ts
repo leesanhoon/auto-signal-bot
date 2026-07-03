@@ -5,6 +5,7 @@ import type {
   MatchOddsPayload,
   BettingPlan,
 } from "./betting-types.js";
+import type { BettingAnalysisSnapshot } from "./betting-analysis-repository.js";
 
 function findMarket(
   payload: MatchOddsPayload,
@@ -68,7 +69,9 @@ function abbreviateTeamName(value: string): string {
 
   const words = normalized.split(" ");
   if (words.length === 1) {
-    return normalized.length <= 6 ? normalized : normalized.slice(0, 4).trimEnd();
+    return normalized.length <= 6
+      ? normalized
+      : normalized.slice(0, 4).trimEnd();
   }
 
   const initials = words
@@ -76,7 +79,9 @@ function abbreviateTeamName(value: string): string {
     .filter(Boolean)
     .join("");
 
-  return initials.length >= 2 ? initials.toUpperCase() : compactText(normalized, 8);
+  return initials.length >= 2
+    ? initials.toUpperCase()
+    : compactText(normalized, 8);
 }
 
 function abbreviateMatchLabel(label: string): string {
@@ -93,7 +98,9 @@ function pickPrimaryTopPick(
 ): BettingPlan["matches"][number]["topPicks"][number] | undefined {
   if (!Array.isArray(picks) || picks.length === 0) return undefined;
   return (
-    picks.find((pick) => pick.suitability === "single" || pick.suitability === "both") ??
+    picks.find(
+      (pick) => pick.suitability === "single" || pick.suitability === "both",
+    ) ??
     picks.find((pick) => pick.suitability === "parlay") ??
     picks[0]
   );
@@ -117,7 +124,9 @@ function pickTopRecommendation(
   payloads: MatchOddsPayload[],
   plan: CombinedAnalysisPlan,
 ): string | undefined {
-  const sorted = [...plan.matches].sort((a, b) => b.scoreConfidence - a.scoreConfidence);
+  const sorted = [...plan.matches].sort(
+    (a, b) => b.scoreConfidence - a.scoreConfidence,
+  );
   const best = sorted[0];
   if (!best) return undefined;
 
@@ -467,9 +476,16 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
   const a = findOutcome(h2h, "A")?.price;
   if (h !== undefined && d !== undefined && a !== undefined) {
     const fav = Math.min(h, a, d);
-    const favLabel = fav === h ? `${payload.home}🏠` : fav === a ? `${payload.away}✈️` : "Hòa🤝";
+    const favLabel =
+      fav === h
+        ? `${payload.home}🏠`
+        : fav === a
+          ? `${payload.away}✈️`
+          : "Hòa🤝";
     lines.push(`📊 *1X2*`);
-    lines.push(`🏠 ${payload.home}: ${h}  🤝 Hòa: ${d}  ✈️ ${payload.away}: ${a}`);
+    lines.push(
+      `🏠 ${payload.home}: ${h}  🤝 Hòa: ${d}  ✈️ ${payload.away}: ${a}`,
+    );
     lines.push(`   👑 Ưu thế: ${favLabel} (ngắn nhất @${fav})`);
   }
 
@@ -480,7 +496,8 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
     for (const o of hcp.outcomes) {
       const label = o.name === "H" ? payload.home : payload.away;
       const pt = o.point !== undefined ? fmtSignedPoint(o.point) : "";
-      const adjustedPt = o.name === "A" && o.point !== undefined ? fmtSignedPoint(-o.point) : pt;
+      const adjustedPt =
+        o.name === "A" && o.point !== undefined ? fmtSignedPoint(-o.point) : pt;
       lines.push(`   ${label} ${adjustedPt} @${o.price.toFixed(2)}`);
     }
   }
@@ -491,7 +508,9 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
     lines.push(`⚽ *Tài/Xỉu (EU)*`);
     for (const o of euTot.outcomes) {
       const lbl = o.name === "Over" ? "🔴 Tài" : "🔵 Xỉu";
-      lines.push(`   ${lbl} ${o.point !== undefined ? fmtNum(o.point) : ""} @${o.price.toFixed(2)}`);
+      lines.push(
+        `   ${lbl} ${o.point !== undefined ? fmtNum(o.point) : ""} @${o.price.toFixed(2)}`,
+      );
     }
   }
 
@@ -501,7 +520,9 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
     lines.push(`⚽ *Tài/Xỉu (Asian)*`);
     for (const o of asiaTot.outcomes) {
       const lbl = o.name === "Over" ? "🔴 Tài" : "🔵 Xỉu";
-      lines.push(`   ${lbl} ${o.point !== undefined ? fmtNum(o.point) : ""} @${o.price.toFixed(2)}`);
+      lines.push(
+        `   ${lbl} ${o.point !== undefined ? fmtNum(o.point) : ""} @${o.price.toFixed(2)}`,
+      );
     }
   }
 
@@ -537,7 +558,9 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
     const ca = findOutcome(corners, "A")?.price;
     if (ch !== undefined && cd !== undefined && ca !== undefined) {
       lines.push(`🏁 *Phạt góc*`);
-      lines.push(`   🏠 ${payload.home}: ${ch}  🤝 Hòa: ${cd}  ✈️ ${payload.away}: ${ca}`);
+      lines.push(
+        `   🏠 ${payload.home}: ${ch}  🤝 Hòa: ${cd}  ✈️ ${payload.away}: ${ca}`,
+      );
     }
   }
 
@@ -558,7 +581,10 @@ export function formatPicksSummaryBlock(
     const payload = payloads[match.matchIndex];
     const pick = pickPrimaryTopPick(match.topPicks);
     if (!payload || !pick) continue;
-    const matchLabel = compactText(match.matchLabel || `${payload.home} vs ${payload.away}`, 40);
+    const matchLabel = compactText(
+      match.matchLabel || `${payload.home} vs ${payload.away}`,
+      40,
+    );
     const selection = compactText(pick.selection, 48);
     lines.push(
       `*${matchLabel}* | ${selection} @${pick.odds} | TS: ${compactText(match.preferredScoreline, 16)} (TT ${match.scoreConfidence}%)`,
@@ -603,7 +629,10 @@ export function formatBettingPlanMessage(plan: BettingPlan): string {
       const typeIcon = getParlayTypeIcon(type);
       const lines = pList.map((p) => {
         const legs = p.legs
-          .map((l) => `${abbreviateMatchLabel(l.matchLabel)}: ${compactText(l.pick.selection, 32)} @${l.pick.odds}`)
+          .map(
+            (l) =>
+              `${abbreviateMatchLabel(l.matchLabel)}: ${compactText(l.pick.selection, 32)} @${l.pick.odds}`,
+          )
           .join(" | ");
         const displayIndex = circledNumber(parlayIndex);
         parlayIndex += 1;
@@ -623,9 +652,7 @@ export function formatBettingPlanMessage(plan: BettingPlan): string {
       singleIndex += 1;
       return `${displayIndex} ${abbreviateMatchLabel(s.matchLabel)}: ${s.pick.selection} @${s.pick.odds}`;
     });
-    sections.push(
-      `📌 *KÈO ĐƠN*\n${lines.join("\n")}`,
-    );
+    sections.push(`📌 *KÈO ĐƠN*\n${lines.join("\n")}`);
   }
 
   return sections.join("\n\n");
@@ -665,4 +692,71 @@ export function formatCombinedOddsMessage(
   }
 
   return blockParts.join("\n\n");
+}
+
+/**
+ * Format message từ danh sách BettingAnalysisSnapshot đã cache (không gọi AI).
+ * Dùng khi cache hit cho tất cả gameIds trong payload — thay thế buildCombinedAnalysisMessage.
+ */
+export function formatCachedAnalysisMessage(
+  payloads: MatchOddsPayload[],
+  snapshots: BettingAnalysisSnapshot[],
+): string {
+  const snapshotByGameId = new Map(snapshots.map((s) => [s.gameId, s]));
+  const sections: string[] = [];
+
+  // Tổng quan từ summary của trận đầu
+  const first = snapshots[0];
+  if (first?.analysis?.summary) {
+    sections.push(`💡 *Tổng quan:* ${first.analysis.summary}`);
+  } else {
+    sections.push("💡 *Tổng quan:* Không có tóm tắt.");
+  }
+
+  // Danh sách kèo từng trận (đầy đủ như fresh)
+  const matchSections: string[] = [];
+  for (const payload of payloads) {
+    const snap = snapshotByGameId.get(payload.gameId);
+    if (!snap) continue;
+    const analysis = snap.analysis;
+    const picks = analysis.picks ?? [];
+
+    const lines: string[] = [];
+    lines.push(`*${analysis.match}*`);
+
+    // Preferred scoreline
+    if (analysis.preferredScoreline) {
+      lines.push(`TS: ${analysis.preferredScoreline} (${analysis.scoreConfidence}%)`);
+    }
+
+    // Key points
+    if (analysis.keyPoints && analysis.keyPoints.length > 0) {
+      for (const kp of analysis.keyPoints) {
+        lines.push(`• ${kp}`);
+      }
+    }
+
+    // Risks
+    if (analysis.risks && analysis.risks.length > 0) {
+      for (const risk of analysis.risks) {
+        lines.push(`⚠️ ${risk}`);
+      }
+    }
+
+    // Picks
+    if (picks.length > 0) {
+      for (const pick of picks) {
+        const reason = pick.reason ? ` — ${pick.reason}` : "";
+        lines.push(`🎯 ${pick.selection} @${pick.odds}${reason}`);
+      }
+    }
+
+    matchSections.push(lines.join("\n"));
+  }
+
+  if (matchSections.length > 0) {
+    sections.push(`🎯 *Các kèo được chọn (từ cache)*\n\n${matchSections.join("\n\n")}`);
+  }
+
+  return sections.join("\n\n");
 }

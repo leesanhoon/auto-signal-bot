@@ -1,4 +1,4 @@
-import { captureVerificationChartScreenshot, findChartForPair } from "./screenshot.js";
+import { captureVerificationChartScreenshot, fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
 import {
   findOpenPositionIdByPair,
   loadPendingOrders,
@@ -15,7 +15,7 @@ import { withRetry } from "../shared/retry.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
 import { createLogger } from "../shared/logger.js";
 import { sendMessage, sendPhoto } from "../shared/telegram.js";
-import type { PendingOrder, TradeSetup } from "./chart-types.js";
+import type { CandleRangeStats, PendingOrder, TradeSetup } from "./chart-types.js";
 
 const logger = createLogger("charts:check-pending-orders");
 const AI_PENDING_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
@@ -32,9 +32,9 @@ function formatPrice(value: number): string {
 
 function resolvePendingOrderByPrice(
   order: PendingOrder,
-  lastPrice: number | null,
+  stats: CandleRangeStats | null,
 ): { status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string } | null {
-  if (lastPrice === null || !Number.isFinite(lastPrice)) {
+  if (stats === null) {
     return null;
   }
 
@@ -44,32 +44,32 @@ function resolvePendingOrderByPrice(
     return null;
   }
 
-  if (order.direction === "LONG" && lastPrice <= stopLoss) {
+  if (order.direction === "LONG" && stats.low <= stopLoss) {
     return {
       status: "CANCELLED",
       confidence: 98,
-      comment: `Giá thật ${formatPrice(lastPrice)} đã xuyên stop loss, hủy lệnh chờ.`,
+      comment: `Giá thấp nhất ${formatPrice(stats.low)} đã xuyên stop loss, hủy lệnh chờ.`,
     };
   }
 
-  if (order.direction === "SHORT" && lastPrice >= stopLoss) {
+  if (order.direction === "SHORT" && stats.high >= stopLoss) {
     return {
       status: "CANCELLED",
       confidence: 98,
-      comment: `Giá thật ${formatPrice(lastPrice)} đã xuyên stop loss, hủy lệnh chờ.`,
+      comment: `Giá cao nhất ${formatPrice(stats.high)} đã xuyên stop loss, hủy lệnh chờ.`,
     };
   }
 
   const triggered = (() => {
     switch (order.orderType) {
       case "BUY_STOP":
-        return lastPrice >= entry;
+        return stats.high >= entry;
       case "SELL_STOP":
-        return lastPrice <= entry;
+        return stats.low <= entry;
       case "BUY_LIMIT":
-        return lastPrice <= entry;
+        return stats.low <= entry;
       case "SELL_LIMIT":
-        return lastPrice >= entry;
+        return stats.high >= entry;
       case "WAIT_FOR_CONFIRMATION":
       default:
         return false;
@@ -80,7 +80,7 @@ function resolvePendingOrderByPrice(
     return {
       status: "TRIGGERED",
       confidence: 96,
-      comment: `Giá thật ${formatPrice(lastPrice)} đã chạm entry.`,
+      comment: `Giá cao nhất ${formatPrice(stats.high)} / giá thấp nhất ${formatPrice(stats.low)} đã chạm entry.`,
     };
   }
 
@@ -156,7 +156,8 @@ async function reviewPendingOrder(order: PendingOrder): Promise<{
     throw new Error(`Pending order parse failed. Raw: ${response.text.slice(0, 300)}`);
   }
 
-  const priceDecision = resolvePendingOrderByPrice(order, screenshot.lastPrice);
+  const stats = await fetchCandleRangeStats(chart.symbol, new Date(order.createdAt).getTime());
+  const priceDecision = resolvePendingOrderByPrice(order, stats);
   return priceDecision ?? parsed;
 }
 

@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../../src/shared/openrouter.js", () => ({ callOpenRouter: vi.fn() }));
-vi.mock("../../src/shared/ai-usage.js", () => ({ recordOpenRouterUsage: vi.fn() }));
+vi.mock("../../src/shared/ai-usage.js", () => ({
+  recordOpenRouterUsage: vi.fn(),
+}));
 const bettingGemini = await import("../../src/betting/betting-gemini.js");
 const openrouter = await import("../../src/shared/openrouter.js");
 const aiUsage = await import("../../src/shared/ai-usage.js");
@@ -10,6 +12,7 @@ const recordOpenRouterUsage = vi.mocked(aiUsage.recordOpenRouterUsage);
 beforeEach(() => {
   recordOpenRouterUsage.mockReset();
   vi.mocked(openrouter.callOpenRouter).mockReset();
+  delete process.env.AI_REASONING_EFFORT;
 });
 
 describe("parseMatchAnalysisResponse", () => {
@@ -41,9 +44,15 @@ describe("parseMatchAnalysisResponse", () => {
     });
 
     expect(callOpenRouter).toHaveBeenCalledTimes(2);
-    expect(callOpenRouter.mock.calls[0][0].model).toBe("deepseek/deepseek-v4-pro");
-    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
-    expect(callOpenRouter.mock.calls[1][0].model).toBe("deepseek/deepseek-v4-flash");
+    expect(callOpenRouter.mock.calls[0][0].model).toBe(
+      "deepseek/deepseek-v4-pro",
+    );
+    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([
+      { id: "web", max_results: 3 },
+    ]);
+    expect(callOpenRouter.mock.calls[1][0].model).toBe(
+      "deepseek/deepseek-v4-flash",
+    );
     expect(callOpenRouter.mock.calls[1][0].plugins).toBeUndefined();
     expect(result.recommendation).toBe("Đứng ngoài.");
     expect(recordOpenRouterUsage).toHaveBeenCalledWith(
@@ -85,8 +94,12 @@ describe("parseMatchAnalysisResponse", () => {
     });
 
     expect(callOpenRouter).toHaveBeenCalledTimes(2);
-    expect(callOpenRouter.mock.calls[0][0].model).toBe("deepseek/deepseek-v4-pro");
-    expect(callOpenRouter.mock.calls[1][0].model).toBe("deepseek/deepseek-v4-flash");
+    expect(callOpenRouter.mock.calls[0][0].model).toBe(
+      "deepseek/deepseek-v4-pro",
+    );
+    expect(callOpenRouter.mock.calls[1][0].model).toBe(
+      "deepseek/deepseek-v4-flash",
+    );
     expect(recordOpenRouterUsage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -101,7 +114,9 @@ describe("parseMatchAnalysisResponse", () => {
   test("records total request count when the primary analyze request retries", async () => {
     const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
     callOpenRouter
-      .mockRejectedValueOnce(new Error("OpenRouter request failed (503): upstream overloaded"))
+      .mockRejectedValueOnce(
+        new Error("OpenRouter request failed (503): upstream overloaded"),
+      )
       .mockResolvedValueOnce({
         text: JSON.stringify({
           match: "Belgium vs Senegal",
@@ -150,7 +165,10 @@ describe("parseMatchAnalysisResponse", () => {
     expect(request.plugins).toEqual([{ id: "web", max_results: 3 }]);
     expect(request.reasoning).toEqual({ effort: "none", exclude: true });
     expect(request.maxTokens).toBe(1400);
-    const firstContent = request.userContent[0] as { type: "text"; text: string };
+    const firstContent = request.userContent[0] as {
+      type: "text";
+      text: string;
+    };
     expect(firstContent.text).toContain('"odds"');
     expect(firstContent.text).toContain('"markets"');
     expect(firstContent.text).not.toContain("CANDIDATES:");
@@ -170,7 +188,13 @@ describe("parseMatchAnalysisResponse", () => {
             preferredScoreline: "1-0",
             scoreConfidence: 51,
             topPicks: [
-              { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+              {
+                market: "1X2",
+                selection: "Belgium thắng",
+                odds: 2.1,
+                reason: "Ngon",
+                suitability: "parlay",
+              },
             ],
           },
         ],
@@ -193,8 +217,12 @@ describe("parseMatchAnalysisResponse", () => {
 
     expect(result?.summary).toBe("Tong quan");
     expect(callOpenRouter).toHaveBeenCalledTimes(1);
-    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
-    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({ effort: "high" });
+    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([
+      { id: "web", max_results: 3 },
+    ]);
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({
+      effort: "medium",
+    });
     expect(recordOpenRouterUsage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -228,7 +256,13 @@ describe("parseMatchAnalysisResponse", () => {
               preferredScoreline: "1-0",
               scoreConfidence: 51,
               topPicks: [
-                { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+                {
+                  market: "1X2",
+                  selection: "Belgium thắng",
+                  odds: 2.1,
+                  reason: "Ngon",
+                  suitability: "parlay",
+                },
               ],
             },
           ],
@@ -251,11 +285,19 @@ describe("parseMatchAnalysisResponse", () => {
 
     expect(result?.summary).toBe("Tong quan");
     expect(callOpenRouter).toHaveBeenCalledTimes(3);
-    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
-    expect(callOpenRouter.mock.calls[1][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
+    expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([
+      { id: "web", max_results: 3 },
+    ]);
+    expect(callOpenRouter.mock.calls[1][0].plugins).toEqual([
+      { id: "web", max_results: 3 },
+    ]);
     expect(callOpenRouter.mock.calls[2][0].plugins).toBeUndefined();
-    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({ effort: "high" });
-    expect(callOpenRouter.mock.calls[2][0].reasoning).toEqual({ effort: "high" });
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({
+      effort: "medium",
+    });
+    expect(callOpenRouter.mock.calls[2][0].reasoning).toEqual({
+      effort: "medium",
+    });
     expect(recordOpenRouterUsage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -287,7 +329,13 @@ describe("parseMatchAnalysisResponse", () => {
               preferredScoreline: "1-0",
               scoreConfidence: 51,
               topPicks: [
-                { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+                {
+                  market: "1X2",
+                  selection: "Belgium thắng",
+                  odds: 2.1,
+                  reason: "Ngon",
+                  suitability: "parlay",
+                },
               ],
             },
           ],
@@ -309,7 +357,13 @@ describe("parseMatchAnalysisResponse", () => {
               preferredScoreline: "1-0",
               scoreConfidence: 51,
               topPicks: [
-                { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+                {
+                  market: "1X2",
+                  selection: "Belgium thắng",
+                  odds: 2.1,
+                  reason: "Ngon",
+                  suitability: "parlay",
+                },
               ],
             },
           ],
@@ -332,8 +386,12 @@ describe("parseMatchAnalysisResponse", () => {
 
     expect(result?.summary).toBe("Tong quan");
     expect(callOpenRouter).toHaveBeenCalledTimes(2);
-    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({ effort: "high" });
-    expect(callOpenRouter.mock.calls[1][0].reasoning).toEqual({ effort: "high" });
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({
+      effort: "medium",
+    });
+    expect(callOpenRouter.mock.calls[1][0].reasoning).toEqual({
+      effort: "medium",
+    });
     expect(recordOpenRouterUsage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -364,7 +422,13 @@ describe("parseMatchAnalysisResponse", () => {
           { candidateId: "P05" },
           { candidateId: "P99" },
         ],
-        marketViews: [{ market: "Chap Chau A", assessment: "Nghieng Belgium -0.25", odds: 1.81 }],
+        marketViews: [
+          {
+            market: "Chap Chau A",
+            assessment: "Nghieng Belgium -0.25",
+            odds: 1.81,
+          },
+        ],
         keyPoints: ["Mot", "Hai", "Ba"],
         risks: ["Bon", "Nam", "Sau"],
         summary: "Tin hieu yeu.",
@@ -378,15 +442,21 @@ describe("parseMatchAnalysisResponse", () => {
           updatedUnix: 0,
           legend: "",
           markets: [
-            { key: "h2h", outcomes: [
-              { name: "H", price: 2.16 },
-              { name: "D", price: 3.2 },
-              { name: "A", price: 3.76 },
-            ] },
-            { key: "asia_handicap", outcomes: [
-              { name: "H", point: -0.25, price: 1.81 },
-              { name: "A", point: -0.25, price: 2.06 },
-            ] },
+            {
+              key: "h2h",
+              outcomes: [
+                { name: "H", price: 2.16 },
+                { name: "D", price: 3.2 },
+                { name: "A", price: 3.76 },
+              ],
+            },
+            {
+              key: "asia_handicap",
+              outcomes: [
+                { name: "H", point: -0.25, price: 1.81 },
+                { name: "A", point: -0.25, price: 2.06 },
+              ],
+            },
           ],
         },
       },
@@ -394,11 +464,30 @@ describe("parseMatchAnalysisResponse", () => {
 
     expect(parsed?.recommendation).toBe("Dat Belgium -0.25");
     expect(parsed?.picks).toHaveLength(3);
-    expect(parsed?.picks?.[0]).toMatchObject({ candidateId: "P01", market: "1X2", selection: "Belgium thắng", odds: 2.16 });
-    expect(parsed?.picks?.[1]).toMatchObject({ candidateId: "P04", market: "Chấp Châu Á", selection: "Belgium -0.25", odds: 1.81 });
-    expect(parsed?.picks?.[2]).toMatchObject({ candidateId: "P05", market: "Chấp Châu Á", selection: "Senegal +0.25", odds: 2.06 });
+    expect(parsed?.picks?.[0]).toMatchObject({
+      candidateId: "P01",
+      market: "1X2",
+      selection: "Belgium thắng",
+      odds: 2.16,
+    });
+    expect(parsed?.picks?.[1]).toMatchObject({
+      candidateId: "P04",
+      market: "Chấp Châu Á",
+      selection: "Belgium -0.25",
+      odds: 1.81,
+    });
+    expect(parsed?.picks?.[2]).toMatchObject({
+      candidateId: "P05",
+      market: "Chấp Châu Á",
+      selection: "Senegal +0.25",
+      odds: 2.06,
+    });
     expect(parsed?.marketViews).toEqual([
-      { market: "Chap Chau A", assessment: "Nghieng Belgium -0.25", odds: 1.81 },
+      {
+        market: "Chap Chau A",
+        assessment: "Nghieng Belgium -0.25",
+        odds: 1.81,
+      },
     ]);
     expect(parsed?.keyPoints).toHaveLength(2);
     expect(parsed?.risks).toHaveLength(2);
@@ -412,7 +501,14 @@ describe("parseMatchAnalysisResponse", () => {
         scoreConfidence: 36,
         recommendation: "Theo dõi kèo này",
         confidence: 33,
-        picks: [{ market: "1X2", selection: "Belgium thắng", odds: 1.79, reason: "Edge nhẹ" }],
+        picks: [
+          {
+            market: "1X2",
+            selection: "Belgium thắng",
+            odds: 1.79,
+            reason: "Edge nhẹ",
+          },
+        ],
         keyPoints: ["Mot", "Hai"],
         risks: ["Bon", "Nam"],
         summary: "Tin hieu yeu.",
@@ -426,11 +522,14 @@ describe("parseMatchAnalysisResponse", () => {
           updatedUnix: 0,
           legend: "",
           markets: [
-            { key: "h2h", outcomes: [
-              { name: "H", price: 1.79 },
-              { name: "D", price: 3.2 },
-              { name: "A", price: 4.0 },
-            ] },
+            {
+              key: "h2h",
+              outcomes: [
+                { name: "H", price: 1.79 },
+                { name: "D", price: 3.2 },
+                { name: "A", price: 4.0 },
+              ],
+            },
           ],
         },
       },
@@ -472,22 +571,32 @@ describe("parseMatchAnalysisResponse", () => {
           updatedUnix: 0,
           legend: "",
           markets: [
-            { key: "h2h", outcomes: [
-              { name: "H", price: 2.16 },
-              { name: "D", price: 3.2 },
-              { name: "A", price: 3.76 },
-            ] },
-            { key: "asia_handicap", outcomes: [
-              { name: "H", point: -0.25, price: 1.81 },
-              { name: "A", point: -0.25, price: 2.06 },
-            ] },
+            {
+              key: "h2h",
+              outcomes: [
+                { name: "H", price: 2.16 },
+                { name: "D", price: 3.2 },
+                { name: "A", price: 3.76 },
+              ],
+            },
+            {
+              key: "asia_handicap",
+              outcomes: [
+                { name: "H", point: -0.25, price: 1.81 },
+                { name: "A", point: -0.25, price: 2.06 },
+              ],
+            },
           ],
         },
       },
     );
 
     expect(parsed?.picks).toHaveLength(3);
-    expect(parsed?.picks?.map((pick) => pick.candidateId)).toEqual(["P01", "P02", "P03"]);
+    expect(parsed?.picks?.map((pick) => pick.candidateId)).toEqual([
+      "P01",
+      "P02",
+      "P03",
+    ]);
   });
 
   test("hydrates revise candidate IDs from the provided catalog", () => {
@@ -512,22 +621,33 @@ describe("parseMatchAnalysisResponse", () => {
           updatedUnix: 0,
           legend: "",
           markets: [
-            { key: "h2h", outcomes: [
-              { name: "H", price: 2.16 },
-              { name: "D", price: 3.2 },
-              { name: "A", price: 3.76 },
-            ] },
-            { key: "asia_handicap", outcomes: [
-              { name: "H", point: -0.25, price: 1.81 },
-              { name: "A", point: -0.25, price: 2.06 },
-            ] },
+            {
+              key: "h2h",
+              outcomes: [
+                { name: "H", price: 2.16 },
+                { name: "D", price: 3.2 },
+                { name: "A", price: 3.76 },
+              ],
+            },
+            {
+              key: "asia_handicap",
+              outcomes: [
+                { name: "H", point: -0.25, price: 1.81 },
+                { name: "A", point: -0.25, price: 2.06 },
+              ],
+            },
           ],
         },
       },
     );
 
     expect(parsed?.picks).toEqual([
-      { candidateId: "P05", market: "Chấp Châu Á", selection: "Senegal +0.25", odds: 2.06 },
+      {
+        candidateId: "P05",
+        market: "Chấp Châu Á",
+        selection: "Senegal +0.25",
+        odds: 2.06,
+      },
     ]);
   });
 
@@ -555,6 +675,77 @@ describe("parseMatchAnalysisResponse", () => {
 
     expect(parsed?.recommendation).toBe("Theo dõi kèo này");
     expect(parsed?.picks).toEqual([]);
+  });
+
+  test("generateCombinedAnalysis respects AI_REASONING_EFFORT env var", async () => {
+    process.env.AI_REASONING_EFFORT = "high";
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Tong quan",
+        matches: [],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 10, completionTokens: 5 },
+    });
+
+    await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({
+      effort: "high",
+    });
+  });
+
+  test("generateBettingPlan respects AI_REASONING_EFFORT env var", async () => {
+    process.env.AI_REASONING_EFFORT = "low";
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Plan summary",
+        matches: [],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 10, completionTokens: 5 },
+    });
+
+    await bettingGemini.generateBettingPlan(
+      [
+        {
+          gameId: "1",
+          home: "Belgium",
+          away: "Senegal",
+          kickoffUnix: 0,
+          odds: { updatedUnix: 0, legend: "", markets: [] },
+        },
+      ],
+      [
+        {
+          match: "Belgium vs Senegal",
+          preferredScoreline: "1-0",
+          scoreConfidence: 50,
+          recommendation: "Bet Belgium",
+          confidence: 75,
+          picks: [],
+          keyPoints: [],
+          risks: [],
+          summary: "Summary",
+        },
+      ],
+    );
+
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({
+      effort: "low",
+    });
   });
 
   test("falls back to stand aside when recommendation is empty and no valid picks", () => {

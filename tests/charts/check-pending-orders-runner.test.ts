@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   validateTradeSetupForOpen: vi.fn(),
   captureVerificationChartScreenshot: vi.fn(),
   findChartForPair: vi.fn(),
+  fetchCandleRangeStats: vi.fn(),
   sendMessage: vi.fn(async () => undefined),
   sendPhoto: vi.fn(async () => undefined),
   recordOpenRouterUsage: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock("../../src/charts/position-engine.js", () => ({
 vi.mock("../../src/charts/screenshot.js", () => ({
   findChartForPair: state.findChartForPair,
   captureVerificationChartScreenshot: state.captureVerificationChartScreenshot,
+  fetchCandleRangeStats: state.fetchCandleRangeStats,
 }));
 
 const runner = await import("../../src/charts/check-pending-orders-runner.js");
@@ -49,6 +51,7 @@ describe("charts/check-pending-orders-runner", () => {
     state.validateTradeSetupForOpen.mockReset();
     state.captureVerificationChartScreenshot.mockReset();
     state.findChartForPair.mockReset();
+    state.fetchCandleRangeStats.mockReset();
     state.sendMessage.mockClear();
     state.sendPhoto.mockClear();
     state.recordOpenRouterUsage.mockClear();
@@ -65,6 +68,11 @@ describe("charts/check-pending-orders-runner", () => {
       buffer: Buffer.from("chart"),
       filepath: "/tmp/chart-m15.jpg",
       lastPrice: 1.0995,
+    });
+    state.fetchCandleRangeStats.mockResolvedValue({
+      high: 1.0995,
+      low: 1.0990,
+      lastClose: 1.0993,
     });
     state.validateTradeSetupForOpen.mockReturnValue({ accepted: true, reason: null, plan: null });
     state.saveOpenPosition.mockResolvedValue(true);

@@ -28,7 +28,7 @@ type InlineKeyboardMarkup = {
 };
 
 type CallbackAction =
-  | { type: "menu"; menu: "main" | "lottery_verify" }
+  | { type: "menu"; menu: "main" | "lottery_verify" | "lottery_predict" }
   | { type: "run"; command: keyof typeof COMMANDS; args: string[] };
 
 const VERIFY_REGIONS = new Set(["mien-bac", "mien-trung", "mien-nam"]);
@@ -52,7 +52,23 @@ const COMMANDS = {
   },
   lottery_predict: {
     file: "lottery-predict.yml",
-    description: "dự đoán xổ số",
+    description: "dự đoán xổ số (cả 3 miền)",
+  },
+  lottery_predict_mien_nam: {
+    file: "lottery-predict-mien-nam.yml",
+    description: "dự đoán xổ số Miền Nam",
+  },
+  lottery_predict_mien_trung: {
+    file: "lottery-predict-mien-trung.yml",
+    description: "dự đoán xổ số Miền Trung",
+  },
+  lottery_predict_mien_bac: {
+    file: "lottery-predict-mien-bac.yml",
+    description: "dự đoán xổ số Miền Bắc",
+  },
+  performance_report: {
+    file: "performance-report.yml",
+    description: "báo cáo hiệu suất",
   },
   lottery_verify: {
     file: "lottery-verify.yml",
@@ -291,9 +307,12 @@ function buildMainMenuKeyboard(): InlineKeyboardMarkup {
       ],
       [
         { text: "🎰 Quét kết quả xổ số", callback_data: "run:lottery" },
-        { text: "🔮 Dự đoán xổ số", callback_data: "run:lottery_predict" },
+        { text: "🔮 Dự đoán xổ số ▸", callback_data: "menu:lottery_predict" },
       ],
-      [{ text: "✅ Xác minh kết quả ▸", callback_data: "menu:lottery_verify" }],
+      [
+        { text: "✅ Xác minh kết quả ▸", callback_data: "menu:lottery_verify" },
+        { text: "📈 Báo cáo hiệu suất", callback_data: "run:performance_report" },
+      ],
     ],
   };
 }
@@ -311,11 +330,25 @@ function buildRegionSubmenuKeyboard(): InlineKeyboardMarkup {
   };
 }
 
+function buildLotteryPredictSubmenuKeyboard(): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Miền Bắc", callback_data: "run:lottery_predict_mien_bac" },
+        { text: "Miền Trung", callback_data: "run:lottery_predict_mien_trung" },
+      ],
+      [{ text: "Miền Nam", callback_data: "run:lottery_predict_mien_nam" }],
+      [{ text: "Cả 3 miền", callback_data: "run:lottery_predict" }],
+      [{ text: "◂ Quay lại", callback_data: "menu:main" }],
+    ],
+  };
+}
+
 function parseCallbackData(data: string): CallbackAction | null {
   const [kind = "", scope = "", part = ""] = data.trim().split(":");
 
   if (kind === "menu") {
-    if (scope === "main" || scope === "lottery_verify") {
+    if (scope === "main" || scope === "lottery_verify" || scope === "lottery_predict") {
       return { type: "menu", menu: scope };
     }
     return null;
@@ -372,7 +405,7 @@ async function editMenu(
   botToken: string,
   chatId: number | string,
   messageId: number,
-  menu: "main" | "lottery_verify",
+  menu: "main" | "lottery_verify" | "lottery_predict",
 ): Promise<void> {
   if (menu === "main") {
     await editTelegramMessage(
@@ -381,6 +414,17 @@ async function editMenu(
       messageId,
       buildMainMenuMessage(),
       buildMainMenuKeyboard(),
+    );
+    return;
+  }
+
+  if (menu === "lottery_predict") {
+    await editTelegramMessage(
+      botToken,
+      chatId,
+      messageId,
+      "Chọn miền để dự đoán:",
+      buildLotteryPredictSubmenuKeyboard(),
     );
     return;
   }
@@ -680,6 +724,26 @@ Deno.serve(async (request) => {
       const command = normalizeTelegramCommandToken(
         message.text?.trim().split(/\s+/)[0],
       );
+      if (command === "/help") {
+        const helpText = [
+          "🤖 *Auto Signal Bot - Hướng dẫn*",
+          "",
+          "Dùng các nút bên dưới để kích hoạt tác vụ:",
+          "",
+          "• 📊 *Phân tích chart* — phân tích biểu đồ TradingView",
+          "• ⚽ *Quét kèo bóng đá* — quét tỷ lệ kèo nhà cái",
+          "• 🎰 *Quét kết quả xổ số* — lấy kết quả xổ số mới nhất",
+          "• 🔮 *Dự đoán xổ số* — dự đoán xổ số theo từng miền hoặc cả 3",
+          "• ✅ *Xác minh kết quả* — xác minh kết quả dự đoán với thực tế",
+          "• 📈 *Báo cáo hiệu suất* — xem báo cáo hiệu suất giao dịch",
+          "",
+          "Lệnh chat:",
+          "• /stats — xem thống kê hiện tại (lệnh mở, win-rate, AI usage)",
+          "• /help — hướng dẫn này",
+        ].join("\n");
+        await sendTelegramMessage(botToken, message.chat.id, helpText, undefined, "Markdown");
+        return Response.json({ ok: true, command: "help" });
+      }
       if (command === "/stats") {
         return handleStatsCommand(botToken, message.chat.id);
       }

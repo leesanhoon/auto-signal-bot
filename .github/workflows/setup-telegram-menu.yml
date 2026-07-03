@@ -1,12 +1,12 @@
-name: Lottery Predictor
+name: Setup Telegram Menu
 
 on:
   workflow_dispatch:
 
 jobs:
-  lottery-predict:
+  setup-menu:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     environment: production
 
     steps:
@@ -22,13 +22,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lottery predictor
+      - name: Update Telegram menu commands
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          AI_TEXT_MODEL: ${{ vars.AI_TEXT_MODEL }}
-          AI_TEXT_FALLBACK_MODEL: ${{ vars.AI_TEXT_FALLBACK_MODEL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: npm run lottery-predict
+        run: npm run setup:telegram-menu

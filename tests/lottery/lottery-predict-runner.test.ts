@@ -286,4 +286,37 @@ describe("lottery/lottery-predict-runner", () => {
     expect(state.savePredictions).toHaveBeenCalledTimes(3);
     expect(String(state.sendMessage.mock.calls[0][0])).toContain("123");
   });
+
+  test("runLotteryPredict with single region only processes that region", async () => {
+    await expect(runner.runLotteryPredict(["mien-nam"])).resolves.toBeUndefined();
+
+    expect(state.predictTopNumbersAI).toHaveBeenCalledTimes(1);
+    expect(state.predictTopNumbersAI).toHaveBeenCalledWith(
+      expect.anything(),
+      "mien-nam",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(state.savePredictions).toHaveBeenCalledTimes(1);
+    expect(String(state.sendMessage.mock.calls[0][0])).toContain("🟩 Miền Nam");
+    expect(String(state.sendMessage.mock.calls[0][0])).not.toContain("🟨 Miền Trung");
+    expect(String(state.sendMessage.mock.calls[0][0])).not.toContain("🟦 Miền Bắc");
+  });
+
+  test("runLotteryPredict with two regions only processes those two", async () => {
+    state.predictTopNumbersAI.mockImplementation(async (_records: unknown[], region: string) => {
+      return [
+        { number: "111", confidence: 0.9, reason: `${region} prediction` },
+        { number: "222", confidence: 0.8, reason: `${region} second` },
+      ];
+    });
+
+    await expect(runner.runLotteryPredict(["mien-bac", "mien-trung"])).resolves.toBeUndefined();
+
+    expect(state.predictTopNumbersAI).toHaveBeenCalledTimes(2);
+    expect(state.savePredictions).toHaveBeenCalledTimes(2);
+    expect(String(state.sendMessage.mock.calls[0][0])).toContain("🟦 Miền Bắc");
+    expect(String(state.sendMessage.mock.calls[0][0])).toContain("🟨 Miền Trung");
+    expect(String(state.sendMessage.mock.calls[0][0])).not.toContain("🟩 Miền Nam");
+  });
 });

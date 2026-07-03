@@ -19,6 +19,9 @@
         "lottery": "tsx src/lottery/lottery-index.ts",
         "lottery-backfill": "tsx src/lottery/lottery-backfill-index.ts",
         "lottery-predict": "tsx src/lottery/lottery-predict-index.ts",
+        "lottery-predict:mien-nam": "LOTTERY_PREDICT_REGION=mien-nam tsx src/lottery/lottery-predict-index.ts",
+        "lottery-predict:mien-trung": "LOTTERY_PREDICT_REGION=mien-trung tsx src/lottery/lottery-predict-index.ts",
+        "lottery-predict:mien-bac": "LOTTERY_PREDICT_REGION=mien-bac tsx src/lottery/lottery-predict-index.ts",
         "lottery-predict-resync": "tsx src/lottery/lottery-predict-resync-index.ts",
         "lottery-verify": "tsx src/lottery/lottery-verify-index.ts"
     },
