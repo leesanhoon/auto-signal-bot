@@ -194,17 +194,17 @@ async function editMessageReplyMarkup(
 
 function buildSummaryTable(summaries: PairSummary[]): string {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
+  const filteredSummaries = summaries.filter((s) => s.confidence >= threshold);
   const lines: string[] = ["📊 *TỔNG QUAN TẤT CẢ CẶP TIỀN*", ""];
 
-  for (const s of summaries) {
-    const icon = s.confidence >= threshold ? "🟢" : s.confidence >= 40 ? "🟡" : "🔴";
-    lines.push(`${icon} *${s.pair}* — ${s.confidence}%`);
+  for (const s of filteredSummaries) {
+    lines.push(`🟢 *${s.pair}* — ${s.confidence}%`);
     lines.push(`   ${s.trend}`);
     lines.push(`   ${s.status}`);
     lines.push("");
   }
 
-  const tradeCount = summaries.filter((s) => s.confidence >= threshold).length;
+  const tradeCount = filteredSummaries.length;
   if (tradeCount > 0) {
     lines.push(`✅ *${tradeCount}* cặp có setup đạt yêu cầu (≥${threshold}%)`);
   } else {
@@ -468,20 +468,24 @@ export async function sendAllAnalyses(
   const timestamp = new Date().toLocaleString("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
   });
+  const threshold = getConfiguredChartSignalConfidenceThreshold();
+  const summaries = result.summaries.filter((summary) => summary.confidence >= threshold);
+  const setups = result.setups.filter((setup) => (setup.confidence ?? 0) >= threshold);
 
-  if (result.setups.length === 0) {
+  if (setups.length === 0) {
     await notifier.sendMessage(
-      `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp tiền (D1/H4/M15 + volume)\n\n⏸ Không có setup từ AI\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
+      `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)\n\n⏸ Không có setup đạt ngưỡng từ AI\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
     );
-    logger.info("  → No setups returned by AI. Notification sent.");
+    logger.info(
+      `  → No setups above threshold (${threshold}%). Notification sent with ${summaries.length} eligible summaries.`,
+    );
     return;
   }
 
-  const setups = result.setups;
   const headerSuffix = " từ AI";
 
   await notifier.sendMessage(
-    `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume) — tìm thấy *${setups.length}* setup${headerSuffix}`,
+    `🚀 *Bob Volman Multi-Timeframe Scanner*\n📅 ${timestamp}\n📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%) — tìm thấy *${setups.length}* setup${headerSuffix}`,
   );
 
   for (const setup of setups) {
@@ -508,6 +512,6 @@ export async function sendAllAnalyses(
   }
 
   await notifier.sendMessage(
-    `✅ *Scan hoàn tất* — ${setups.length} setup(s) từ AI\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
+    `✅ *Scan hoàn tất* — ${summaries.length} cặp và ${setups.length} setup(s) đạt ngưỡng (≥${threshold}%) từ AI\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
   );
 }

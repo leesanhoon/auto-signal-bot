@@ -47,7 +47,7 @@ describe("shared/telegram", () => {
       setup: "Breakout",
       reasons: ["EMA 20 hỗ trợ"],
       risks: ["Nến giả phá"],
-      confidence: 35,
+      confidence: 75,
       entry: "1.1000",
       stopLoss: "1.0980",
       takeProfit1: "1.1040",
@@ -69,11 +69,75 @@ describe("shared/telegram", () => {
 
     await sendAllAnalyses(result, notifier);
 
-    expect(sends.join("\n")).toContain("tìm thấy *1* setup từ AI");
+    expect(sends.join("\n")).toContain("Lọc còn *1* cặp đạt ngưỡng");
     expect(sends.join("\n")).toContain("Buy Stop — lệnh chờ breakout lên vùng entry");
     expect(sends.join("\n")).toContain("Điều kiện vào");
     expect(sends.join("\n")).toContain("trigger/pending");
     expect(sends.join("\n")).toContain("ℹ️ Nếu đây là lệnh chờ, chỉ vào khi giá khớp đúng điều kiện trên.");
+  });
+
+  test("sendAllAnalyses filters out setups below confidence threshold", async () => {
+    const sends: string[] = [];
+    const photos: string[] = [];
+    const notifier = {
+      sendMessage: vi.fn(async (message: string) => {
+        sends.push(message);
+      }),
+      sendPhoto: vi.fn(async (_buffer: Buffer, caption: string) => {
+        photos.push(caption);
+      }),
+    };
+
+    const baseSetup = {
+      pair: "EUR/USD",
+      direction: "LONG" as const,
+      setup: "Breakout",
+      reasons: ["EMA 20 hỗ trợ"],
+      risks: ["Nến giả phá"],
+      entry: "1.1000",
+      stopLoss: "1.0980",
+      takeProfit1: "1.1040",
+      takeProfit2: "1.1080",
+      riskReward: "1:2",
+      summary: "Chờ breakout rõ ràng",
+      orderType: "BUY_STOP" as const,
+      entryCondition: "Chỉ vào khi phá lên 1.1000",
+      currentPriceContext: "Giá hiện tại vẫn nằm dưới entry",
+      verifiedConfirmed: true,
+    };
+
+    const result: AnalysisResult = {
+      summaries: [
+        { pair: "EUR/USD", trend: "Tăng", status: "OK", confidence: 68 },
+        { pair: "GBP/USD", trend: "Giảm", status: "OK", confidence: 81 },
+      ],
+      setups: [
+        { ...baseSetup, pair: "EUR/USD", confidence: 69 },
+        { ...baseSetup, pair: "GBP/USD", confidence: 82 },
+      ],
+      noSetupReason: "",
+      screenshots: [
+        {
+          chart: {
+            symbol: "GBPUSD",
+            name: "GBP/USD H4",
+            timeframe: "H4",
+            interval: "240",
+            description: "",
+          },
+          buffer: Buffer.from("gbp"),
+          filepath: "/tmp/gbp-h4.jpg",
+        },
+      ],
+    };
+
+    await sendAllAnalyses(result, notifier);
+
+    const fullText = sends.join("\n");
+    expect(fullText).toContain("Lọc còn *1* cặp đạt ngưỡng");
+    expect(fullText).toContain("GBP/USD");
+    expect(fullText).not.toContain("EUR/USD — LONG");
+    expect(photos).toHaveLength(1);
   });
 
   test("sendAllAnalyses prefers exact provenance over fuzzy screenshot matching", async () => {

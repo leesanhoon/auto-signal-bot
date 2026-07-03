@@ -106,4 +106,40 @@ describe("charts/analyzer", () => {
     expect(result.setups[0].pair).toBe("EURUSD");
     expect(result.setups[0].sourceCharts).toHaveLength(3);
   });
+
+  test("analyzeAllCharts sends a Volman-focused prompt with EMA20 and volume rules", async () => {
+    state.call.mockResolvedValueOnce({
+      text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"RB","reasons":["EMA20 flat to up"],"risks":["False break"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":"none"}',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    });
+
+    const screenshots: ScreenshotResult[] = [
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
+        buffer: Buffer.from("d1"),
+        filepath: "/tmp/chart-d1.jpg",
+      },
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
+        buffer: Buffer.from("h4"),
+        filepath: "/tmp/chart-h4.jpg",
+      },
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
+        buffer: Buffer.from("m15"),
+        filepath: "/tmp/chart-m15.jpg",
+      },
+    ];
+
+    await analyzer.analyzeAllCharts(screenshots);
+
+    const request = state.call.mock.calls[0][0];
+    expect(request.systemPrompt).toContain("Bob Volman");
+    expect(request.systemPrompt).toContain("EMA20");
+    expect(request.systemPrompt).toContain("volume");
+    expect(request.systemPrompt).toContain("RB");
+    expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("noSetupReason");
+    expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("EMA20 slope");
+    expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("RB, ARB, IRB, BB, FB, SB, DD");
+  });
 });

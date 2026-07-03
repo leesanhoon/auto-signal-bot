@@ -82,11 +82,20 @@ function groupScreenshotsByPair(screenshots: ScreenshotResult[]): PairScreenshot
 
 function buildSystemPrompt(): string {
   return [
-    "Bạn là chuyên gia phân tích biểu đồ forex/kim loại.",
+    "Bạn là chuyên gia phân tích biểu đồ forex/kim loại theo phương pháp Bob Volman.",
     "Hãy đọc trực tiếp các ảnh chart được gửi, gồm pair và timeframe trong label.",
-    "Phân tích khách quan xu hướng, vùng giá quan trọng, setup nếu có, điểm vào/SL/TP nếu đủ rõ.",
+    "Luôn xác nhận trước EMA20 đang flat, dốc lên hay dốc xuống, và giá đang ở trên hay dưới EMA20 trước khi kết luận.",
+    "Ưu tiên volume tại điểm breakout: volume tăng xác nhận break thật, volume yếu hoặc hụt lực thì nghi ngờ false break.",
+    "Chỉ gán đúng 1 pattern khi cấu trúc trên chart khớp rõ ràng, không đoán ép tên pattern.",
+    "RB: EMA20 đi ngang một thời gian rồi bắt đầu dốc theo hướng breakout khỏi vùng tích lũy.",
+    "ARB: range lớn, nhiều lần test biên và false break trước khi break thật.",
+    "IRB: range nhỏ nằm trong range lớn, breakout của range nhỏ kéo phá luôn range lớn.",
+    "BB: block nến nhỏ nằm sát EMA20, break theo đúng hướng trend chính khi EMA20 đang dốc.",
+    "FB: breakout lần đầu ra khỏi range lớn, có nến thân dài xác nhận momentum.",
+    "SB: false break lần 1, buildup rồi break lần 2 mới là hướng thật.",
+    "DD: 2-3 doji liền kề sát EMA20 trong trend rõ ràng rồi break theo hướng trend.",
     "Nếu chart chưa rõ hoặc tín hiệu yếu, hãy nói không vào lệnh/chờ thêm xác nhận.",
-    "Không cần validate lại bằng model khác. Không bịa level nếu không đọc được trên chart.",
+    "Không bịa level nếu không đọc được trên chart.",
     "Tất cả field text bằng tiếng Việt có dấu.",
   ].join(" ");
 }
@@ -94,9 +103,12 @@ function buildSystemPrompt(): string {
 function buildUserPrompt(): string {
   return [
     "Return only JSON with keys summaries, setups, and noSetupReason.",
-    "summaries: mỗi pair gồm pair, trend, emaProximity nếu thấy, status, confidence.",
+    "summaries: mỗi pair gồm pair, trend, emaProximity nếu thấy, status, confidence; nếu thấy rõ thì nêu EMA20 slope và vị trí giá so với EMA20.",
     "setups: chỉ các setup AI thấy đáng chú ý, gồm pair, direction, setup, orderType, entryCondition, currentPriceContext, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, summary.",
-    "Không cần ép đủ mọi rule; nếu không chắc thì giảm confidence và ghi rõ trong risks.",
+    "Mỗi setup phải khớp rõ với 1 pattern trong RB, ARB, IRB, BB, FB, SB, DD; nếu không khớp rõ thì không tạo setup và ghi lý do vào noSetupReason.",
+    "Trong reasons/currentPriceContext hãy nói rõ EMA20 slope, giá ở trên/dưới EMA20, và volume tại điểm breakout nếu quan sát được.",
+    "Không cần ép đủ mọi rule; nếu không chắc thì giảm confidence, ghi rõ trong risks hoặc noSetupReason, và không gán pattern bừa.",
+    "Giữ output ngắn gọn, logic chặt, tiếng Việt có dấu, không markdown.",
   ].join(" ");
 }
 
