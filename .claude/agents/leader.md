@@ -1,5 +1,5 @@
 ---
-name: planner
+name: leader
 description: Phân tích yêu cầu, khảo sát code hiện có, lên kế hoạch chi tiết trước khi code, và review code sau khi executor hoàn thành. Dùng khi cần thiết kế giải pháp hoặc kiểm tra chất lượng code.
 tools: Read, Grep, Glob, Bash
 model: sonnet
