@@ -1,7 +1,7 @@
 import "../shared/env.js";
 import { getDb } from "../shared/db.js";
 import { loadWeekdayHistory } from "./lottery-repository.js";
-import { predictTopNumbers } from "./lottery-predict.js";
+import { predictTopNumbersAI } from "./lottery-ai-predict.js";
 import { savePredictions } from "./lottery-predictions-repository.js";
 import { sendMessage, notifyError } from "../shared/telegram.js";
 import type { LotteryRegion } from "./lottery-types.js";
@@ -109,18 +109,24 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const fresh = predictTopNumbers(history, group.region, 3);
-    const freshNumbers = new Set(fresh.map((prediction) => prediction.number));
-    if (sameNumberSet(group.numbers, freshNumbers)) {
-      logger.info(`OK   ${group.region} ${group.date}: no change`);
-      continue;
-    }
+    try {
+      const fresh = await predictTopNumbersAI(history, group.region, group.weekday, 3);
+      const freshNumbers = new Set(fresh.map((prediction) => prediction.number));
+      if (sameNumberSet(group.numbers, freshNumbers)) {
+        logger.info(`OK   ${group.region} ${group.date}: no change`);
+        continue;
+      }
 
-    await savePredictions(group.date, group.weekday, group.region, fresh);
-    resynced.push(
-      `${group.region} ${group.date}: ${formatNumbers(group.numbers)} -> ${formatNumbers(freshNumbers)}`,
-    );
-    logger.info(`Update ${group.region} ${group.date}: ${formatNumbers(group.numbers)} -> ${formatNumbers(freshNumbers)}`);
+      await savePredictions(group.date, group.weekday, group.region, fresh);
+      resynced.push(
+        `${group.region} ${group.date}: ${formatNumbers(group.numbers)} -> ${formatNumbers(freshNumbers)}`,
+      );
+      logger.info(`Update ${group.region} ${group.date}: ${formatNumbers(group.numbers)} -> ${formatNumbers(freshNumbers)}`);
+    } catch (error) {
+      logger.error(
+        `Skip ${group.region} ${group.date}: AI prediction failed — ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   if (resynced.length === 0) {

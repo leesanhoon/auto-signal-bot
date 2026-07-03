@@ -57,7 +57,11 @@ export type ClaudeUsageResponseLike = {
 };
 
 export type OpenRouterUsageResponseLike = {
-  usage?: { promptTokens?: number; completionTokens?: number; cachedTokens?: number };
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    cachedTokens?: number;
+  };
 };
 
 export type AiUsageInput = {
@@ -92,11 +96,23 @@ const DEFAULT_RATES: Record<AiProvider, Record<string, Rate>> = {
     "claude-sonnet-4-6": { inputPerMillionUsd: 3, outputPerMillionUsd: 15 },
   },
   openrouter: {
-    "xiaomi/mimo-v2.5": { inputPerMillionUsd: 0.105, outputPerMillionUsd: 0.28 },
-    "deepseek/deepseek-v4-flash": { inputPerMillionUsd: 0.09, outputPerMillionUsd: 0.18 },
+    "xiaomi/mimo-v2.5": {
+      inputPerMillionUsd: 0.105,
+      outputPerMillionUsd: 0.28,
+    },
+    "deepseek/deepseek-v4-flash": {
+      inputPerMillionUsd: 0.09,
+      outputPerMillionUsd: 0.18,
+    },
     "minimax/minimax-m3": { inputPerMillionUsd: 0.3, outputPerMillionUsd: 1.2 },
-    "meta-llama/llama-3.3-70b-instruct": { inputPerMillionUsd: 0.12, outputPerMillionUsd: 0.34 },
-    "moonshotai/kimi-k2.6": { inputPerMillionUsd: 0.3, outputPerMillionUsd: 1.2 },
+    "meta-llama/llama-3.3-70b-instruct": {
+      inputPerMillionUsd: 0.12,
+      outputPerMillionUsd: 0.34,
+    },
+    "moonshotai/kimi-k2.6": {
+      inputPerMillionUsd: 0.3,
+      outputPerMillionUsd: 1.2,
+    },
   },
 };
 
@@ -137,9 +153,14 @@ function getDefaultRate(provider: AiProvider, model: string): Rate {
 
 function getAlertConfig(): AiUsageAlertConfig {
   return {
-    dailyTokenLimit: parseOptionalNumber(process.env.AI_USAGE_DAILY_TOKEN_LIMIT),
-    dailyCostLimitUsd: parseOptionalNumber(process.env.AI_USAGE_DAILY_COST_LIMIT_USD),
-    thresholdRatio: parseOptionalNumber(process.env.AI_USAGE_ALERT_THRESHOLD_RATIO) ?? 0.8,
+    dailyTokenLimit: parseOptionalNumber(
+      process.env.AI_USAGE_DAILY_TOKEN_LIMIT,
+    ),
+    dailyCostLimitUsd: parseOptionalNumber(
+      process.env.AI_USAGE_DAILY_COST_LIMIT_USD,
+    ),
+    thresholdRatio:
+      parseOptionalNumber(process.env.AI_USAGE_ALERT_THRESHOLD_RATIO) ?? 0.8,
   };
 }
 
@@ -148,29 +169,56 @@ function formatUsd(value: number): string {
 }
 
 function getBreakdownBucket<T extends string>(
-  map: Map<T, { requests: number; inputTokens: number; outputTokens: number; estimatedCostUsd: number }>,
+  map: Map<
+    T,
+    {
+      requests: number;
+      inputTokens: number;
+      outputTokens: number;
+      estimatedCostUsd: number;
+    }
+  >,
   key: T,
 ) {
   const existing = map.get(key);
   if (existing) return existing;
-  const created = { requests: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
+  const created = {
+    requests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    estimatedCostUsd: 0,
+  };
   map.set(key, created);
   return created;
 }
 
-export function estimateAiUsageCost(provider: AiProvider, model: string, inputTokens: number, outputTokens: number): number {
+export function estimateAiUsageCost(
+  provider: AiProvider,
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
   const rate = getDefaultRate(provider, model);
-  return roundMoney((inputTokens / 1_000_000) * rate.inputPerMillionUsd + (outputTokens / 1_000_000) * rate.outputPerMillionUsd);
+  return roundMoney(
+    (inputTokens / 1_000_000) * rate.inputPerMillionUsd +
+      (outputTokens / 1_000_000) * rate.outputPerMillionUsd,
+  );
 }
 
-export function extractGeminiUsage(response: GeminiUsageResponseLike): { inputTokens: number; outputTokens: number } {
+export function extractGeminiUsage(response: GeminiUsageResponseLike): {
+  inputTokens: number;
+  outputTokens: number;
+} {
   const usage = response.usageMetadata;
   const inputTokens = normalizeCount(usage?.promptTokenCount);
   const candidatesTokens = usage?.candidatesTokenCount;
   const totalTokens = normalizeCount(usage?.totalTokenCount);
   const toolTokens = normalizeCount(usage?.toolUsePromptTokenCount);
   const thoughtsTokens = normalizeCount(usage?.thoughtsTokenCount);
-  const fallbackOutput = Math.max(0, totalTokens - inputTokens - toolTokens - thoughtsTokens);
+  const fallbackOutput = Math.max(
+    0,
+    totalTokens - inputTokens - toolTokens - thoughtsTokens,
+  );
 
   return {
     inputTokens,
@@ -178,14 +226,21 @@ export function extractGeminiUsage(response: GeminiUsageResponseLike): { inputTo
   };
 }
 
-export function extractClaudeUsage(response: ClaudeUsageResponseLike): { inputTokens: number; outputTokens: number } {
+export function extractClaudeUsage(response: ClaudeUsageResponseLike): {
+  inputTokens: number;
+  outputTokens: number;
+} {
   return {
     inputTokens: normalizeCount(response.usage?.input_tokens),
     outputTokens: normalizeCount(response.usage?.output_tokens),
   };
 }
 
-export function extractOpenRouterUsage(response: OpenRouterUsageResponseLike): { inputTokens: number; outputTokens: number; cachedTokens: number } {
+export function extractOpenRouterUsage(response: OpenRouterUsageResponseLike): {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+} {
   return {
     inputTokens: normalizeCount(response.usage?.promptTokens),
     outputTokens: normalizeCount(response.usage?.completionTokens),
@@ -193,7 +248,9 @@ export function extractOpenRouterUsage(response: OpenRouterUsageResponseLike): {
   };
 }
 
-export function aggregateAiUsageByDay(records: AiUsageRecord[]): AiUsageDailySummary[] {
+export function aggregateAiUsageByDay(
+  records: AiUsageRecord[],
+): AiUsageDailySummary[] {
   const dayMap = new Map<
     string,
     {
@@ -201,9 +258,33 @@ export function aggregateAiUsageByDay(records: AiUsageRecord[]): AiUsageDailySum
       inputTokens: number;
       outputTokens: number;
       estimatedCostUsd: number;
-      byProvider: Map<AiProvider, { requests: number; inputTokens: number; outputTokens: number; estimatedCostUsd: number }>;
-      bySource: Map<AiUsageSource, { requests: number; inputTokens: number; outputTokens: number; estimatedCostUsd: number }>;
-      byModel: Map<string, { requests: number; inputTokens: number; outputTokens: number; estimatedCostUsd: number }>;
+      byProvider: Map<
+        AiProvider,
+        {
+          requests: number;
+          inputTokens: number;
+          outputTokens: number;
+          estimatedCostUsd: number;
+        }
+      >;
+      bySource: Map<
+        AiUsageSource,
+        {
+          requests: number;
+          inputTokens: number;
+          outputTokens: number;
+          estimatedCostUsd: number;
+        }
+      >;
+      byModel: Map<
+        string,
+        {
+          requests: number;
+          inputTokens: number;
+          outputTokens: number;
+          estimatedCostUsd: number;
+        }
+      >;
     }
   >();
 
@@ -221,25 +302,36 @@ export function aggregateAiUsageByDay(records: AiUsageRecord[]): AiUsageDailySum
     existing.requests += 1;
     existing.inputTokens += record.inputTokens;
     existing.outputTokens += record.outputTokens;
-    existing.estimatedCostUsd = roundMoney(existing.estimatedCostUsd + record.estimatedCostUsd);
+    existing.estimatedCostUsd = roundMoney(
+      existing.estimatedCostUsd + record.estimatedCostUsd,
+    );
 
-    const providerBucket = getBreakdownBucket(existing.byProvider, record.provider);
+    const providerBucket = getBreakdownBucket(
+      existing.byProvider,
+      record.provider,
+    );
     providerBucket.requests += 1;
     providerBucket.inputTokens += record.inputTokens;
     providerBucket.outputTokens += record.outputTokens;
-    providerBucket.estimatedCostUsd = roundMoney(providerBucket.estimatedCostUsd + record.estimatedCostUsd);
+    providerBucket.estimatedCostUsd = roundMoney(
+      providerBucket.estimatedCostUsd + record.estimatedCostUsd,
+    );
 
     const sourceBucket = getBreakdownBucket(existing.bySource, record.source);
     sourceBucket.requests += 1;
     sourceBucket.inputTokens += record.inputTokens;
     sourceBucket.outputTokens += record.outputTokens;
-    sourceBucket.estimatedCostUsd = roundMoney(sourceBucket.estimatedCostUsd + record.estimatedCostUsd);
+    sourceBucket.estimatedCostUsd = roundMoney(
+      sourceBucket.estimatedCostUsd + record.estimatedCostUsd,
+    );
 
     const modelBucket = getBreakdownBucket(existing.byModel, record.model);
     modelBucket.requests += 1;
     modelBucket.inputTokens += record.inputTokens;
     modelBucket.outputTokens += record.outputTokens;
-    modelBucket.estimatedCostUsd = roundMoney(modelBucket.estimatedCostUsd + record.estimatedCostUsd);
+    modelBucket.estimatedCostUsd = roundMoney(
+      modelBucket.estimatedCostUsd + record.estimatedCostUsd,
+    );
 
     dayMap.set(record.usageDate, existing);
   }
@@ -264,14 +356,19 @@ export function aggregateAiUsageByDay(records: AiUsageRecord[]): AiUsageDailySum
     }));
 }
 
-export function buildAiUsageAlertMessage(summary: AiUsageDailySummary, config: AiUsageAlertConfig = getAlertConfig()): string | null {
+export function buildAiUsageAlertMessage(
+  summary: AiUsageDailySummary,
+  config: AiUsageAlertConfig = getAlertConfig(),
+): string | null {
   const thresholds: string[] = [];
   const ratio = config.thresholdRatio ?? 0.8;
 
   if (config.dailyTokenLimit && config.dailyTokenLimit > 0) {
     const tokenRatio = summary.inputTokens + summary.outputTokens;
     if (tokenRatio >= config.dailyTokenLimit * ratio) {
-      thresholds.push(`token ${tokenRatio}/${config.dailyTokenLimit} (${((tokenRatio / config.dailyTokenLimit) * 100).toFixed(1)}%)`);
+      thresholds.push(
+        `token ${tokenRatio}/${config.dailyTokenLimit} (${((tokenRatio / config.dailyTokenLimit) * 100).toFixed(1)}%)`,
+      );
     }
   }
 
@@ -298,21 +395,27 @@ export function buildAiUsageAlertMessage(summary: AiUsageDailySummary, config: A
   if (summary.byProvider.length > 0) {
     lines.push("", "Theo provider:");
     for (const row of summary.byProvider) {
-      lines.push(`- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} token | ${formatUsd(row.estimatedCostUsd)}`);
+      lines.push(
+        `- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} token | ${formatUsd(row.estimatedCostUsd)}`,
+      );
     }
   }
 
   if (summary.bySource.length > 0) {
     lines.push("", "Theo nguồn:");
     for (const row of summary.bySource) {
-      lines.push(`- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} token | ${formatUsd(row.estimatedCostUsd)}`);
+      lines.push(
+        `- ${row.key}: ${row.requests} req | ${row.inputTokens + row.outputTokens} token | ${formatUsd(row.estimatedCostUsd)}`,
+      );
     }
   }
 
   return lines.join("\n");
 }
 
-export async function loadAiUsageRecords(sinceDate?: string): Promise<AiUsageRecord[]> {
+export async function loadAiUsageRecords(
+  sinceDate?: string,
+): Promise<AiUsageRecord[]> {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
     return [];
   }
@@ -325,7 +428,9 @@ export async function loadAiUsageRecords(sinceDate?: string): Promise<AiUsageRec
       query = query.gte("usage_date", sinceDate);
     }
 
-    const { data, error } = await query.order("usage_date", { ascending: false }).order("recorded_at", { ascending: false });
+    const { data, error } = await query
+      .order("usage_date", { ascending: false })
+      .order("recorded_at", { ascending: false });
     if (error) {
       throw new Error(error.message);
     }
@@ -333,9 +438,19 @@ export async function loadAiUsageRecords(sinceDate?: string): Promise<AiUsageRec
     return (data ?? []).map((row: Record<string, unknown>) => ({
       recordedAt: String(row.recorded_at ?? new Date().toISOString()),
       usageDate: String(row.usage_date ?? vnDateStr(Date.now())),
-      provider: row.provider === "openrouter" ? "openrouter" : row.provider === "claude" ? "claude" : "gemini",
+      provider:
+        row.provider === "openrouter"
+          ? "openrouter"
+          : row.provider === "claude"
+            ? "claude"
+            : "gemini",
       model: String(row.model ?? ""),
-      source: row.source === "betting" || row.source === "lottery" || row.source === "test" ? row.source : "chart",
+      source:
+        row.source === "betting" ||
+        row.source === "lottery" ||
+        row.source === "test"
+          ? row.source
+          : "chart",
       inputTokens: normalizeCount(row.input_tokens),
       outputTokens: normalizeCount(row.output_tokens),
       estimatedCostUsd: Number(row.estimated_cost_usd ?? 0),
@@ -347,11 +462,15 @@ export async function loadAiUsageRecords(sinceDate?: string): Promise<AiUsageRec
   }
 }
 
-export async function loadAiUsageDailySummary(sinceDate?: string): Promise<AiUsageDailySummary[]> {
+export async function loadAiUsageDailySummary(
+  sinceDate?: string,
+): Promise<AiUsageDailySummary[]> {
   return aggregateAiUsageByDay(await loadAiUsageRecords(sinceDate));
 }
 
-async function maybeSendAiUsageAlert(summary: AiUsageDailySummary): Promise<void> {
+async function maybeSendAiUsageAlert(
+  summary: AiUsageDailySummary,
+): Promise<void> {
   const config = getAlertConfig();
   const message = buildAiUsageAlertMessage(summary, config);
   if (!message) return;
@@ -378,7 +497,13 @@ export async function recordAiUsage(input: AiUsageInput): Promise<void> {
   const inputTokens = normalizeCount(input.inputTokens);
   const outputTokens = normalizeCount(input.outputTokens);
   const estimatedCostUsd = roundMoney(
-    input.estimatedCostUsd ?? estimateAiUsageCost(input.provider, input.model, inputTokens, outputTokens),
+    input.estimatedCostUsd ??
+      estimateAiUsageCost(
+        input.provider,
+        input.model,
+        inputTokens,
+        outputTokens,
+      ),
   );
 
   try {
@@ -398,11 +523,18 @@ export async function recordAiUsage(input: AiUsageInput): Promise<void> {
       throw new Error(error.message ?? "Unknown Supabase insert error");
     }
   } catch (error) {
-    logger.warn("Failed to persist AI usage entry", { error, provider: input.provider, model: input.model, source: input.source });
+    logger.warn("Failed to persist AI usage entry", {
+      error,
+      provider: input.provider,
+      model: input.model,
+      source: input.source,
+    });
     return;
   }
 
-  const todaySummary = (await loadAiUsageDailySummary(usageDate)).find((row) => row.date === usageDate);
+  const todaySummary = (await loadAiUsageDailySummary(usageDate)).find(
+    (row) => row.date === usageDate,
+  );
   if (todaySummary) {
     await maybeSendAiUsageAlert(todaySummary);
   }
@@ -410,7 +542,9 @@ export async function recordAiUsage(input: AiUsageInput): Promise<void> {
 
 export async function recordGeminiUsage(
   response: GeminiUsageResponseLike,
-  input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & { provider?: "gemini" },
+  input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & {
+    provider?: "gemini";
+  },
 ): Promise<void> {
   const usage = extractGeminiUsage(response);
   await recordAiUsage({
@@ -426,7 +560,9 @@ export async function recordGeminiUsage(
 
 export async function recordClaudeUsage(
   response: ClaudeUsageResponseLike,
-  input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & { provider?: "claude" },
+  input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & {
+    provider?: "claude";
+  },
 ): Promise<void> {
   const usage = extractClaudeUsage(response);
   await recordAiUsage({
@@ -442,7 +578,9 @@ export async function recordClaudeUsage(
 
 export async function recordOpenRouterUsage(
   response: OpenRouterUsageResponseLike,
-  input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & { provider?: "openrouter" },
+  input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & {
+    provider?: "openrouter";
+  },
 ): Promise<void> {
   const usage = extractOpenRouterUsage(response);
   if (usage.inputTokens > 0 && usage.cachedTokens && usage.cachedTokens > 0) {

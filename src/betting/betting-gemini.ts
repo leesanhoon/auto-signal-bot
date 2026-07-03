@@ -923,7 +923,7 @@ export async function generateBettingPlan(
     temperature: 0.3,
     responseFormat: { type: "json_object" },
     timeoutMs: PLAN_TIMEOUT_MS,
-    reasoning: { effort: "high" },
+    reasoning: { effort: "medium" },
   };
 
   const fallbackRequest: OpenRouterRequest = {
@@ -1196,7 +1196,7 @@ export async function generateCombinedAnalysis(
     temperature: 0.3,
     responseFormat: { type: "json_object" },
     timeoutMs: COMBINED_TIMEOUT_MS,
-    reasoning: { effort: "high" },
+    reasoning: { effort: "medium" },
     plugins: [{ id: "web", max_results: ANALYZE_WEB_RESULTS }],
   };
 

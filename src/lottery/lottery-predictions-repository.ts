@@ -1,5 +1,6 @@
 import { getDb } from "../shared/db.js";
-import type { NumberPrediction } from "./lottery-predict.js";
+import { PREDICTION_METHOD_VERSION } from "./lottery-ai-predict.js";
+import type { AiNumberPrediction } from "./lottery-ai-predict.js";
 import type { LotteryRegion } from "./lottery-types.js";
 
 export type PredictionRow = {
@@ -7,6 +8,13 @@ export type PredictionRow = {
   weekday: number;
   region: LotteryRegion;
   number: string;
+  rank: number;
+};
+
+export type CachedPrediction = {
+  number: string;
+  confidence: number;
+  reason: string;
   rank: number;
 };
 
@@ -19,7 +27,7 @@ export async function savePredictions(
   date: string,
   weekday: number,
   region: LotteryRegion,
-  predictions: NumberPrediction[],
+  predictions: AiNumberPrediction[],
 ): Promise<void> {
   if (predictions.length === 0) return;
 
@@ -37,11 +45,13 @@ export async function savePredictions(
     region,
     number: p.number,
     rank: i + 1,
-    freq: p.freq,
-    weighted_freq: p.weightedFreq,
-    gap: p.gap,
-    overdue_ratio: p.overdueRatio,
-    score: p.score,
+    reason: p.reason,
+    freq: null,
+    weighted_freq: null,
+    gap: null,
+    overdue_ratio: null,
+    score: p.confidence,
+    method_version: PREDICTION_METHOD_VERSION,
   }));
 
   const { error } = await (getDb().from("lottery_predictions") as any).upsert(rows, { onConflict: "date,region,number" });
@@ -58,6 +68,38 @@ export async function loadUnverifiedPredictions(date: string, region: LotteryReg
     .order("rank", { ascending: true });
   if (error || !data) return [];
   return data as PredictionRow[];
+}
+
+/** Đọc dự đoán đã lưu cho đúng date+region — dùng để tái sử dụng thay vì gọi lại AI trong cùng ngày. */
+export async function loadCachedPredictions(
+  date: string,
+  region: LotteryRegion,
+): Promise<CachedPrediction[]> {
+  try {
+    const { data, error } = await (getDb().from("lottery_predictions") as any)
+      .select("number, score, reason, rank")
+      .eq("date", date)
+      .eq("region", region)
+      .eq("method_version", PREDICTION_METHOD_VERSION)
+      .order("rank", { ascending: true });
+    if (error || !data || data.length === 0) return [];
+
+    return (data as Array<{
+      number: string;
+      score: number | null;
+      reason: string | null;
+      rank: number | null;
+    }>)
+      .filter((row) => row.reason != null && row.score != null && row.rank != null)
+      .map((row) => ({
+        number: row.number,
+        confidence: Number(row.score),
+        reason: String(row.reason),
+        rank: Number(row.rank),
+      }));
+  } catch {
+    return [];
+  }
 }
 
 /** Đánh dấu 1 dự đoán đã được xác minh, kèm kết quả trúng/không trúng. */
