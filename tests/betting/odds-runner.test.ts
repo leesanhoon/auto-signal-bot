@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import * as oddsRunner from "../../src/betting/odds-runner.js";
 import {
   formatBettingPlanMessage,
-  formatCombinedOddsMessage,
-  formatMatchAnalysisMessage,
+  formatOddsText,
+  formatPicksSummaryBlock,
 } from "../../src/betting/odds-text-format.js";
 
 const state = vi.hoisted(() => ({
@@ -55,9 +55,9 @@ vi.mock("../../src/betting/odds-text-format.js", async () => {
   );
   return {
     ...actual,
-    formatCombinedOddsMessage: vi.fn((payloads) => `RAW:${payloads.length}`),
+    formatOddsText: vi.fn((payload) => `ODDS:${payload.gameId}`),
+    formatPicksSummaryBlock: vi.fn(() => "PICKS"),
     formatBettingPlanMessage: vi.fn(() => "PLAN"),
-    formatMatchAnalysisMessage: vi.fn(() => "ANALYSIS"),
   };
 });
 
@@ -94,17 +94,17 @@ describe("betting/odds-runner combined flow", () => {
     state.buildOddsPayload.mockResolvedValue({
       payload: [
         {
-          gameId: "1",
-          home: "Team A",
-          away: "Team B",
-          kickoffUnix: 1000,
-          odds: { updatedUnix: 0, legend: "", markets: [] },
-        },
-        {
           gameId: "2",
           home: "Team C",
           away: "Team D",
           kickoffUnix: 2000,
+          odds: { updatedUnix: 0, legend: "", markets: [] },
+        },
+        {
+          gameId: "1",
+          home: "Team A",
+          away: "Team B",
+          kickoffUnix: 1000,
           odds: { updatedUnix: 0, legend: "", markets: [] },
         },
       ],
@@ -145,15 +145,18 @@ describe("betting/odds-runner combined flow", () => {
   test("sends raw odds then combined analysis+plan as single message", async () => {
     await oddsRunner.runOddsCheck();
 
-    expect(state.sendMessage).toHaveBeenCalledTimes(2);
-    expect(state.sendMessage).toHaveBeenNthCalledWith(1, "RAW:2");
-    expect(state.sendMessage).toHaveBeenNthCalledWith(2, expect.stringContaining("📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC*"));
-    expect(state.sendMessage).toHaveBeenNthCalledWith(2, expect.stringContaining("📋 *TỔNG QUAN*"));
-    expect(state.sendMessage).toHaveBeenNthCalledWith(2, expect.stringContaining("PLAN"));
+    expect(state.sendMessage).toHaveBeenCalledTimes(3);
+    expect(state.sendMessage).toHaveBeenNthCalledWith(1, "ODDS:1");
+    expect(state.sendMessage).toHaveBeenNthCalledWith(2, "ODDS:2");
+    expect(state.sendMessage).toHaveBeenNthCalledWith(3, expect.stringContaining("📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC*"));
+    expect(state.sendMessage).toHaveBeenNthCalledWith(3, expect.stringContaining("💡 *Tổng quan:*"));
+    expect(state.sendMessage).toHaveBeenNthCalledWith(3, expect.stringContaining("═══════════════════════"));
+    expect(state.sendMessage).toHaveBeenNthCalledWith(3, expect.stringContaining("PICKS"));
+    expect(state.sendMessage).toHaveBeenNthCalledWith(3, expect.stringContaining("PLAN"));
     expect(state.generateCombinedAnalysis).toHaveBeenCalledTimes(1);
     expect(state.saveBettingAnalysisSnapshot).toHaveBeenCalledTimes(2);
-    expect(formatCombinedOddsMessage).toHaveBeenCalledTimes(1);
-    expect(formatMatchAnalysisMessage).toHaveBeenCalledTimes(2);
+    expect(formatOddsText).toHaveBeenCalledTimes(2);
+    expect(formatPicksSummaryBlock).toHaveBeenCalledTimes(1);
     expect(formatBettingPlanMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -162,7 +165,8 @@ describe("betting/odds-runner combined flow", () => {
 
     await oddsRunner.runOddsCheck();
 
-    expect(state.sendMessage).toHaveBeenCalledWith("RAW:2");
+    expect(state.sendMessage).toHaveBeenNthCalledWith(1, "ODDS:1");
+    expect(state.sendMessage).toHaveBeenNthCalledWith(2, "ODDS:2");
     expect(state.sendMessage).toHaveBeenCalledWith(
       "⚠️ AI không phân tích được. Đã gửi dữ liệu odds thô phía trên.",
     );

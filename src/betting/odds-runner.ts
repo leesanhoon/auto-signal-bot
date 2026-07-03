@@ -12,8 +12,9 @@ import { saveBettingAnalysisSnapshot } from "./betting-analysis-repository.js";
 import { loadUpcomingMatches } from "./match-repository.js";
 import {
   formatBettingPlanMessage,
-  formatCombinedOddsMessage,
-  formatMatchAnalysisMessage,
+  formatOddsText,
+  formatPicksSummaryBlock,
+  sortMatchOddsByKickoff,
 } from "./odds-text-format.js";
 import { createLogger } from "../shared/logger.js";
 import { vnDateStr } from "../shared/vn-time.js";
@@ -54,15 +55,8 @@ function buildCombinedAnalysisMessage(
   plan: CombinedAnalysisPlan,
 ): string {
   const sections: string[] = [];
-  sections.push(`📋 *TỔNG QUAN*\n${plan.summary || "Không có tóm tắt."}`);
-
-  for (const match of plan.matches) {
-    const payload = payloads[match.matchIndex];
-    if (!payload) continue;
-    sections.push(
-      formatMatchAnalysisMessage(payload, buildCombinedMatchAnalysis(payload, match)),
-    );
-  }
+  sections.push(`💡 *Tổng quan:* ${plan.summary || "Không có tóm tắt."}`);
+  sections.push(formatPicksSummaryBlock(payloads, plan));
 
   return sections.join("\n\n");
 }
@@ -124,7 +118,10 @@ export async function runOddsCheck(): Promise<void> {
     return;
   }
 
-  await sendMessage(formatCombinedOddsMessage(payload));
+  const sortedPayload = sortMatchOddsByKickoff(payload);
+  for (const match of sortedPayload) {
+    await sendMessage(formatOddsText(match));
+  }
 
   let plan: CombinedAnalysisPlan | null = null;
   try {
@@ -150,6 +147,7 @@ export async function runOddsCheck(): Promise<void> {
       "📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC*",
       "",
       combinedMessage.trim(),
+      "═══════════════════════",
       planBlock.trim(),
     ].filter(Boolean).join("\n\n");
     await sendMessage(fullMessage);

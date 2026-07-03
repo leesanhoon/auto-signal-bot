@@ -50,7 +50,7 @@ describe("parseMatchAnalysisResponse", () => {
       expect.anything(),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          requestCount: 3,
+          requestCount: 2,
           fallbackUsed: true,
         }),
       }),
@@ -91,7 +91,7 @@ describe("parseMatchAnalysisResponse", () => {
       expect.anything(),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          requestCount: 3,
+          requestCount: 2,
           fallbackUsed: true,
         }),
       }),
@@ -129,7 +129,7 @@ describe("parseMatchAnalysisResponse", () => {
       expect.anything(),
       expect.objectContaining({
         metadata: expect.objectContaining({
-          requestCount: 3,
+          requestCount: 2,
           fallbackUsed: false,
         }),
       }),
@@ -194,6 +194,7 @@ describe("parseMatchAnalysisResponse", () => {
     expect(result?.summary).toBe("Tong quan");
     expect(callOpenRouter).toHaveBeenCalledTimes(1);
     expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({ effort: "high" });
     expect(recordOpenRouterUsage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -253,12 +254,92 @@ describe("parseMatchAnalysisResponse", () => {
     expect(callOpenRouter.mock.calls[0][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
     expect(callOpenRouter.mock.calls[1][0].plugins).toEqual([{ id: "web", max_results: 3 }]);
     expect(callOpenRouter.mock.calls[2][0].plugins).toBeUndefined();
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({ effort: "high" });
+    expect(callOpenRouter.mock.calls[2][0].reasoning).toEqual({ effort: "high" });
     expect(recordOpenRouterUsage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         metadata: expect.objectContaining({
           stage: "combined",
           requestCount: 3,
+          fallbackUsed: true,
+          timeoutMs: 240_000,
+          inputTokens: 8,
+          outputTokens: 16,
+          finishReason: "stop",
+        }),
+      }),
+    );
+  });
+
+  test("generateCombinedAnalysis falls back when the primary response is truncated", async () => {
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          summary: "Tong quan",
+          matches: [
+            {
+              matchIndex: 0,
+              matchLabel: "Belgium vs Senegal",
+              kickoff: "12:00",
+              analysis: "Phan tich",
+              preferredScoreline: "1-0",
+              scoreConfidence: 51,
+              topPicks: [
+                { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+              ],
+            },
+          ],
+          parlays: [],
+          remainingSingles: [],
+        }),
+        usage: { promptTokens: 12, completionTokens: 16_000 },
+        finishReason: "length",
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          summary: "Tong quan",
+          matches: [
+            {
+              matchIndex: 0,
+              matchLabel: "Belgium vs Senegal",
+              kickoff: "12:00",
+              analysis: "Phan tich",
+              preferredScoreline: "1-0",
+              scoreConfidence: 51,
+              topPicks: [
+                { market: "1X2", selection: "Belgium thắng", odds: 2.1, reason: "Ngon", suitability: "parlay" },
+              ],
+            },
+          ],
+          parlays: [],
+          remainingSingles: [],
+        }),
+        usage: { promptTokens: 8, completionTokens: 16 },
+        finishReason: "stop",
+      });
+
+    const result = await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.summary).toBe("Tong quan");
+    expect(callOpenRouter).toHaveBeenCalledTimes(2);
+    expect(callOpenRouter.mock.calls[0][0].reasoning).toEqual({ effort: "high" });
+    expect(callOpenRouter.mock.calls[1][0].reasoning).toEqual({ effort: "high" });
+    expect(recordOpenRouterUsage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          stage: "combined",
+          requestCount: 2,
           fallbackUsed: true,
           timeoutMs: 240_000,
           inputTokens: 8,

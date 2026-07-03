@@ -1,88 +1,21 @@
 import { describe, expect, test } from "vitest";
-import { formatMainOddsSummary, formatMatchAnalysisMessage, formatOddsAnalysisInput, formatFullOddsAnalysisInput, formatOddsFallbackMessage, formatOddsDataMessage } from "../../src/betting/odds-text-format.js";
-import type { MatchAiAnalysis, MatchOddsPayload } from "../../src/betting/betting-types.js";
+import {
+  formatBettingPlanMessage,
+  formatFullOddsAnalysisInput,
+  formatMainOddsSummary,
+  formatOddsAnalysisInput,
+  formatOddsDataMessage,
+  formatOddsFallbackMessage,
+  formatPicksSummaryBlock,
+} from "../../src/betting/odds-text-format.js";
+import type {
+  BettingPlan,
+  CombinedAnalysisPlan,
+  MatchOddsPayload,
+} from "../../src/betting/betting-types.js";
 
-describe("formatMatchAnalysisMessage", () => {
-  test("highlights the revised recommendation and limits supporting detail", () => {
-    const payload: MatchOddsPayload = {
-      gameId: "1",
-      home: "Belgium",
-      away: "Senegal",
-      kickoffUnix: 0,
-      odds: { updatedUnix: 0, legend: "", markets: [] },
-    };
-    const analysis: MatchAiAnalysis = {
-      match: "Belgium vs Senegal",
-      preferredScoreline: "1-0",
-      scoreConfidence: 36,
-      recommendation: "Belgium -0.25",
-      confidence: 33,
-      picks: [{ market: "Chap Chau A", selection: "Belgium -0.25", odds: 1.81, reason: "Kèo nghiêng theo dữ liệu odds" }],
-      marketViews: [
-        { market: "Chap Chau A", assessment: "Nghieng Belgium -0.25", odds: 1.81 },
-        { market: "GG/NG", assessment: "Nghieng GG", odds: 1.69 },
-      ],
-      verificationStatus: "revised",
-      keyPoints: ["Điểm chính 1", "Điểm chính 2", "Điểm thừa"],
-      risks: ["Rủi ro 1", "Rủi ro 2", "Rủi ro thừa"],
-      summary: "Phần tóm tắt dài và trùng lặp.",
-      verifiedConfirmed: false,
-      verifiedConfidence: 62,
-      verifiedComment: "Lời từ chối cũ rất dài và không cần hiển thị.",
-      revisedAfterReject: true,
-    };
-
-    const message = formatMatchAnalysisMessage(payload, analysis);
-
-    expect(message).toContain("🏟 *Belgium (H) vs Senegal (A)*");
-    expect(message).toContain("1. *Belgium -0.25*  [@1.81]");
-    expect(message).toContain("_Chap Chau A_");
-    expect(message).toContain("Lý do");
-    expect(message).toContain("⚽ *Tỷ số dự đoán:* 1-0 _(36%)_");
-    expect(message).not.toContain("⭐ *Độ tin cậy:");
-    expect(message).not.toContain("Thẩm định:");
-    expect(message).not.toContain("🔎 *Nhận định:");
-    expect(message).not.toContain("⚠️ *Rủi ro:");
-    expect(message).not.toContain("Điểm chính 1");
-    expect(message).not.toContain("Rủi ro thừa");
-    expect(message).not.toContain("Lời từ chối cũ");
-    expect(message).not.toContain("Phần tóm tắt");
-    expect(message).not.toContain("Kèo chính:");
-  });
-
-  test("hides no-bet recommendation and internal verification state", () => {
-    const message = formatMatchAnalysisMessage(
-      {
-        gameId: "1",
-        home: "Belgium",
-        away: "Senegal",
-        kickoffUnix: 0,
-        odds: { updatedUnix: 0, legend: "", markets: [] },
-      },
-      {
-        match: "Belgium vs Senegal",
-        preferredScoreline: "2-1",
-        scoreConfidence: 45,
-        recommendation: "Đứng ngoài",
-        confidence: 38,
-        keyPoints: ["Odds chu nha nhinh hon.", "Tong ban chua ro."],
-        risks: ["Tin hieu xung dot.", "Ti so phan tan."],
-        summary: "Khong co lua chon.",
-        verifiedConfirmed: false,
-        verifiedConfidence: 0,
-        verifiedComment: "Internal",
-        revisedAfterReject: true,
-        verificationStatus: "failed",
-      },
-    );
-
-    expect(message).not.toContain("KÈO ĐỀ XUẤT");
-    expect(message).not.toContain("Thẩm định:");
-    expect(message).not.toContain("Internal");
-    expect(message).toContain("⚽ *Tỷ số dự đoán:*");
-  });
-
-  test("formatFullOddsAnalysisInput includes all markets and correct score", () => {
+describe("formatFullOddsAnalysisInput", () => {
+  test("includes all markets and correct score", () => {
     const payload: MatchOddsPayload = {
       gameId: "1",
       home: "Belgium",
@@ -152,5 +85,181 @@ describe("odds Telegram messages Vietnamese output", () => {
     const dataMessage = formatOddsDataMessage(payload);
     expect(dataMessage).toContain("Asian Handicap");
     expect(dataMessage).not.toContain("Dữ liệu odds thô");
+  });
+});
+
+describe("summary and betting plan blocks", () => {
+  const payloads: MatchOddsPayload[] = [
+    {
+      gameId: "1",
+      home: "Tây Ban Nha",
+      away: "Áo",
+      kickoffUnix: 1000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    },
+    {
+      gameId: "2",
+      home: "Bồ Đào Nha",
+      away: "Croatia",
+      kickoffUnix: 2000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    },
+    {
+      gameId: "3",
+      home: "Thụy Sĩ",
+      away: "Algeria",
+      kickoffUnix: 3000,
+      odds: { updatedUnix: 0, legend: "", markets: [] },
+    },
+  ];
+
+  test("formatPicksSummaryBlock renders compact selected-picks rows", () => {
+    const plan: CombinedAnalysisPlan = {
+      summary: "3 kèo chính",
+      matches: [
+        {
+          matchIndex: 0,
+          matchLabel: "TBN vs Áo",
+          kickoff: "06:00",
+          analysis: "Main",
+          preferredScoreline: "2:0",
+          scoreConfidence: 61,
+          topPicks: [
+            { market: "Tài/Xỉu EU", selection: "Under 2.5 EU", odds: 2.19, reason: "gọn" },
+          ],
+          keyPoints: ["A"],
+          risks: ["B"],
+        },
+        {
+          matchIndex: 2,
+          matchLabel: "Thụy Sĩ vs Algeria",
+          kickoff: "08:00",
+          analysis: "Main",
+          preferredScoreline: "1:1",
+          scoreConfidence: 58,
+          topPicks: [
+            { market: "Chấp Châu Á", selection: "Algeria +0.25 AH", odds: 2.17, reason: "gọn" },
+          ],
+          keyPoints: ["A"],
+          risks: ["B"],
+        },
+      ],
+      parlays: [],
+      remainingSingles: [],
+    };
+
+    const message = formatPicksSummaryBlock(payloads, plan);
+
+    expect(message).toContain("🎯 *Các kèo được chọn*");
+    expect(message).toContain("🏆 *Khuyến nghị chính:*");
+    expect(message).toContain("TBN vs Áo");
+    expect(message).toContain("*TBN vs Áo* | Under 2.5 EU @2.19 | TS: 2:0");
+    expect(message).toContain("(TT 61%)");
+    expect(message).toContain("*Thụy Sĩ vs Algeria* | Algeria +0.25 AH @2.17 | TS: 1:1");
+  });
+
+  test("formatPicksSummaryBlock prefers a single-eligible top pick over the first array item", () => {
+    const plan: CombinedAnalysisPlan = {
+      summary: "Chọn kèo phù hợp nhất.",
+      matches: [
+        {
+          matchIndex: 0,
+          matchLabel: "TBN vs Áo",
+          kickoff: "06:00",
+          analysis: "Main",
+          preferredScoreline: "2:0",
+          scoreConfidence: 61,
+          topPicks: [
+            { market: "1X2", selection: "TBN thắng", odds: 1.72, reason: "parlay first", suitability: "parlay" },
+            { market: "Tỷ số chính xác", selection: "2:0", odds: 6.0, reason: "single preferred", suitability: "single" },
+          ],
+          keyPoints: ["A"],
+          risks: ["B"],
+        },
+      ],
+      parlays: [],
+      remainingSingles: [],
+    };
+
+    const message = formatPicksSummaryBlock(payloads, plan);
+
+    expect(message).toContain("*TBN vs Áo* | 2:0 @6 | TS: 2:0");
+    expect(message).not.toContain("TBN thắng @1.72");
+  });
+
+  test("formatBettingPlanMessage trims stake detail and keeps compact lines", () => {
+    const plan: BettingPlan = {
+      summary: "Giữ 3 xiên, 1 kèo đơn.",
+      parlays: [
+        {
+          type: "Xiên 3 (main)",
+          combinedOdds: 10.07,
+          stake: 50_000,
+          potentialWin: 503_500,
+          legs: [
+            {
+              matchIndex: 0,
+              matchLabel: "TBN vs Áo",
+              pick: { market: "EU", selection: "Under 2.5 EU", odds: 2.19, reason: "A" },
+            },
+            {
+              matchIndex: 1,
+              matchLabel: "Bồ Đào Nha vs Croatia",
+              pick: { market: "EU", selection: "Under 2.5 EU", odds: 2.12, reason: "B" },
+            },
+            {
+              matchIndex: 2,
+              matchLabel: "Thụy Sĩ vs Algeria",
+              pick: { market: "AH", selection: "Algeria +0.25 AH", odds: 2.17, reason: "C" },
+            },
+          ],
+        },
+        {
+          type: "Xiên 2 (main)",
+          combinedOdds: 4.64,
+          stake: 50_000,
+          potentialWin: 232_000,
+          legs: [
+            {
+              matchIndex: 0,
+              matchLabel: "TBN vs Áo",
+              pick: { market: "EU", selection: "Under 2.5 EU", odds: 2.19, reason: "A" },
+            },
+            {
+              matchIndex: 1,
+              matchLabel: "Bồ Đào Nha vs Croatia",
+              pick: { market: "EU", selection: "Under 2.5 EU", odds: 2.12, reason: "B" },
+            },
+          ],
+        },
+      ],
+      remainingSingles: [
+        {
+          matchIndex: 0,
+          matchLabel: "TBN vs Áo",
+          betType: "Tỷ số chính xác",
+          pick: { market: "CS", selection: "2:0", odds: 6, reason: "D" },
+          stake: 250_000,
+          potentialWin: 1_500_000,
+        },
+      ],
+    };
+
+    const message = formatBettingPlanMessage(plan);
+
+    expect(message).toContain("⛓️ *Xiên 3 (main)* — x10.07");
+    expect(message).toContain("② 🔗 *Xiên 2 (main)* — x4.64");
+    expect(message).toContain("🔴 Mạo hiểm");
+    expect(message).toContain("🟡 Vừa");
+    expect(message).toContain("TBN vs Áo: Under 2.5 EU @2.19");
+    expect(message).toContain("BĐN vs Croa: Under 2.5 EU @2.12");
+    expect(message).toContain("TS vs Alge: Algeria +0.25 AH @2.17");
+    expect(message).toContain(" | ");
+    expect(message).toContain("📌 *KÈO ĐƠN*");
+    expect(message).toContain("① TBN vs Áo: 2:0 @6");
+    expect(message).not.toContain("250_000");
+    expect(message).not.toContain("→");
+    expect(message).not.toContain(" × ");
+    expect(message).not.toContain("Giữ 3 xiên, 1 kèo đơn.");
   });
 });

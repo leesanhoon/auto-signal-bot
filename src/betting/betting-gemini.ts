@@ -1056,7 +1056,7 @@ const COMBINED_TIMEOUT_MS = parsePositiveEnv(
   "BETTING_AI_COMBINED_TIMEOUT_MS",
   240_000,
 );
-const COMBINED_TOKENS = 6_000;
+const COMBINED_TOKENS = 16_000;
 
 function buildPlanSystemPrompt(matchCount: number): string {
   const totalCapital = matchCount * 1_000_000;
@@ -1490,6 +1490,7 @@ export async function generateCombinedAnalysis(
     temperature: 0.3,
     responseFormat: { type: "json_object" },
     timeoutMs: COMBINED_TIMEOUT_MS,
+    reasoning: { effort: "high" },
     plugins: [{ id: "web", max_results: ANALYZE_WEB_RESULTS }],
   };
 
@@ -1522,6 +1523,21 @@ export async function generateCombinedAnalysis(
       finishReason: response.finishReason ?? "stop",
     });
 
+    if (response.finishReason === "length") {
+      logger.warn(
+        `  ! Combined analysis truncated (finish_reason=length, ${response.usage.completionTokens} tokens) for ${payloads[0].home} vs ${payloads[0].away}; trying fallback model`,
+      );
+      throw Object.assign(
+        new Error(
+          `combined response truncated (finish_reason=length, ${response.usage.completionTokens} tokens)`,
+        ),
+        {
+          requestCount,
+          forceFallback: true,
+        },
+      );
+    }
+
     const plan = parseCombinedAnalysisResponse(response.text, payloads);
     if (!plan) {
       logger.warn(
@@ -1530,7 +1546,9 @@ export async function generateCombinedAnalysis(
     }
     return plan;
   } catch (primaryError) {
-    if (!isProFallbackTrigger(primaryError)) {
+    const forcedFallback =
+      (primaryError as Error & { forceFallback?: boolean }).forceFallback === true;
+    if (!forcedFallback && !isProFallbackTrigger(primaryError)) {
       logger.warn(
         `  ! Combined analysis primary model failed (non-retryable): ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`,
       );
@@ -1568,6 +1586,13 @@ export async function generateCombinedAnalysis(
         timeoutMs: COMBINED_TIMEOUT_MS,
         finishReason: response.finishReason ?? "stop",
       });
+
+      if (response.finishReason === "length") {
+        logger.warn(
+          `  ! Combined analysis truncated (finish_reason=length, ${response.usage.completionTokens} tokens) for fallback model ${fallbackRequest.model}; giving up`,
+        );
+        return null;
+      }
 
       const plan = parseCombinedAnalysisResponse(response.text, payloads);
       if (!plan) {

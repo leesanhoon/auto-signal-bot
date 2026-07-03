@@ -1,7 +1,7 @@
 import type {
   CompactMarket,
   CompactOutcome,
-  MatchAiAnalysis,
+  CombinedAnalysisPlan,
   MatchOddsPayload,
   BettingPlan,
 } from "./betting-types.js";
@@ -26,6 +26,116 @@ function fmtNum(n: number): string {
 
 function fmtSignedPoint(n: number): string {
   return n > 0 ? `+${fmtNum(n)}` : fmtNum(n);
+}
+
+const CIRCLED_DIGITS = [
+  "①",
+  "②",
+  "③",
+  "④",
+  "⑤",
+  "⑥",
+  "⑦",
+  "⑧",
+  "⑨",
+  "⑩",
+  "⑪",
+  "⑫",
+  "⑬",
+  "⑭",
+  "⑮",
+  "⑯",
+  "⑰",
+  "⑱",
+  "⑲",
+  "⑳",
+] as const;
+
+function circledNumber(index: number): string {
+  return CIRCLED_DIGITS[index] ?? `${index + 1}`;
+}
+
+function compactText(value: string, maxLength = 80): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, maxLength - 1).trimEnd()}…`
+    : normalized;
+}
+
+function abbreviateTeamName(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return normalized;
+
+  const words = normalized.split(" ");
+  if (words.length === 1) {
+    return normalized.length <= 6 ? normalized : normalized.slice(0, 4).trimEnd();
+  }
+
+  const initials = words
+    .map((word) => word[0])
+    .filter(Boolean)
+    .join("");
+
+  return initials.length >= 2 ? initials.toUpperCase() : compactText(normalized, 8);
+}
+
+function abbreviateMatchLabel(label: string): string {
+  const normalized = label.replace(/\s+/g, " ").trim();
+  const parts = normalized.split(/\s+vs\s+/i);
+  if (parts.length !== 2) return compactText(normalized, 20);
+
+  const [home, away] = parts;
+  return `${abbreviateTeamName(home)} vs ${abbreviateTeamName(away)}`;
+}
+
+function pickPrimaryTopPick(
+  picks: BettingPlan["matches"][number]["topPicks"],
+): BettingPlan["matches"][number]["topPicks"][number] | undefined {
+  if (!Array.isArray(picks) || picks.length === 0) return undefined;
+  return (
+    picks.find((pick) => pick.suitability === "single" || pick.suitability === "both") ??
+    picks.find((pick) => pick.suitability === "parlay") ??
+    picks[0]
+  );
+}
+
+function getParlayTypeIcon(type: string): string {
+  const lower = type.toLowerCase();
+  if (lower.includes("tỉ số")) return "🎯";
+  if (lower.includes("xiên 3")) return "⛓️";
+  if (lower.includes("xiên 2")) return "🔗";
+  return "📎";
+}
+
+function riskLabel(combinedOdds: number): string {
+  if (combinedOdds < 3) return "🟢 An toàn";
+  if (combinedOdds < 8) return "🟡 Vừa";
+  return "🔴 Mạo hiểm";
+}
+
+function pickTopRecommendation(
+  payloads: MatchOddsPayload[],
+  plan: CombinedAnalysisPlan,
+): string | undefined {
+  const sorted = [...plan.matches].sort((a, b) => b.scoreConfidence - a.scoreConfidence);
+  const best = sorted[0];
+  if (!best) return undefined;
+
+  const pick = pickPrimaryTopPick(best.topPicks);
+  if (!pick) return undefined;
+
+  const fallbackLabel =
+    payloads[best.matchIndex]?.home && payloads[best.matchIndex]?.away
+      ? `${payloads[best.matchIndex].home} vs ${payloads[best.matchIndex].away}`
+      : best.matchLabel;
+
+  return `🏆 *Khuyến nghị chính:* ${compactText(fallbackLabel, 40)} — ${compactText(pick.selection, 48)} @${pick.odds} (TT ${best.scoreConfidence}%)`;
+}
+
+export function sortMatchOddsByKickoff(
+  payloads: MatchOddsPayload[],
+): MatchOddsPayload[] {
+  return [...payloads].sort((a, b) => a.kickoffUnix - b.kickoffUnix);
 }
 
 function formatKickoffDateTime(kickoffUnix: number): string {
@@ -435,59 +545,31 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
   return lines.join("\n");
 }
 
-export function formatMatchAnalysisMessage(
-  payload: MatchOddsPayload,
-  analysis: MatchAiAnalysis,
+export function formatPicksSummaryBlock(
+  payloads: MatchOddsPayload[],
+  plan: CombinedAnalysisPlan,
 ): string {
-  const isStandAside =
-    /[dđ][uứ]ng\s*(ngo[aà]i|l[aạ]i)|kh[oô]ng\s+(c[oó]\s+)?(k[eè]o|edge)/i.test(
-      analysis.recommendation,
-    );
-  const compact = (value: string, maxLength = 140): string => {
-    const normalized = value.replace(/\s+/g, " ").trim();
-    return normalized.length > maxLength
-      ? `${normalized.slice(0, maxLength - 1).trimEnd()}…`
-      : normalized;
-  };
-  const picks = (analysis.picks ?? []).slice(0, 3);
-  const sections: string[] = [
-    `🏟 *${payload.home} (H) vs ${payload.away} (A)*`,
-  ];
+  const lines: string[] = ["🎯 *Các kèo được chọn*"];
 
-  if (picks.length > 0) {
-    sections.push(
-      [
-        "🎯 *KÈO ĐỀ XUẤT*",
-        ...picks.map((pick, index) => {
-          const reason = pick.reason
-            ? `\n   _Lý do:_ ${compact(pick.reason, 100)}`
-            : "";
-          // Badge xiên / đơn / cả hai
-          const badge =
-            pick.suitability === "parlay"
-              ? " 🔗XIÊN"
-              : pick.suitability === "single"
-                ? " 📌ĐƠN"
-                : pick.suitability === "both"
-                  ? " 🔗XIÊN+📌ĐƠN"
-                  : "";
-          const parlayNote = pick.parlayNote
-            ? `\n   💡 ${pick.parlayNote}`
-            : "";
-          return `${index + 1}. *${compact(pick.selection, 60)}*  [@${pick.odds}]${badge}\n   _${compact(pick.market, 35)}_${reason}${parlayNote}`;
-        }),
-      ].join("\n"),
-    );
-  } else if (!isStandAside) {
-    sections.push(
-      `🎯 *KÈO ĐỀ XUẤT*\n• ${compact(analysis.recommendation, 120)}`,
+  const recommendation = pickTopRecommendation(payloads, plan);
+  if (recommendation) lines.push(recommendation, "");
+
+  for (const match of plan.matches) {
+    const payload = payloads[match.matchIndex];
+    const pick = pickPrimaryTopPick(match.topPicks);
+    if (!payload || !pick) continue;
+    const matchLabel = compactText(match.matchLabel || `${payload.home} vs ${payload.away}`, 40);
+    const selection = compactText(pick.selection, 48);
+    lines.push(
+      `*${matchLabel}* | ${selection} @${pick.odds} | TS: ${compactText(match.preferredScoreline, 16)} (TT ${match.scoreConfidence}%)`,
     );
   }
-  sections.push(
-    `⚽ *Tỷ số dự đoán:* ${analysis.preferredScoreline} _(${analysis.scoreConfidence}%)_`,
-  );
 
-  return sections.join("\n\n");
+  if (lines.length === 1) {
+    lines.push("Không có kèo được chọn.");
+  }
+
+  return lines.join("\n");
 }
 
 export function formatOddsFallbackMessage(
@@ -505,6 +587,8 @@ export function formatOddsFallbackMessage(
 
 export function formatBettingPlanMessage(plan: BettingPlan): string {
   const sections: string[] = [];
+  let parlayIndex = 0;
+  let singleIndex = 0;
 
   // Parlays grouped by type
   if (plan.parlays.length > 0) {
@@ -516,48 +600,32 @@ export function formatBettingPlanMessage(plan: BettingPlan): string {
     }
 
     for (const [type, pList] of grouped) {
-      // Icon per parlay type
-      const typeIcon =
-        type.toLowerCase().includes("xiên tỉ số")
-          ? "🎯"
-          : type.toLowerCase().includes("xiên 2")
-            ? "🔗"
-            : type.toLowerCase().includes("xiên 3")
-              ? "⛓️"
-              : "📎";
+      const typeIcon = getParlayTypeIcon(type);
       const lines = pList.map((p) => {
-        const legText = p.legs
-          .map((l) => `  · ${l.matchLabel}: ${l.pick.selection} @${l.pick.odds}`)
-          .join("\n");
-        const winText = p.potentialWin.toLocaleString("vi-VN");
-        const stakeText = p.stake.toLocaleString("vi-VN");
-        return `${legText}\n  ➡️ ${p.combinedOdds.toFixed(2)} · ${stakeText}đ → ${winText}đ`;
+        const legs = p.legs
+          .map((l) => `${abbreviateMatchLabel(l.matchLabel)}: ${compactText(l.pick.selection, 32)} @${l.pick.odds}`)
+          .join(" | ");
+        const displayIndex = circledNumber(parlayIndex);
+        parlayIndex += 1;
+        return [
+          `${displayIndex} ${typeIcon} *${type}* — x${p.combinedOdds.toFixed(2)} · ${riskLabel(p.combinedOdds)}`,
+          `   ${legs}`,
+        ].join("\n");
       });
-      // Capital management line
-      const totalStake = pList.reduce((s, p) => s + p.stake, 0);
-      sections.push(
-        `${typeIcon} *${type.toUpperCase()}* (mỗi xiên: ${pList[0].stake.toLocaleString("vi-VN")}đ · tổng: ${totalStake.toLocaleString("vi-VN")}đ)\n${lines.join("\n\n")}`,
-      );
+      sections.push(lines.join("\n\n"));
     }
   }
 
   // Singles
   if (plan.remainingSingles.length > 0) {
     const lines = plan.remainingSingles.map((s) => {
-      const winText = s.potentialWin.toLocaleString("vi-VN");
-      const stakeText = s.stake.toLocaleString("vi-VN");
-      return `• ${s.matchLabel}: ${s.pick.market} — ${s.pick.selection} @${s.pick.odds}\n  ${stakeText}đ → ${winText}đ`;
+      const displayIndex = circledNumber(singleIndex);
+      singleIndex += 1;
+      return `${displayIndex} ${abbreviateMatchLabel(s.matchLabel)}: ${s.pick.selection} @${s.pick.odds}`;
     });
-    const totalStake = plan.remainingSingles.reduce((s, i) => s + i.stake, 0);
-    const totalPotential = plan.remainingSingles.reduce((s, i) => s + i.potentialWin, 0);
     sections.push(
-      `📌 *KÈO ĐƠN* (tổng: ${totalStake.toLocaleString("vi-VN")}đ → ${totalPotential.toLocaleString("vi-VN")}đ)\n${lines.join("\n")}`,
+      `📌 *KÈO ĐƠN*\n${lines.join("\n")}`,
     );
-  }
-
-  // Summary
-  if (plan.summary) {
-    sections.push(`📝 ${plan.summary}`);
   }
 
   return sections.join("\n\n");
@@ -573,8 +641,7 @@ export function formatCombinedOddsMessage(
 ): string {
   if (payloads.length === 0) return "Không có dữ liệu odds.";
 
-  // Sort by kickoffUnix ascending
-  const sorted = [...payloads].sort((a, b) => a.kickoffUnix - b.kickoffUnix);
+  const sorted = sortMatchOddsByKickoff(payloads);
 
   // Get date for header from first match
   const firstDate = new Date(sorted[0].kickoffUnix * 1000);
