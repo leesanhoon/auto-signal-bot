@@ -1,4 +1,6 @@
 import { withConfiguredRateLimit } from "./rate-limit.js";
+import { createLogger } from "./logger.js";
+import { writeOpenRouterPromptLog } from "./prompt-log.js";
 
 export type OpenRouterRequest = {
   model: string;
@@ -23,6 +25,8 @@ export type OpenRouterResponse = {
   usage: { promptTokens: number; completionTokens: number };
   finishReason?: string;
 };
+
+const logger = createLogger("shared:openrouter");
 
 type ApiResponse = {
   choices?: Array<{
@@ -51,6 +55,16 @@ export async function callOpenRouter(
   return withConfiguredRateLimit(
     { key: "openrouter", envVar: "OPENROUTER_RATE_LIMIT_RPM", defaultRpm: 15 },
     async () => {
+      try {
+        const promptLogPath = await writeOpenRouterPromptLog(input);
+        logger.info({ promptLogPath, model: input.model }, "Wrote OpenRouter prompt log");
+      } catch (error) {
+        logger.warn(
+          { error, model: input.model },
+          "Failed to write OpenRouter prompt log",
+        );
+      }
+
       const messages: Array<Record<string, unknown>> = [];
       if (input.systemPrompt)
         messages.push({ role: "system", content: input.systemPrompt });

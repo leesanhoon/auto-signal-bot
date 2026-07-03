@@ -14,3 +14,10 @@ function parseBooleanEnv(raw: string | undefined): boolean {
 export function getConfiguredChartVerifyEnabled(): boolean {
   return parseBooleanEnv(process.env.CHART_AI_VERIFY_ENABLED);
 }
+
+export function getConfiguredPendingOrderExpiryRuns(): number {
+  const raw = process.env.PENDING_ORDER_EXPIRY_RUNS?.trim();
+  if (!raw) return 2;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 2;
+}

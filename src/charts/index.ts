@@ -1,8 +1,9 @@
 import "../shared/env.js";
 import { captureAllCharts } from "./screenshot.js";
 import { analyzeAllCharts, confirmHighConfidenceSetups } from "./analyzer.js";
-import { saveOpenPosition } from "./positions-repository.js";
+import { saveOpenPosition, savePendingOrder } from "./positions-repository.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner.js";
+import { runCheckPendingOrders } from "./check-pending-orders-runner.js";
 import { sendAllAnalyses, notifyError } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
 import { validateTradeSetupForOpen } from "./position-engine.js";
@@ -65,10 +66,29 @@ async function main(): Promise<void> {
       } catch (error) {
         logger.error("Failed to auto-save open position", { pair: setup.pair, error });
       }
+    } else if ((setup.confidence ?? 0) >= threshold && setup.orderType !== "MARKET_NOW") {
+      try {
+        const saved = await savePendingOrder(setup);
+        if (saved) {
+          logger.info("Saved pending order", {
+            pair: setup.pair,
+            orderType: setup.orderType,
+            primaryTimeframe: setup.primaryTimeframe,
+          });
+        } else {
+          logger.info("Skipped duplicate pending order", {
+            pair: setup.pair,
+            orderType: setup.orderType,
+          });
+        }
+      } catch (error) {
+        logger.error("Failed to save pending order", { pair: setup.pair, error });
+      }
     } else if (setup.verifiedConfirmed === true) {
-      logger.info("Skipped auto-save because setup is pending, not an open position", {
+      logger.info("Skipped save because setup is pending below threshold or not eligible", {
         pair: setup.pair,
         orderType: setup.orderType,
+        confidence: setup.confidence,
       });
     }
   }
@@ -77,6 +97,8 @@ async function main(): Promise<void> {
   await sendAllAnalyses(result);
   logger.info("Checking open positions");
   await runCheckOpenTrades();
+  logger.info("Checking pending orders");
+  await runCheckPendingOrders();
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   logger.info("Run complete", { scannedPairs: screenshots.length, elapsedSeconds: Number(elapsed) });
 }

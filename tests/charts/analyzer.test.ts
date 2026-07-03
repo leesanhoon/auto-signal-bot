@@ -32,6 +32,23 @@ describe("charts/analyzer", () => {
     expect(parsed.setups[0].orderType).toBe("BUY_STOP");
     expect(parsed.setups[0].entryCondition).toBe("Chờ giá xác nhận đúng vùng entry trước khi vào lệnh.");
     expect(parsed.setups[0].currentPriceContext).toBe("Model chưa mô tả rõ vị trí giá hiện tại so với entry.");
+    expect(parsed.setups[0].primaryTimeframe).toBe("H4");
+  });
+
+  test("parseAnalysisResponse preserves a valid primary timeframe", () => {
+    const parsed = analyzer.parseAnalysisResponse(
+      '{"summaries":[],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"BB","primaryTimeframe":"M15","reasons":[],"risks":[],"confidence":80,"entry":"1.1000","stopLoss":"1.0950","takeProfit1":"1.1100","takeProfit2":"1.1200","riskReward":"1:2","summary":"Test"}],"noSetupReason":""}',
+    );
+
+    expect(parsed.setups[0].primaryTimeframe).toBe("M15");
+  });
+
+  test("parseAnalysisResponse normalizes Vietnamese direction labels", () => {
+    const parsed = analyzer.parseAnalysisResponse(
+      '{"summaries":[],"setups":[{"pair":"EUR/USD","direction":"Bán","setup":"BB","reasons":[],"risks":[],"confidence":80,"entry":"1.1000","stopLoss":"1.0950","takeProfit1":"1.1100","takeProfit2":"1.1200","riskReward":"1:2","summary":"Test"}],"noSetupReason":""}',
+    );
+
+    expect(parsed.setups[0].direction).toBe("SHORT");
   });
 
   test("parseAnalysisResponse falls back for blank explanatory fields", () => {
@@ -141,5 +158,59 @@ describe("charts/analyzer", () => {
     expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("noSetupReason");
     expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("EMA20 slope");
     expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("RB, ARB, IRB, BB, FB, SB, DD");
+  });
+
+  test("confirmHighConfidenceSetups uses the primary timeframe for provenance", async () => {
+    state.call.mockResolvedValueOnce({
+      text: '{"confirmed":true,"confidence":91,"comment":"OK"}',
+      usage: { promptTokens: 4, completionTokens: 2 },
+    });
+
+    const screenshots: ScreenshotResult[] = [
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
+        buffer: Buffer.from("d1"),
+        filepath: "/tmp/chart-d1.jpg",
+      },
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
+        buffer: Buffer.from("h4"),
+        filepath: "/tmp/chart-h4.jpg",
+      },
+      {
+        chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
+        buffer: Buffer.from("m15"),
+        filepath: "/tmp/chart-m15.jpg",
+      },
+    ];
+
+    const result = await analyzer.confirmHighConfidenceSetups(
+      [
+        {
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "RB",
+          primaryTimeframe: "M15",
+          reasons: ["EMA20 flat to up"],
+          risks: ["False break"],
+          confidence: 88,
+          entry: "1.1",
+          stopLoss: "1.09",
+          takeProfit1: "1.12",
+          takeProfit2: "1.13",
+          riskReward: "1:2",
+          summary: "Valid",
+          sourceCharts: [
+            { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", filepath: "/tmp/chart-h4.jpg" },
+            { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", filepath: "/tmp/chart-m15.jpg" },
+          ],
+        },
+      ],
+      screenshots,
+    );
+
+    expect(result[0].telegramChart?.timeframe).toBe("M15");
+    expect(result[0].telegramChart?.filepath).toBe("/tmp/chart-m15.jpg");
+    expect(state.call.mock.calls[0][0].userContent[1].text).toContain("- Pair: EUR/USD");
   });
 });

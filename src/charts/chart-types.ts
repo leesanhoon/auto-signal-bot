@@ -41,6 +41,7 @@ export type TradeSetup = {
   pair: string;
   direction: "LONG" | "SHORT";
   setup: string;
+  primaryTimeframe?: ChartTimeframe;
   emaTouch?: boolean;
   reasons: string[];
   risks: string[];
@@ -59,6 +60,7 @@ export type TradeSetup = {
   verifiedComment?: string;
   verifiedBy?: string;
   autoTracked?: boolean;
+  chartFallbackUsed?: boolean;
   sourceCharts?: ChartAnalysisSource[];
   telegramChart?: ChartAnalysisSource;
 };
@@ -67,4 +69,30 @@ export type AnalysisResult = {
   setups: TradeSetup[];
   noSetupReason: string;
   screenshots: ScreenshotResult[];
+};
+
+export type PendingOrderStatus = "PENDING" | "TRIGGERED" | "EXPIRED" | "CANCELLED";
+
+export type PendingOrder = {
+  id: number;
+  pair: string;
+  direction: "LONG" | "SHORT";
+  setup: string | null;
+  orderType: ChartOrderType;
+  entry: string;
+  stopLoss: string;
+  takeProfit1: string;
+  takeProfit2: string | null;
+  confidence: number | null;
+  reasons: string[] | null;
+  risks: string[] | null;
+  primaryTimeframe: ChartTimeframe | null;
+  sourceChartFilepath: string | null;
+  status: PendingOrderStatus;
+  runCount: number;
+  expiryRuns: number;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedReason: string | null;
+  triggeredPositionId: number | null;
 };

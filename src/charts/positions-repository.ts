@@ -1,6 +1,7 @@
 import { getDb } from "../shared/db.js";
 import { createLogger } from "../shared/logger.js";
-import type { TradeSetup } from "./chart-types.js";
+import type { PendingOrder, PendingOrderStatus, TradeSetup } from "./chart-types.js";
+import { getConfiguredPendingOrderExpiryRuns } from "./chart-config-env.js";
 import {
   buildOpenPositionInsertRow,
   deriveManagementPatch,
@@ -47,6 +48,14 @@ export type OpenPosition = {
   realizedExitPrice: string | null;
 };
 
+export type PendingOrderUpdate = {
+  status?: PendingOrderStatus;
+  runCount?: number;
+  resolvedAt?: string | null;
+  resolvedReason?: string | null;
+  triggeredPositionId?: number | null;
+};
+
 export async function saveOpenPosition(setup: TradeSetup): Promise<boolean> {
   const row = buildOpenPositionInsertRow(setup, {
     minRiskReward: getConfiguredMinRiskRewardRatio(),
@@ -68,6 +77,138 @@ export async function saveOpenPosition(setup: TradeSetup): Promise<boolean> {
   const { error } = await (getDb().from("open_positions") as any).insert(row);
   if (error) throw new Error(`saveOpenPosition insert failed: ${error.message}`);
   return true;
+}
+
+function buildPendingOrderInsertRow(setup: TradeSetup): Record<string, unknown> {
+  const primaryTimeframe = setup.primaryTimeframe ?? "H4";
+  const sourceChartFilepath =
+    setup.telegramChart?.filepath ??
+    setup.sourceCharts?.find((chart) => chart.timeframe === primaryTimeframe)?.filepath ??
+    setup.sourceCharts?.[0]?.filepath ??
+    null;
+
+  return {
+    pair: setup.pair,
+    direction: setup.direction,
+    setup: setup.setup,
+    order_type: setup.orderType ?? (setup.direction === "SHORT" ? "SELL_STOP" : "BUY_STOP"),
+    entry: setup.entry,
+    stop_loss: setup.stopLoss,
+    take_profit_1: setup.takeProfit1,
+    take_profit_2: setup.takeProfit2 || null,
+    confidence: setup.confidence,
+    reasons: setup.reasons,
+    risks: setup.risks,
+    primary_timeframe: primaryTimeframe,
+    source_chart_filepath: sourceChartFilepath,
+    status: "PENDING",
+    run_count: 0,
+    expiry_runs: getConfiguredPendingOrderExpiryRuns(),
+    resolved_at: null,
+    resolved_reason: null,
+    triggered_position_id: null,
+  };
+}
+
+export async function savePendingOrder(setup: TradeSetup): Promise<boolean> {
+  const row = buildPendingOrderInsertRow(setup);
+  const { data: existing, error: existingError } = await (getDb().from("pending_orders") as any)
+    .select("id")
+    .eq("status", "PENDING")
+    .eq("pair", setup.pair)
+    .limit(1);
+
+  if (existingError) throw new Error(`savePendingOrder lookup failed: ${existingError.message}`);
+  if ((existing ?? []).length > 0) return false;
+
+  const { error } = await (getDb().from("pending_orders") as any).insert(row);
+  if (error) throw new Error(`savePendingOrder insert failed: ${error.message}`);
+  return true;
+}
+
+export async function loadPendingOrders(): Promise<PendingOrder[]> {
+  const { data, error } = await (getDb().from("pending_orders") as any)
+    .select(
+      "id, pair, direction, setup, order_type, entry, stop_loss, take_profit_1, take_profit_2, confidence, reasons, risks, primary_timeframe, source_chart_filepath, status, run_count, expiry_runs, created_at, resolved_at, resolved_reason, triggered_position_id",
+    )
+    .eq("status", "PENDING")
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(`loadPendingOrders failed: ${error.message}`);
+
+  return (
+    (data ?? []) as Array<{
+      id: number;
+      pair: string;
+      direction: "LONG" | "SHORT";
+      setup: string | null;
+      order_type: "BUY_STOP" | "SELL_STOP" | "BUY_LIMIT" | "SELL_LIMIT" | "WAIT_FOR_CONFIRMATION";
+      entry: string;
+      stop_loss: string;
+      take_profit_1: string;
+      take_profit_2: string | null;
+      confidence: number | null;
+      reasons: string[] | null;
+      risks: string[] | null;
+      primary_timeframe: "D1" | "H4" | "M15" | null;
+      source_chart_filepath: string | null;
+      status: PendingOrderStatus;
+      run_count: number;
+      expiry_runs: number;
+      created_at: string;
+      resolved_at: string | null;
+      resolved_reason: string | null;
+      triggered_position_id: number | null;
+    }>
+  ).map((row) => ({
+    id: row.id,
+    pair: row.pair,
+    direction: row.direction,
+    setup: row.setup,
+    orderType: row.order_type,
+    entry: row.entry,
+    stopLoss: row.stop_loss,
+    takeProfit1: row.take_profit_1,
+    takeProfit2: row.take_profit_2,
+    confidence: row.confidence,
+    reasons: row.reasons,
+    risks: row.risks,
+    primaryTimeframe: row.primary_timeframe,
+    sourceChartFilepath: row.source_chart_filepath,
+    status: row.status,
+    runCount: row.run_count,
+    expiryRuns: row.expiry_runs,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at,
+    resolvedReason: row.resolved_reason,
+    triggeredPositionId: row.triggered_position_id,
+  }));
+}
+
+export async function updatePendingOrder(id: number, patch: PendingOrderUpdate): Promise<void> {
+  const { error } = await (getDb().from("pending_orders") as any)
+    .update({
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.runCount !== undefined ? { run_count: patch.runCount } : {}),
+      ...(patch.resolvedAt !== undefined ? { resolved_at: patch.resolvedAt } : {}),
+      ...(patch.resolvedReason !== undefined ? { resolved_reason: patch.resolvedReason } : {}),
+      ...(patch.triggeredPositionId !== undefined ? { triggered_position_id: patch.triggeredPositionId } : {}),
+    })
+    .eq("id", id);
+
+  if (error) throw new Error(`updatePendingOrder failed: ${error.message}`);
+}
+
+export async function findOpenPositionIdByPair(pair: string): Promise<number | null> {
+  const { data, error } = await (getDb().from("open_positions") as any)
+    .select("id")
+    .eq("status", "open")
+    .eq("pair", pair)
+    .order("opened_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw new Error(`findOpenPositionIdByPair failed: ${error.message}`);
+  return (data ?? [])[0]?.id ?? null;
 }
 
 export async function loadOpenPositions(): Promise<OpenPosition[]> {

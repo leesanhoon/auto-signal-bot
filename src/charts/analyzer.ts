@@ -1,13 +1,27 @@
-import type { AnalysisResult, ChartOrderType, PairSummary, ScreenshotResult, TradeSetup, ChartAnalysisSource } from "./chart-types.js";
+import type {
+  AnalysisResult,
+  ChartOrderType,
+  PairSummary,
+  ScreenshotResult,
+  TradeSetup,
+  ChartAnalysisSource,
+  ChartTimeframe,
+  PendingOrder,
+} from "./chart-types.js";
 import { withRetry } from "../shared/retry.js";
 import { createLogger } from "../shared/logger.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
-import { callOpenRouter, type OpenRouterRequest } from "../shared/openrouter.js";
+import {
+  callOpenRouter,
+  type OpenRouterRequest,
+} from "../shared/openrouter.js";
 import { findChartForPair } from "./screenshot.js";
 
 const logger = createLogger("charts:analyzer");
-const ANALYSIS_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
-const VERIFY_MODEL = process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
+const ANALYSIS_MODEL =
+  process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
+const VERIFY_MODEL =
+  process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
 
 type PairScreenshotGroup = { pair: string; screenshots: ScreenshotResult[] };
 
@@ -15,7 +29,9 @@ function getPairName(screenshot: ScreenshotResult): string {
   return screenshot.chart.name.replace(` ${screenshot.chart.timeframe}`, "");
 }
 
-function toChartAnalysisSource(screenshot: ScreenshotResult): ChartAnalysisSource {
+function toChartAnalysisSource(
+  screenshot: ScreenshotResult,
+): ChartAnalysisSource {
   return {
     symbol: screenshot.chart.symbol,
     timeframe: screenshot.chart.timeframe,
@@ -32,8 +48,24 @@ function findScreenshotByProvenance(
   pair: string,
   screenshots: ScreenshotResult[],
   preferredSource?: ChartAnalysisSource,
+  preferredTimeframe: ChartTimeframe = "H4",
 ): ScreenshotResult | undefined {
   if (preferredSource) {
+    const preferredTriple = screenshots.find(
+      (s) =>
+        s.filepath === preferredSource.filepath &&
+        s.chart.symbol === preferredSource.symbol &&
+        s.chart.timeframe === preferredTimeframe,
+    );
+    if (preferredTriple) return preferredTriple;
+
+    const preferredSymbolTimeframe = screenshots.find(
+      (s) =>
+        s.chart.symbol === preferredSource.symbol &&
+        s.chart.timeframe === preferredTimeframe,
+    );
+    if (preferredSymbolTimeframe) return preferredSymbolTimeframe;
+
     const exactTriples = screenshots.find(
       (s) =>
         s.filepath === preferredSource.filepath &&
@@ -50,19 +82,26 @@ function findScreenshotByProvenance(
     if (exactSymbolTimeframe) return exactSymbolTimeframe;
 
     if (preferredSource.filepath) {
-      const exactFilepath = screenshots.find((s) => s.filepath === preferredSource.filepath);
+      const exactFilepath = screenshots.find(
+        (s) => s.filepath === preferredSource.filepath,
+      );
       if (exactFilepath) return exactFilepath;
     }
   }
 
-  const preferredTimeframe = preferredSource?.timeframe ?? "H4";
   const chart = findChartForPair(pair, preferredTimeframe);
   return chart
-    ? screenshots.find((s) => s.chart.symbol === chart.symbol && s.chart.timeframe === chart.timeframe)
+    ? screenshots.find(
+        (s) =>
+          s.chart.symbol === chart.symbol &&
+          s.chart.timeframe === chart.timeframe,
+      )
     : undefined;
 }
 
-function groupScreenshotsByPair(screenshots: ScreenshotResult[]): PairScreenshotGroup[] {
+function groupScreenshotsByPair(
+  screenshots: ScreenshotResult[],
+): PairScreenshotGroup[] {
   const groups = new Map<string, ScreenshotResult[]>();
   for (const screenshot of screenshots) {
     const pair = getPairName(screenshot);
@@ -104,7 +143,7 @@ function buildUserPrompt(): string {
   return [
     "Return only JSON with keys summaries, setups, and noSetupReason.",
     "summaries: mỗi pair gồm pair, trend, emaProximity nếu thấy, status, confidence; nếu thấy rõ thì nêu EMA20 slope và vị trí giá so với EMA20.",
-    "setups: chỉ các setup AI thấy đáng chú ý, gồm pair, direction, setup, orderType, entryCondition, currentPriceContext, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, summary.",
+    "setups: chỉ các setup AI thấy đáng chú ý, gồm pair, direction, setup, primaryTimeframe, orderType, entryCondition, currentPriceContext, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, summary.",
     "Mỗi setup phải khớp rõ với 1 pattern trong RB, ARB, IRB, BB, FB, SB, DD; nếu không khớp rõ thì không tạo setup và ghi lý do vào noSetupReason.",
     "Trong reasons/currentPriceContext hãy nói rõ EMA20 slope, giá ở trên/dưới EMA20, và volume tại điểm breakout nếu quan sát được.",
     "Không cần ép đủ mọi rule; nếu không chắc thì giảm confidence, ghi rõ trong risks hoặc noSetupReason, và không gán pattern bừa.",
@@ -112,8 +151,37 @@ function buildUserPrompt(): string {
   ].join(" ");
 }
 
+export function buildPendingOrderCheckPrompt(order: PendingOrder): string {
+  return [
+    "You assess whether a pending forex setup has triggered, failed, or is still pending.",
+    "Return only JSON with keys status, confidence, comment.",
+    "Possible status values: TRIGGERED, CANCELLED, PENDING.",
+    "Use the attached chart and the order details below.",
+    `- Pair: ${order.pair}`,
+    `- Direction: ${order.direction}`,
+    `- Order type: ${order.orderType}`,
+    `- Setup: ${order.setup ?? ""}`,
+    `- Primary timeframe: ${order.primaryTimeframe ?? "H4"}`,
+    `- Entry: ${order.entry}`,
+    `- Stop loss: ${order.stopLoss}`,
+    `- Take profit 1: ${order.takeProfit1}`,
+    `- Take profit 2: ${order.takeProfit2 ?? ""}`,
+    `- Confidence: ${order.confidence ?? 0}%`,
+    `- Reasons: ${(order.reasons ?? []).slice(0, 3).join(" | ")}`,
+    `- Risks: ${(order.risks ?? []).slice(0, 3).join(" | ")}`,
+    "",
+    "TRIGGERED: price has touched or broken the entry in the correct direction and the setup still looks valid.",
+    "CANCELLED: price moved against the setup, hit stop-loss before entry, or the structure is no longer valid.",
+    "PENDING: entry has not been reached yet and the structure remains valid.",
+    "Use Vietnamese with accents in comment.",
+  ].join("\n");
+}
+
 export function cleanResponse(text: string): string {
-  return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  return text
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
 }
 
 export function extractJsonObject(text: string): string {
@@ -155,7 +223,11 @@ function parseVerificationResponse(
 ): { confirmed: boolean; confidence: number; comment: string } | null {
   const cleaned = extractJsonObject(text);
   try {
-    const parsed = JSON.parse(cleaned) as { confirmed?: unknown; confidence?: unknown; comment?: unknown };
+    const parsed = JSON.parse(cleaned) as {
+      confirmed?: unknown;
+      confidence?: unknown;
+      comment?: unknown;
+    };
     return {
       confirmed: Boolean(parsed.confirmed),
       confidence: clampConfidence(parsed.confidence),
@@ -169,23 +241,32 @@ function parseVerificationResponse(
 async function verifySetup(
   setup: TradeSetup,
   imageBuffer: Buffer,
-): Promise<{ confirmed: boolean; confidence: number; comment: string; verifiedBy: string }> {
+): Promise<{
+  confirmed: boolean;
+  confidence: number;
+  comment: string;
+  verifiedBy: string;
+}> {
   const mime = detectImageMimeType(imageBuffer);
   const response = await withRetry(
-    () => callOpenRouter({
-      model: VERIFY_MODEL,
-      systemPrompt: "You independently verify trading setups. Return only concise JSON.",
-      userContent: [
-        {
-          type: "image_url",
-          image_url: { url: `data:${mime};base64,${imageBuffer.toString("base64")}` },
-        },
-        { type: "text", text: buildVerificationPrompt(setup) },
-      ],
-      maxTokens: 300,
-      temperature: 0.2,
-      responseFormat: { type: "json_object" },
-    }),
+    () =>
+      callOpenRouter({
+        model: VERIFY_MODEL,
+        systemPrompt:
+          "You independently verify trading setups. Return only concise JSON.",
+        userContent: [
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${mime};base64,${imageBuffer.toString("base64")}`,
+            },
+          },
+          { type: "text", text: buildVerificationPrompt(setup) },
+        ],
+        maxTokens: 300,
+        temperature: 0.2,
+        responseFormat: { type: "json_object" },
+      }),
     {
       onRetry: (error, attempt, maxAttempts, delayMs) =>
         logger.warn(
@@ -193,10 +274,15 @@ async function verifySetup(
         ),
     },
   );
-  void recordOpenRouterUsage(response, { model: VERIFY_MODEL, source: "chart" });
+  void recordOpenRouterUsage(response, {
+    model: VERIFY_MODEL,
+    source: "chart",
+  });
   const parsed = parseVerificationResponse(response.text);
   if (!parsed) {
-    throw new Error(`OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`);
+    throw new Error(
+      `OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`,
+    );
   }
   return { ...parsed, verifiedBy: VERIFY_MODEL };
 }
@@ -207,8 +293,19 @@ export async function confirmHighConfidenceSetups(
 ): Promise<TradeSetup[]> {
   return Promise.all(
     setups.map(async (setup) => {
-      const preferredSource = setup.sourceCharts?.find((chart) => chart.timeframe === "H4") ?? setup.sourceCharts?.[0];
-      const screenshot = findScreenshotByProvenance(setup.pair, screenshots, preferredSource);
+      const preferredTimeframe = normalizeTimeframe(setup.primaryTimeframe);
+      const preferredSource =
+        setup.sourceCharts?.find(
+          (chart) => chart.timeframe === preferredTimeframe,
+        ) ??
+        setup.sourceCharts?.find((chart) => chart.timeframe === "H4") ??
+        setup.sourceCharts?.[0];
+      const screenshot = findScreenshotByProvenance(
+        setup.pair,
+        screenshots,
+        preferredSource,
+        preferredTimeframe,
+      );
       if (!screenshot) return setup;
 
       try {
@@ -224,9 +321,12 @@ export async function confirmHighConfidenceSetups(
           verifiedComment: verification.comment,
           verifiedBy: verification.verifiedBy,
           telegramChart: toChartAnalysisSource(screenshot),
+          primaryTimeframe: preferredTimeframe,
         };
       } catch (error) {
-        logger.warn(`  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`);
+        logger.warn(
+          `  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`,
+        );
         return setup;
       }
     }),
@@ -245,8 +345,13 @@ function toArray(value: unknown): string[] {
   return [];
 }
 
-function normalizeOrderType(value: unknown, direction: unknown): ChartOrderType {
-  const raw = String(value ?? "").trim().toUpperCase();
+function normalizeOrderType(
+  value: unknown,
+  direction: unknown,
+): ChartOrderType {
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase();
   if (
     raw === "MARKET_NOW" ||
     raw === "BUY_STOP" ||
@@ -257,13 +362,51 @@ function normalizeOrderType(value: unknown, direction: unknown): ChartOrderType 
   ) {
     return raw;
   }
-  return String(direction ?? "").toUpperCase() === "SHORT" ? "SELL_STOP" : "BUY_STOP";
+  return String(direction ?? "").toUpperCase() === "SHORT"
+    ? "SELL_STOP"
+    : "BUY_STOP";
+}
+
+function normalizeDirection(value: unknown): "LONG" | "SHORT" {
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (["LONG", "BUY", "MUA", "LEN", "TANG", "UP"].includes(raw)) return "LONG";
+  if (["SHORT", "SELL", "BAN", "XUONG", "GIAM", "DOWN"].includes(raw))
+    return "SHORT";
+  return raw.includes("SHORT") || raw.includes("SELL") ? "SHORT" : "LONG";
+}
+
+function normalizeTimeframe(value: unknown): ChartTimeframe {
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase();
+  return raw === "D1" || raw === "H4" || raw === "M15" ? raw : "H4";
+}
+
+function normalizePendingStatus(
+  value: unknown,
+): "TRIGGERED" | "CANCELLED" | "PENDING" {
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase();
+  if (raw === "TRIGGERED" || raw === "CANCELLED" || raw === "PENDING")
+    return raw;
+  return "PENDING";
 }
 
 function detectImageMimeType(buffer: Buffer): "image/png" | "image/jpeg" {
   return buffer.length >= 8 &&
-    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
-    buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
     ? "image/png"
     : "image/jpeg";
 }
@@ -281,44 +424,83 @@ export function parseAnalysisResponse(text: string): {
     }>;
     const rawSetups = Array.isArray(parsed.setups) ? parsed.setups : [];
     const normalizedSetups: TradeSetup[] = rawSetups
-      .filter((s): s is Record<string, unknown> => s !== null && typeof s === "object")
-      .map((s) => ({
-        ...s,
-        reasons: toArray(s.reasons),
-        risks: toArray(s.risks),
-        orderType: normalizeOrderType(s.orderType, s.direction),
-        entryCondition: toText(
-          s.entryCondition,
-          "Chờ giá xác nhận đúng vùng entry trước khi vào lệnh.",
-        ),
-        currentPriceContext: toText(
-          s.currentPriceContext,
-          "Model chưa mô tả rõ vị trí giá hiện tại so với entry.",
-        ),
-      } as unknown as TradeSetup));
+      .filter(
+        (s): s is Record<string, unknown> =>
+          s !== null && typeof s === "object",
+      )
+      .map((s) => {
+        const direction = normalizeDirection(s.direction);
+        return {
+          ...s,
+          direction,
+          reasons: toArray(s.reasons),
+          risks: toArray(s.risks),
+          primaryTimeframe: normalizeTimeframe(s.primaryTimeframe),
+          orderType: normalizeOrderType(s.orderType, direction),
+          entryCondition: toText(
+            s.entryCondition,
+            "Chờ giá xác nhận đúng vùng entry trước khi vào lệnh.",
+          ),
+          currentPriceContext: toText(
+            s.currentPriceContext,
+            "Model chưa mô tả rõ vị trí giá hiện tại so với entry.",
+          ),
+        } as unknown as TradeSetup;
+      });
     return {
       summaries: Array.isArray(parsed.summaries) ? parsed.summaries : [],
       setups: normalizedSetups,
       noSetupReason: toText(parsed.noSetupReason),
     };
   } catch {
-    return { summaries: [], setups: [], noSetupReason: "Failed to parse AI response. Raw: " + text.slice(0, 300) };
+    return {
+      summaries: [],
+      setups: [],
+      noSetupReason: "Failed to parse AI response. Raw: " + text.slice(0, 300),
+    };
   }
 }
 
-async function analyzeWithOpenRouter(screenshots: ScreenshotResult[]): Promise<string> {
+export function parsePendingOrderCheckResponse(text: string): {
+  status: "TRIGGERED" | "CANCELLED" | "PENDING";
+  confidence: number;
+  comment: string;
+} | null {
+  const cleaned = extractJsonObject(text);
+  try {
+    const parsed = JSON.parse(cleaned) as {
+      status?: unknown;
+      confidence?: unknown;
+      comment?: unknown;
+    };
+    return {
+      status: normalizePendingStatus(parsed.status),
+      confidence: clampConfidence(parsed.confidence),
+      comment: toText(parsed.comment),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function analyzeWithOpenRouter(
+  screenshots: ScreenshotResult[],
+): Promise<string> {
   const userContent: OpenRouterRequest["userContent"] = [];
   const ordered = [...screenshots].sort((left, right) => {
     const pairOrder = left.chart.symbol.localeCompare(right.chart.symbol);
     return pairOrder !== 0
       ? pairOrder
-      : ["D1", "H4", "M15"].indexOf(left.chart.timeframe) - ["D1", "H4", "M15"].indexOf(right.chart.timeframe);
+      : ["D1", "H4", "M15"].indexOf(left.chart.timeframe) -
+          ["D1", "H4", "M15"].indexOf(right.chart.timeframe);
   });
   for (const screenshot of ordered) {
     const mime = detectImageMimeType(screenshot.buffer);
     userContent.push({
       type: "image_url",
-      image_url: { url: `data:${mime};base64,${screenshot.buffer.toString("base64")}` },
+      image_url: {
+        url: `data:${mime};base64,${screenshot.buffer.toString("base64")}`,
+      },
     });
     userContent.push({
       type: "text",
@@ -328,14 +510,15 @@ async function analyzeWithOpenRouter(screenshots: ScreenshotResult[]): Promise<s
   userContent.push({ type: "text", text: buildUserPrompt() });
 
   const result = await withRetry(
-    () => callOpenRouter({
-      model: ANALYSIS_MODEL,
-      systemPrompt: buildSystemPrompt(),
-      userContent,
-      maxTokens: 4000,
-      temperature: 0.2,
-      responseFormat: { type: "json_object" },
-    }),
+    () =>
+      callOpenRouter({
+        model: ANALYSIS_MODEL,
+        systemPrompt: buildSystemPrompt(),
+        userContent,
+        maxTokens: 4000,
+        temperature: 0.2,
+        responseFormat: { type: "json_object" },
+      }),
     {
       onRetry: (error, attempt, maxAttempts, delayMs) =>
         logger.warn(
@@ -343,13 +526,20 @@ async function analyzeWithOpenRouter(screenshots: ScreenshotResult[]): Promise<s
         ),
     },
   );
-  void recordOpenRouterUsage(result, { model: ANALYSIS_MODEL, source: "chart" });
+  void recordOpenRouterUsage(result, {
+    model: ANALYSIS_MODEL,
+    source: "chart",
+  });
   return result.text;
 }
 
-export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise<AnalysisResult> {
+export async function analyzeAllCharts(
+  screenshots: ScreenshotResult[],
+): Promise<AnalysisResult> {
   const groups = groupScreenshotsByPair(screenshots);
-  logger.info(`  -> Trying ${ANALYSIS_MODEL} per pair...`, { pairs: groups.length });
+  logger.info(`  -> Trying ${ANALYSIS_MODEL} per pair...`, {
+    pairs: groups.length,
+  });
   const summaries: PairSummary[] = [];
   const setups: TradeSetup[] = [];
   const noSetupReasons: string[] = [];
@@ -359,7 +549,9 @@ export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise
     groups.map(async (group) => {
       try {
         logger.info(`  -> Analyzing ${group.pair} with ${ANALYSIS_MODEL}...`);
-        const parsed = parseAnalysisResponse(await analyzeWithOpenRouter(group.screenshots));
+        const parsed = parseAnalysisResponse(
+          await analyzeWithOpenRouter(group.screenshots),
+        );
         const sourceCharts = group.screenshots.map(toChartAnalysisSource);
         logger.info(`  ✓ Analyzed ${group.pair} by ${ANALYSIS_MODEL}`);
         return {
@@ -370,7 +562,9 @@ export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise
           noSetupReason: parsed.noSetupReason,
         };
       } catch (error) {
-        logger.warn(`  ! OpenRouter main analysis failed for ${group.pair} (${group.screenshots.length} screenshots): ${error instanceof Error ? error.message : error}`);
+        logger.warn(
+          `  ! OpenRouter main analysis failed for ${group.pair} (${group.screenshots.length} screenshots): ${error instanceof Error ? error.message : error}`,
+        );
         return { kind: "err" as const, pair: group.pair };
       }
     }),
@@ -395,6 +589,13 @@ export async function analyzeAllCharts(screenshots: ScreenshotResult[]): Promise
     );
   }
 
-  logger.info(`  ✓ ${summaries.length} pairs scanned, ${setups.length} setup(s) returned by AI`);
-  return { summaries, setups, noSetupReason: noSetupReasons.join("\n").trim(), screenshots };
+  logger.info(
+    `  ✓ ${summaries.length} pairs scanned, ${setups.length} setup(s) returned by AI`,
+  );
+  return {
+    summaries,
+    setups,
+    noSetupReason: noSetupReasons.join("\n").trim(),
+    screenshots,
+  };
 }

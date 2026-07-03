@@ -5,6 +5,7 @@ import type {
   PairSummary,
   ScreenshotResult,
   ChartAnalysisSource,
+  ChartTimeframe,
 } from "../charts/chart-types.js";
 import type { Notifier } from "./notifier.js";
 import { createLogger } from "./logger.js";
@@ -260,6 +261,9 @@ function buildCopyableSetup(setup: TradeSetup): string {
     confidence >= 80 ? "🟢🟢🟢" : confidence >= threshold ? "🟡🟡" : "🔴";
   const emaTag = setup.emaTouch ? " 📍EMA" : "";
   const patternInfo = getPatternInfo(setup.setup);
+  const fallbackNote = setup.chartFallbackUsed
+    ? `⚠️ Ảnh minh họa không đúng khung thời gian gốc (${normalizeSetupTimeframe(setup)}), chỉ tham khảo.`
+    : "";
   return [
     `${arrow} *${setup.pair} — ${setup.direction}* (${confidence}% ${confBar})${emaTag}`,
     `📋 *${setup.setup}*`,
@@ -267,6 +271,7 @@ function buildCopyableSetup(setup: TradeSetup): string {
     setup.orderType ? `🧭 *Loại lệnh:* ${getOrderTypeLabel(setup.orderType)}` : "",
     setup.entryCondition ? `⏳ *Điều kiện vào:* ${setup.entryCondition}` : "",
     setup.currentPriceContext ? `📍 *Giá hiện tại:* ${setup.currentPriceContext}` : "",
+    fallbackNote,
     "",
     "```",
     `Direction : ${setup.direction}`,
@@ -414,44 +419,71 @@ function normalizeChartKey(value: string): string {
   return value.replace(/[\s\/_.:-]+/g, "").toUpperCase();
 }
 
+function normalizeSetupTimeframe(setup: TradeSetup): ChartTimeframe {
+  const raw = setup.primaryTimeframe?.trim().toUpperCase();
+  return raw === "D1" || raw === "H4" || raw === "M15" ? raw : "H4";
+}
+
 function findScreenshotForSetup(
   setup: TradeSetup,
   screenshots: ScreenshotResult[],
 ): { screenshot?: ScreenshotResult; usedFallback: boolean } {
-  const exactTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
-  if (setup.telegramChart) exactTargets.push(setup.telegramChart);
-  if (setup.sourceCharts) exactTargets.push(...setup.sourceCharts.filter((chart) => chart.timeframe === "H4"));
+  const preferredTimeframe = normalizeSetupTimeframe(setup);
+  const preferredTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
+  const fallbackTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
 
-  for (const target of exactTargets) {
-    const exactTriple = screenshots.find(
-      (s) =>
-        s.filepath === target.filepath &&
-        s.chart.symbol === target.symbol &&
-        s.chart.timeframe === target.timeframe,
-    );
-    if (exactTriple) return { screenshot: exactTriple, usedFallback: false };
+  for (const chart of setup.sourceCharts ?? []) {
+    if (chart.timeframe === preferredTimeframe) preferredTargets.push(chart);
+    else fallbackTargets.push(chart);
   }
 
-  for (const target of exactTargets) {
-    const exactSymbolTimeframe = screenshots.find(
-      (s) => s.chart.symbol === target.symbol && s.chart.timeframe === target.timeframe,
-    );
-    if (exactSymbolTimeframe) return { screenshot: exactSymbolTimeframe, usedFallback: false };
+  if (setup.telegramChart) {
+    if (setup.telegramChart.timeframe === preferredTimeframe) preferredTargets.push(setup.telegramChart);
+    else fallbackTargets.push(setup.telegramChart);
   }
 
-  for (const target of exactTargets) {
-    if (!target.filepath) continue;
-    const exactFilepath = screenshots.find((s) => s.filepath === target.filepath);
-    if (exactFilepath) return { screenshot: exactFilepath, usedFallback: false };
-  }
+  const findExact = (
+    targets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">>,
+  ): ScreenshotResult | undefined => {
+    for (const target of targets) {
+      const exactTriple = screenshots.find(
+        (s) =>
+          s.filepath === target.filepath &&
+          s.chart.symbol === target.symbol &&
+          s.chart.timeframe === target.timeframe,
+      );
+      if (exactTriple) return exactTriple;
+    }
+
+    for (const target of targets) {
+      const exactSymbolTimeframe = screenshots.find(
+        (s) => s.chart.symbol === target.symbol && s.chart.timeframe === target.timeframe,
+      );
+      if (exactSymbolTimeframe) return exactSymbolTimeframe;
+    }
+
+    for (const target of targets) {
+      if (!target.filepath) continue;
+      const exactFilepath = screenshots.find((s) => s.filepath === target.filepath);
+      if (exactFilepath) return exactFilepath;
+    }
+
+    return undefined;
+  };
+
+  const preferredMatch = findExact(preferredTargets);
+  if (preferredMatch) return { screenshot: preferredMatch, usedFallback: false };
+
+  const fallbackMatch = findExact(fallbackTargets);
+  if (fallbackMatch) return { screenshot: fallbackMatch, usedFallback: true };
 
   const normalizedPair = normalizeChartKey(setup.pair);
-  const byPair = screenshots.find(
+  const byPreferredTimeframe = screenshots.find(
     (s) =>
       normalizeChartKey(s.chart.symbol).includes(normalizedPair) &&
-      s.chart.timeframe === "H4",
+      s.chart.timeframe === preferredTimeframe,
   );
-  if (byPair) return { screenshot: byPair, usedFallback: true };
+  if (byPreferredTimeframe) return { screenshot: byPreferredTimeframe, usedFallback: true };
 
   return {
     screenshot: screenshots.find((s) => normalizeChartKey(s.chart.symbol).includes(normalizedPair)),
@@ -495,6 +527,7 @@ export async function sendAllAnalyses(
     if (screenshot) {
       try {
         const caption = `📊 ${screenshot.chart.symbol} ${screenshot.chart.timeframe} — ${setup.direction} (${confidence}% 🔥)\nNguồn ảnh: ${basename(screenshot.filepath)}`;
+        setup.chartFallbackUsed = usedFallback;
         await notifier.sendPhoto(screenshot.buffer, caption);
         if (usedFallback) {
           logger.warn(`  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`);

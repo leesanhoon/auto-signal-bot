@@ -50,4 +50,5 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CHART_SIGNAL_CONFIDENCE_THRESHOLD: ${{ vars.CHART_SIGNAL_CONFIDENCE_THRESHOLD }}
+          PENDING_ORDER_EXPIRY_RUNS: ${{ vars.PENDING_ORDER_EXPIRY_RUNS }}
         run: npm run analyze
