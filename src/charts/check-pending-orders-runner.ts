@@ -18,7 +18,74 @@ import { sendMessage, sendPhoto } from "../shared/telegram.js";
 import type { PendingOrder, TradeSetup } from "./chart-types.js";
 
 const logger = createLogger("charts:check-pending-orders");
-const AI_PENDING_MODEL = process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
+const AI_PENDING_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
+
+function parsePrice(value: string): number | null {
+  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatPrice(value: number): string {
+  const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
+  return value.toFixed(precision);
+}
+
+function resolvePendingOrderByPrice(
+  order: PendingOrder,
+  lastPrice: number | null,
+): { status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string } | null {
+  if (lastPrice === null || !Number.isFinite(lastPrice)) {
+    return null;
+  }
+
+  const entry = parsePrice(order.entry);
+  const stopLoss = parsePrice(order.stopLoss);
+  if (entry === null || stopLoss === null) {
+    return null;
+  }
+
+  if (order.direction === "LONG" && lastPrice <= stopLoss) {
+    return {
+      status: "CANCELLED",
+      confidence: 98,
+      comment: `Giá thật ${formatPrice(lastPrice)} đã xuyên stop loss, hủy lệnh chờ.`,
+    };
+  }
+
+  if (order.direction === "SHORT" && lastPrice >= stopLoss) {
+    return {
+      status: "CANCELLED",
+      confidence: 98,
+      comment: `Giá thật ${formatPrice(lastPrice)} đã xuyên stop loss, hủy lệnh chờ.`,
+    };
+  }
+
+  const triggered = (() => {
+    switch (order.orderType) {
+      case "BUY_STOP":
+        return lastPrice >= entry;
+      case "SELL_STOP":
+        return lastPrice <= entry;
+      case "BUY_LIMIT":
+        return lastPrice <= entry;
+      case "SELL_LIMIT":
+        return lastPrice >= entry;
+      case "WAIT_FOR_CONFIRMATION":
+      default:
+        return false;
+    }
+  })();
+
+  if (triggered) {
+    return {
+      status: "TRIGGERED",
+      confidence: 96,
+      comment: `Giá thật ${formatPrice(lastPrice)} đã chạm entry.`,
+    };
+  }
+
+  return null;
+}
 
 function formatCheckedAt(): string {
   return new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -68,7 +135,7 @@ async function reviewPendingOrder(order: PendingOrder): Promise<{
           },
           {
             type: "text",
-            text: buildPendingOrderCheckPrompt(order),
+            text: buildPendingOrderCheckPrompt(order, screenshot.lastPrice),
           },
         ],
         maxTokens: 250,
@@ -89,7 +156,8 @@ async function reviewPendingOrder(order: PendingOrder): Promise<{
     throw new Error(`Pending order parse failed. Raw: ${response.text.slice(0, 300)}`);
   }
 
-  return parsed;
+  const priceDecision = resolvePendingOrderByPrice(order, screenshot.lastPrice);
+  return priceDecision ?? parsed;
 }
 
 async function triggerPendingOrder(order: PendingOrder): Promise<number | null> {

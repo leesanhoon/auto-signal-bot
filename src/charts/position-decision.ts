@@ -67,6 +67,7 @@ Trade:
 - Stop loss: ${position.stopLoss}
 - Take profit 1: ${position.takeProfit1}
 - Take profit 2: ${position.takeProfit2 ?? ""}
+- Last price: ${screenshot.lastPrice ?? "unknown"}
 - Reasons: ${(position.reasons ?? []).slice(0, 4).join(" | ")}
 
 All user-facing fields must be Vietnamese with accents. The comment must be Vietnamese, concise, and directly explain HOLD/CLOSE/STOP.

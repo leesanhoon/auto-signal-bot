@@ -5,6 +5,7 @@ import {
   estimateAiUsageCost,
   extractClaudeUsage,
   extractGeminiUsage,
+  extractOpenRouterUsage,
 } from "../../src/shared/ai-usage.js";
 
 describe("shared/ai-usage", () => {
@@ -27,6 +28,16 @@ describe("shared/ai-usage", () => {
         },
       }),
     ).toEqual({ inputTokens: 300, outputTokens: 80 });
+
+    expect(
+      extractOpenRouterUsage({
+        usage: {
+          promptTokens: 140,
+          completionTokens: 30,
+          cachedTokens: 90,
+        },
+      }),
+    ).toEqual({ inputTokens: 140, outputTokens: 30, cachedTokens: 90 });
   });
 
   test("aggregates usage by day and keeps breakdowns", () => {

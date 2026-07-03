@@ -64,6 +64,7 @@ describe("charts/check-pending-orders-runner", () => {
       chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
       buffer: Buffer.from("chart"),
       filepath: "/tmp/chart-m15.jpg",
+      lastPrice: 1.0995,
     });
     state.validateTradeSetupForOpen.mockReturnValue({ accepted: true, reason: null, plan: null });
     state.saveOpenPosition.mockResolvedValue(true);

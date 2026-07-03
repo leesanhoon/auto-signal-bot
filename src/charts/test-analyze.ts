@@ -37,7 +37,7 @@ async function main(): Promise<void> {
     const name = file.replace(extname(file), "").replace(/[-_]/g, " ");
     const timeframe = inferTimeframe(file);
     const chart: ChartConfig = { name: `${name} ${timeframe}`, symbol: name, interval: timeframe === "D1" ? "D" : timeframe === "M15" ? "15" : "240", description: `Test — ${name} — ${timeframe}`, timeframe };
-    screenshots.push({ chart, buffer: Buffer.from(buffer), filepath });
+    screenshots.push({ chart, buffer: Buffer.from(buffer), filepath, lastPrice: null });
     logger.info("Loaded chart fixture", { file, timeframe });
   }
 

@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext } from "playwright";
+import { chromium, type BrowserContext, type Frame } from "playwright";
 import { mkdir } from "fs/promises";
 import { join } from "path";
 import { CHARTS, buildChartHtml } from "./charts.config.js";
@@ -8,7 +8,10 @@ import { createLogger } from "../shared/logger.js";
 const SCREENSHOT_DIR = join(process.cwd(), "screenshots");
 const VIEWPORT = { width: 1400, height: 900 };
 const CHART_LOAD_TIMEOUT = 30_000;
-const CHART_RENDER_DELAY = 4_000;
+const CHART_PRICE_POLL_INTERVAL = 500;
+const CHART_PRICE_STABLE_READS = 2;
+const CHART_PRICE_TIMEOUT = 8_000;
+const CHART_FALLBACK_RENDER_DELAY = 3_000;
 const PARALLEL_TABS = 8;
 const logger = createLogger("charts:screenshot");
 
@@ -39,9 +42,149 @@ export function findChartForPair(pair: string, preferredTimeframe: ChartTimefram
 
 type CaptureOptions = {
   viewport?: { width: number; height: number };
-  renderDelayMs?: number;
+  priceTimeoutMs?: number;
   quality?: number;
 };
+
+const FALLBACK_SYMBOLS: Record<string, string> = {
+  "OANDA:EURUSD": "EURUSD=X",
+  "OANDA:GBPUSD": "GBPUSD=X",
+  "OANDA:USDJPY": "USDJPY=X",
+  "OANDA:AUDUSD": "AUDUSD=X",
+  "OANDA:USDCHF": "USDCHF=X",
+  "OANDA:USDCAD": "USDCAD=X",
+  "OANDA:NZDUSD": "NZDUSD=X",
+  "OANDA:XAUUSD": "GC=F",
+  "OANDA:XAGUSD": "SI=F",
+};
+
+function parsePriceText(value: string): number | null {
+  const parsed = Number(value.replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function extractLegendPriceText(text: string): string | null {
+  const normalized = text.replace(/\r/g, "\n");
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const cIndex = lines.findIndex((line) => line === "C");
+  if (cIndex !== -1) {
+    const candidate = lines[cIndex + 1];
+    if (candidate && /^[0-9][0-9,]*(?:\.[0-9]+)?$/.test(candidate)) {
+      return candidate.replace(/,/g, "");
+    }
+  }
+
+  const inline = normalized.match(/\bC\b\s*([0-9][0-9,]*(?:\.[0-9]+)?)/);
+  if (inline?.[1]) {
+    return inline[1].replace(/,/g, "");
+  }
+
+  return null;
+}
+
+async function readLegendLastPriceText(frame: Frame): Promise<string | null> {
+  const text = await frame.locator("body").innerText({ timeout: 2_000 }).catch(() => "");
+  if (!text.trim()) {
+    return null;
+  }
+
+  return extractLegendPriceText(text);
+}
+
+async function fetchFallbackLastPrice(symbol: string): Promise<number | null> {
+  const fallbackSymbol = FALLBACK_SYMBOLS[symbol];
+  if (!fallbackSymbol) {
+    return null;
+  }
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(fallbackSymbol)}?interval=2m&range=1d`;
+  const response = await fetch(url, {
+    headers: { "user-agent": "Mozilla/5.0" },
+  });
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as {
+    chart?: {
+      result?: Array<{
+        indicators?: {
+          quote?: Array<{
+            close?: Array<number | null>;
+          }>;
+        };
+      }>;
+    };
+  };
+
+  const closes = payload.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+  const lastClose = [...closes].reverse().find((value) => typeof value === "number" && Number.isFinite(value));
+  return typeof lastClose === "number" ? lastClose : null;
+}
+
+async function resolveLastPrice(
+  page: import("playwright").Page,
+  frame: Frame,
+  chart: (typeof CHARTS)[number],
+  timeoutMs: number,
+): Promise<number | null> {
+  const deadline = Date.now() + timeoutMs;
+  let lastText: string | null = null;
+  let stableReads = 0;
+
+  while (Date.now() < deadline) {
+    const text = await readLegendLastPriceText(frame);
+    if (text && text === lastText) {
+      stableReads += 1;
+      if (stableReads >= CHART_PRICE_STABLE_READS) {
+        return parsePriceText(text);
+      }
+    } else if (text) {
+      lastText = text;
+      stableReads = 1;
+    } else {
+      stableReads = 0;
+    }
+
+    await page.waitForTimeout(CHART_PRICE_POLL_INTERVAL);
+  }
+
+  if (lastText) {
+    const parsed = parsePriceText(lastText);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  return fetchFallbackLastPrice(chart.symbol);
+}
+
+function buildScreenshotPath(chart: (typeof CHARTS)[number]): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `${chart.symbol.replace(/[:/]/g, "_")}_${chart.timeframe}_${timestamp}.jpg`;
+  return join(SCREENSHOT_DIR, filename);
+}
+
+async function capturePageScreenshot(
+  page: import("playwright").Page,
+  chart: (typeof CHARTS)[number],
+  quality: number,
+  lastPrice: number | null,
+): Promise<ScreenshotResult> {
+  const filepath = buildScreenshotPath(chart);
+  const buffer = await page.screenshot({
+    path: filepath,
+    fullPage: false,
+    type: "jpeg",
+    quality,
+  });
+
+  return { chart, buffer: Buffer.from(buffer), filepath, lastPrice };
+}
 
 export async function captureAllCharts(): Promise<ScreenshotResult[]> {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
@@ -96,7 +239,7 @@ export async function captureChartScreenshot(
 export async function captureVerificationChartScreenshot(chart: (typeof CHARTS)[number]): Promise<ScreenshotResult> {
   return captureChartScreenshot(chart, {
     viewport: { width: 1200, height: 750 },
-    renderDelayMs: 5_000,
+    priceTimeoutMs: 5_000,
     quality: 55,
   });
 }
@@ -117,23 +260,18 @@ async function captureChart(
       const contentFrame = await frame.contentFrame();
       if (contentFrame) {
         await contentFrame.waitForSelector("canvas", { timeout: CHART_LOAD_TIMEOUT });
+        const lastPrice = await resolveLastPrice(
+          page,
+          contentFrame,
+          chart,
+          options.priceTimeoutMs ?? CHART_PRICE_TIMEOUT,
+        );
+        return await capturePageScreenshot(page, chart, options.quality ?? 75, lastPrice);
       }
     }
 
-    await page.waitForTimeout(options.renderDelayMs ?? CHART_RENDER_DELAY);
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `${chart.symbol.replace(/[:/]/g, "_")}_${chart.timeframe}_${timestamp}.jpg`;
-    const filepath = join(SCREENSHOT_DIR, filename);
-
-    const buffer = await page.screenshot({
-      path: filepath,
-      fullPage: false,
-      type: "jpeg",
-      quality: options.quality ?? 75,
-    });
-
-    return { chart, buffer: Buffer.from(buffer), filepath };
+    await page.waitForTimeout(CHART_FALLBACK_RENDER_DELAY);
+    return await capturePageScreenshot(page, chart, options.quality ?? 75, null);
   } finally {
     await page.close();
   }

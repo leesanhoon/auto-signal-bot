@@ -3,8 +3,137 @@ import { buildPositionManagementPatch, closePosition, loadOpenPositions, updateP
 import { decidePosition } from "./position-decision.js";
 import { buildPositionDecisionMessage, sendMessage, sendPhoto } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
+import type { PositionDecisionOutcome } from "./position-engine.js";
 
 const logger = createLogger("charts:check-open-trades");
+
+function parsePrice(value: string): number | null {
+  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatPrice(value: number): string {
+  const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
+  return value.toFixed(precision);
+}
+
+function resolvePositionByPrice(
+  position: Awaited<ReturnType<typeof loadOpenPositions>>[number],
+  lastPrice: number | null,
+): PositionDecisionOutcome | null {
+  if (lastPrice === null || !Number.isFinite(lastPrice)) {
+    return null;
+  }
+
+  const stopLoss = parsePrice(position.stopLoss);
+  const takeProfit1 = parsePrice(position.takeProfit1);
+  const takeProfit2 = position.takeProfit2 ? parsePrice(position.takeProfit2) : null;
+  if (stopLoss === null || takeProfit1 === null) {
+    return null;
+  }
+
+  const tp1AlreadyClosed = (position.tp1ClosedPercent ?? 0) > 0 || position.tradeStage === "tp1_partial";
+
+  if (position.direction === "LONG") {
+    if (lastPrice <= stopLoss) {
+      return {
+        decision: "STOP",
+        confidence: 99,
+        comment: `Giá thật ${formatPrice(lastPrice)} đã xuống dưới stop loss ${formatPrice(stopLoss)}.`,
+        managementAction: "NONE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: false,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+
+    if (takeProfit2 !== null && lastPrice >= takeProfit2) {
+      return {
+        decision: "CLOSE",
+        confidence: 99,
+        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
+        managementAction: "TP2_CLOSE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: true,
+        tp2Reached: true,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+
+    if (!tp1AlreadyClosed && lastPrice >= takeProfit1) {
+      return {
+        decision: "HOLD",
+        confidence: 96,
+        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
+        managementAction: "PARTIAL_TP1",
+        partialClosePercent: 50,
+        newStopLoss: position.entry,
+        tp1Reached: true,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+  } else {
+    if (lastPrice >= stopLoss) {
+      return {
+        decision: "STOP",
+        confidence: 99,
+        comment: `Giá thật ${formatPrice(lastPrice)} đã vượt stop loss ${formatPrice(stopLoss)}.`,
+        managementAction: "NONE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: false,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+
+    if (takeProfit2 !== null && lastPrice <= takeProfit2) {
+      return {
+        decision: "CLOSE",
+        confidence: 99,
+        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
+        managementAction: "TP2_CLOSE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: true,
+        tp2Reached: true,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+
+    if (!tp1AlreadyClosed && lastPrice <= takeProfit1) {
+      return {
+        decision: "HOLD",
+        confidence: 96,
+        comment: `Giá thật ${formatPrice(lastPrice)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
+        managementAction: "PARTIAL_TP1",
+        partialClosePercent: 50,
+        newStopLoss: position.entry,
+        tp1Reached: true,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+  }
+
+  return null;
+}
 
 function formatCheckedAt(): string {
   return new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -21,10 +150,12 @@ async function processPosition(position: Awaited<ReturnType<typeof loadOpenPosit
   await sendPhoto(screenshot.buffer, `📊 ${position.pair} - kiểm tra vị thế (${chart.timeframe})`);
 
   const decision = await decidePosition(position, screenshot);
-  const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, decision);
-  await updatePositionDecision(position.id, decision, patch);
+  const priceDecision = resolvePositionByPrice(position, screenshot.lastPrice);
+  const effectiveDecision = priceDecision ?? decision;
+  const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, effectiveDecision);
+  await updatePositionDecision(position.id, effectiveDecision, patch);
   if (shouldClose) {
-    await closePosition(position, decision, patch);
+    await closePosition(position, effectiveDecision, patch);
   }
 
   const message = buildPositionDecisionMessage(
@@ -46,7 +177,7 @@ async function processPosition(position: Awaited<ReturnType<typeof loadOpenPosit
       tp1ClosedPercent: patch?.tp1ClosedPercent ?? position.tp1ClosedPercent,
       trailingStopLoss: patch?.trailingStopLoss ?? position.trailingStopLoss,
     },
-    decision,
+    effectiveDecision,
   );
 
   await sendMessage(`${message}\n\n*Cập nhật lúc:* ${formatCheckedAt()}`);

@@ -15,13 +15,10 @@ import {
   callOpenRouter,
   type OpenRouterRequest,
 } from "../shared/openrouter.js";
-import { findChartForPair } from "./screenshot.js";
 
 const logger = createLogger("charts:analyzer");
 const ANALYSIS_MODEL =
   process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
-const VERIFY_MODEL =
-  process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
 
 type PairScreenshotGroup = { pair: string; screenshots: ScreenshotResult[] };
 
@@ -44,59 +41,107 @@ function normalizePairKey(value: string): string {
   return value.replace(/[\s\/_.:-]+/g, "").toUpperCase();
 }
 
-function findScreenshotByProvenance(
-  pair: string,
-  screenshots: ScreenshotResult[],
-  preferredSource?: ChartAnalysisSource,
-  preferredTimeframe: ChartTimeframe = "H4",
-): ScreenshotResult | undefined {
-  if (preferredSource) {
-    const preferredTriple = screenshots.find(
-      (s) =>
-        s.filepath === preferredSource.filepath &&
-        s.chart.symbol === preferredSource.symbol &&
-        s.chart.timeframe === preferredTimeframe,
-    );
-    if (preferredTriple) return preferredTriple;
-
-    const preferredSymbolTimeframe = screenshots.find(
-      (s) =>
-        s.chart.symbol === preferredSource.symbol &&
-        s.chart.timeframe === preferredTimeframe,
-    );
-    if (preferredSymbolTimeframe) return preferredSymbolTimeframe;
-
-    const exactTriples = screenshots.find(
-      (s) =>
-        s.filepath === preferredSource.filepath &&
-        s.chart.symbol === preferredSource.symbol &&
-        s.chart.timeframe === preferredSource.timeframe,
-    );
-    if (exactTriples) return exactTriples;
-
-    const exactSymbolTimeframe = screenshots.find(
-      (s) =>
-        s.chart.symbol === preferredSource.symbol &&
-        s.chart.timeframe === preferredSource.timeframe,
-    );
-    if (exactSymbolTimeframe) return exactSymbolTimeframe;
-
-    if (preferredSource.filepath) {
-      const exactFilepath = screenshots.find(
-        (s) => s.filepath === preferredSource.filepath,
-      );
-      if (exactFilepath) return exactFilepath;
-    }
+function getReferenceLastPrice(screenshots: ScreenshotResult[]): number | null {
+  const h4 = screenshots.find(
+    (s) => s.chart.timeframe === "H4" && typeof s.lastPrice === "number",
+  );
+  if (typeof h4?.lastPrice === "number") {
+    return h4.lastPrice;
   }
 
-  const chart = findChartForPair(pair, preferredTimeframe);
-  return chart
-    ? screenshots.find(
-        (s) =>
-          s.chart.symbol === chart.symbol &&
-          s.chart.timeframe === chart.timeframe,
-      )
-    : undefined;
+  const anyPrice = screenshots.find((s) => typeof s.lastPrice === "number");
+  return typeof anyPrice?.lastPrice === "number" ? anyPrice.lastPrice : null;
+}
+
+function parsePrice(value: string): number | null {
+  const parsed = Number(
+    String(value ?? "")
+      .replace(/,/g, "")
+      .trim(),
+  );
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatPrice(value: number): string {
+  const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
+  return value.toFixed(precision);
+}
+
+function applyPriceSanityChecks(
+  setup: TradeSetup,
+  lastPrice: number | null,
+): { setup: TradeSetup | null; note?: string } {
+  if (lastPrice === null || !Number.isFinite(lastPrice)) {
+    return { setup };
+  }
+
+  const entry = parsePrice(setup.entry);
+  const stopLoss = parsePrice(setup.stopLoss);
+  const takeProfit1 = parsePrice(setup.takeProfit1);
+  const takeProfit2 = setup.takeProfit2 ? parsePrice(setup.takeProfit2) : null;
+
+  const currentPriceContext = setup.currentPriceContext
+    ? `${setup.currentPriceContext} | Giá thật hiện tại: ${formatPrice(lastPrice)}`
+    : `Giá thật hiện tại: ${formatPrice(lastPrice)}`;
+
+  if (entry === null || stopLoss === null || takeProfit1 === null) {
+    return {
+      setup: {
+        ...setup,
+        lastPrice,
+        currentPriceContext,
+      },
+    };
+  }
+
+  const marketNowDeviation =
+    Math.abs(lastPrice - entry) / Math.max(lastPrice, entry);
+  if (setup.orderType === "MARKET_NOW" && marketNowDeviation > 0.005) {
+    return {
+      setup: null,
+      note: `Loại setup ${setup.pair} vì MARKET_NOW lệch quá xa so với giá thật ${formatPrice(lastPrice)}.`,
+    };
+  }
+
+  if (setup.direction === "LONG" && lastPrice <= stopLoss) {
+    return {
+      setup: null,
+      note: `Loại setup ${setup.pair} vì giá thật ${formatPrice(lastPrice)} đã nằm dưới stop loss.`,
+    };
+  }
+
+  if (setup.direction === "SHORT" && lastPrice >= stopLoss) {
+    return {
+      setup: null,
+      note: `Loại setup ${setup.pair} vì giá thật ${formatPrice(lastPrice)} đã nằm trên stop loss.`,
+    };
+  }
+
+  const updatedSetup: TradeSetup = {
+    ...setup,
+    lastPrice,
+    currentPriceContext,
+  };
+
+  if (
+    setup.direction === "LONG" &&
+    takeProfit2 !== null &&
+    lastPrice >= takeProfit2
+  ) {
+    updatedSetup.currentPriceContext += ` | Giá đã vượt TP2 ${formatPrice(takeProfit2)}.`;
+  } else if (
+    setup.direction === "SHORT" &&
+    takeProfit2 !== null &&
+    lastPrice <= takeProfit2
+  ) {
+    updatedSetup.currentPriceContext += ` | Giá đã vượt TP2 ${formatPrice(takeProfit2)}.`;
+  } else if (setup.direction === "LONG" && lastPrice >= takeProfit1) {
+    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP1 ${formatPrice(takeProfit1)}.`;
+  } else if (setup.direction === "SHORT" && lastPrice <= takeProfit1) {
+    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP1 ${formatPrice(takeProfit1)}.`;
+  }
+
+  return { setup: updatedSetup };
 }
 
 function groupScreenshotsByPair(
@@ -146,12 +191,16 @@ function buildUserPrompt(): string {
     "setups: chỉ các setup AI thấy đáng chú ý, gồm pair, direction, setup, primaryTimeframe, orderType, entryCondition, currentPriceContext, emaTouch, reasons, risks, confidence, entry, stopLoss, takeProfit1, takeProfit2, riskReward, summary.",
     "Mỗi setup phải khớp rõ với 1 pattern trong RB, ARB, IRB, BB, FB, SB, DD; nếu không khớp rõ thì không tạo setup và ghi lý do vào noSetupReason.",
     "Trong reasons/currentPriceContext hãy nói rõ EMA20 slope, giá ở trên/dưới EMA20, và volume tại điểm breakout nếu quan sát được.",
+    "Luôn bám theo LAST_PRICE từ dữ liệu ảnh để kiểm tra entry/stop loss/take profit; nếu giá thật mâu thuẫn với setup thì giảm confidence hoặc không tạo setup.",
     "Không cần ép đủ mọi rule; nếu không chắc thì giảm confidence, ghi rõ trong risks hoặc noSetupReason, và không gán pattern bừa.",
     "Giữ output ngắn gọn, logic chặt, tiếng Việt có dấu, không markdown.",
   ].join(" ");
 }
 
-export function buildPendingOrderCheckPrompt(order: PendingOrder): string {
+export function buildPendingOrderCheckPrompt(
+  order: PendingOrder,
+  lastPrice: number | null = null,
+): string {
   return [
     "You assess whether a pending forex setup has triggered, failed, or is still pending.",
     "Return only JSON with keys status, confidence, comment.",
@@ -169,6 +218,7 @@ export function buildPendingOrderCheckPrompt(order: PendingOrder): string {
     `- Confidence: ${order.confidence ?? 0}%`,
     `- Reasons: ${(order.reasons ?? []).slice(0, 3).join(" | ")}`,
     `- Risks: ${(order.risks ?? []).slice(0, 3).join(" | ")}`,
+    `- Last price: ${lastPrice ?? "unknown"}`,
     "",
     "TRIGGERED: price has touched or broken the entry in the correct direction and the setup still looks valid.",
     "CANCELLED: price moved against the setup, hit stop-loss before entry, or the structure is no longer valid.",
@@ -194,143 +244,6 @@ export function extractJsonObject(text: string): string {
 export function clampConfidence(value: unknown): number {
   const num = Number(value);
   return Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : 0;
-}
-
-export function buildVerificationPrompt(setup: TradeSetup): string {
-  return `Check this H4 EMA20 setup against the attached chart.
-
-Setup:
-- Pair: ${setup.pair}
-- Direction: ${setup.direction}
-- Pattern: ${setup.setup}
-- Order type: ${setup.orderType ?? ""}
-- Entry condition: ${setup.entryCondition ?? ""}
-- Current price context: ${setup.currentPriceContext ?? ""}
-- Entry: ${setup.entry}
-- Stop loss: ${setup.stopLoss}
-- Take profit 1: ${setup.takeProfit1}
-- Take profit 2: ${setup.takeProfit2}
-- Proposed confidence: ${setup.confidence}%
-- Reasons: ${setup.reasons.slice(0, 3).join(" | ")}
-
-Reject if the order type is inconsistent with direction, current price context, or entry/SL/TP levels. Reject if the setup is described like an already-open trade while orderType is pending.
-Return only JSON with keys confirmed, confidence, comment.
-Keep comment short, specific, and in Vietnamese with accents.`;
-}
-
-function parseVerificationResponse(
-  text: string,
-): { confirmed: boolean; confidence: number; comment: string } | null {
-  const cleaned = extractJsonObject(text);
-  try {
-    const parsed = JSON.parse(cleaned) as {
-      confirmed?: unknown;
-      confidence?: unknown;
-      comment?: unknown;
-    };
-    return {
-      confirmed: Boolean(parsed.confirmed),
-      confidence: clampConfidence(parsed.confidence),
-      comment: String(parsed.comment || ""),
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function verifySetup(
-  setup: TradeSetup,
-  imageBuffer: Buffer,
-): Promise<{
-  confirmed: boolean;
-  confidence: number;
-  comment: string;
-  verifiedBy: string;
-}> {
-  const mime = detectImageMimeType(imageBuffer);
-  const response = await withRetry(
-    () =>
-      callOpenRouter({
-        model: VERIFY_MODEL,
-        systemPrompt:
-          "You independently verify trading setups. Return only concise JSON.",
-        userContent: [
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:${mime};base64,${imageBuffer.toString("base64")}`,
-            },
-          },
-          { type: "text", text: buildVerificationPrompt(setup) },
-        ],
-        maxTokens: 300,
-        temperature: 0.2,
-        responseFormat: { type: "json_object" },
-      }),
-    {
-      onRetry: (error, attempt, maxAttempts, delayMs) =>
-        logger.warn(
-          `  ! OpenRouter verify temporary error for ${setup.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
-        ),
-    },
-  );
-  void recordOpenRouterUsage(response, {
-    model: VERIFY_MODEL,
-    source: "chart",
-  });
-  const parsed = parseVerificationResponse(response.text);
-  if (!parsed) {
-    throw new Error(
-      `OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`,
-    );
-  }
-  return { ...parsed, verifiedBy: VERIFY_MODEL };
-}
-
-export async function confirmHighConfidenceSetups(
-  setups: TradeSetup[],
-  screenshots: ScreenshotResult[],
-): Promise<TradeSetup[]> {
-  return Promise.all(
-    setups.map(async (setup) => {
-      const preferredTimeframe = normalizeTimeframe(setup.primaryTimeframe);
-      const preferredSource =
-        setup.sourceCharts?.find(
-          (chart) => chart.timeframe === preferredTimeframe,
-        ) ??
-        setup.sourceCharts?.find((chart) => chart.timeframe === "H4") ??
-        setup.sourceCharts?.[0];
-      const screenshot = findScreenshotByProvenance(
-        setup.pair,
-        screenshots,
-        preferredSource,
-        preferredTimeframe,
-      );
-      if (!screenshot) return setup;
-
-      try {
-        logger.info(`  -> Verifying ${setup.pair} with ${VERIFY_MODEL}...`);
-        const verification = await verifySetup(setup, screenshot.buffer);
-        logger.info(
-          `  ${verification.confirmed ? "✓" : "✗"} ${setup.pair}: ${verification.confirmed ? "confirmed" : "rejected"} (${verification.confidence}%) - ${verification.comment}`,
-        );
-        return {
-          ...setup,
-          verifiedConfirmed: verification.confirmed,
-          verifiedConfidence: verification.confidence,
-          verifiedComment: verification.comment,
-          verifiedBy: verification.verifiedBy,
-          telegramChart: toChartAnalysisSource(screenshot),
-          primaryTimeframe: preferredTimeframe,
-        };
-      } catch (error) {
-        logger.warn(
-          `  ! Verify failed for ${setup.pair}: ${error instanceof Error ? error.message : error}`,
-        );
-        return setup;
-      }
-    }),
-  );
 }
 
 function toText(value: unknown, fallback = ""): string {
@@ -411,7 +324,10 @@ function detectImageMimeType(buffer: Buffer): "image/png" | "image/jpeg" {
     : "image/jpeg";
 }
 
-export function parseAnalysisResponse(text: string): {
+export function parseAnalysisResponse(
+  text: string,
+  options: { lastPriceByPair?: Map<string, number | null> } = {},
+): {
   summaries: PairSummary[];
   setups: TradeSetup[];
   noSetupReason: string;
@@ -423,14 +339,15 @@ export function parseAnalysisResponse(text: string): {
       noSetupReason: string;
     }>;
     const rawSetups = Array.isArray(parsed.setups) ? parsed.setups : [];
-    const normalizedSetups: TradeSetup[] = rawSetups
+    const noSetupNotes: string[] = [];
+    const normalizedSetups = rawSetups
       .filter(
         (s): s is Record<string, unknown> =>
           s !== null && typeof s === "object",
       )
-      .map((s) => {
+      .map((s): TradeSetup | null => {
         const direction = normalizeDirection(s.direction);
-        return {
+        const setup = {
           ...s,
           direction,
           reasons: toArray(s.reasons),
@@ -446,11 +363,23 @@ export function parseAnalysisResponse(text: string): {
             "Model chưa mô tả rõ vị trí giá hiện tại so với entry.",
           ),
         } as unknown as TradeSetup;
+        const lastPrice =
+          options.lastPriceByPair?.get(normalizePairKey(setup.pair)) ?? null;
+        const checked = applyPriceSanityChecks(setup, lastPrice);
+        if (!checked.setup && checked.note) {
+          noSetupNotes.push(checked.note);
+          return null;
+        }
+        return checked.setup;
       });
     return {
       summaries: Array.isArray(parsed.summaries) ? parsed.summaries : [],
-      setups: normalizedSetups,
-      noSetupReason: toText(parsed.noSetupReason),
+      setups: normalizedSetups.filter((setup): setup is TradeSetup =>
+        Boolean(setup),
+      ),
+      noSetupReason: [toText(parsed.noSetupReason), ...noSetupNotes]
+        .filter(Boolean)
+        .join("\n"),
     };
   } catch {
     return {
@@ -504,7 +433,7 @@ async function analyzeWithOpenRouter(
     });
     userContent.push({
       type: "text",
-      text: `[PAIR=${getPairName(screenshot)}; TIMEFRAME=${screenshot.chart.timeframe}]`,
+      text: `[PAIR=${getPairName(screenshot)}; TIMEFRAME=${screenshot.chart.timeframe}; LAST_PRICE=${screenshot.lastPrice ?? "unknown"}]`,
     });
   }
   userContent.push({ type: "text", text: buildUserPrompt() });
@@ -549,8 +478,14 @@ export async function analyzeAllCharts(
     groups.map(async (group) => {
       try {
         logger.info(`  -> Analyzing ${group.pair} with ${ANALYSIS_MODEL}...`);
+        const referenceLastPrice = getReferenceLastPrice(group.screenshots);
         const parsed = parseAnalysisResponse(
           await analyzeWithOpenRouter(group.screenshots),
+          {
+            lastPriceByPair: new Map([
+              [normalizePairKey(group.pair), referenceLastPrice],
+            ]),
+          },
         );
         const sourceCharts = group.screenshots.map(toChartAnalysisSource);
         logger.info(`  ✓ Analyzed ${group.pair} by ${ANALYSIS_MODEL}`);
@@ -558,7 +493,11 @@ export async function analyzeAllCharts(
           kind: "ok" as const,
           pair: group.pair,
           summaries: parsed.summaries,
-          setups: parsed.setups.map((setup) => ({ ...setup, sourceCharts })),
+          setups: parsed.setups.map((setup) => ({
+            ...setup,
+            sourceCharts,
+            lastPrice: referenceLastPrice,
+          })),
           noSetupReason: parsed.noSetupReason,
         };
       } catch (error) {

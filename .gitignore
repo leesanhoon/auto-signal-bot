@@ -2,7 +2,6 @@ node_modules/
 dist/
 data/
 screenshots/
-.hermes/prompt-logs/
 .env
 *.png
 supabase/.temp/

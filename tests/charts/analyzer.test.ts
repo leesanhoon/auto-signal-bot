@@ -61,6 +61,26 @@ describe("charts/analyzer", () => {
     expect(parsed.noSetupReason).toBe("");
   });
 
+  test("parseAnalysisResponse drops market-now setups that are far from last price", () => {
+    const parsed = analyzer.parseAnalysisResponse(
+      '{"summaries":[],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"RB","orderType":"MARKET_NOW","reasons":[],"risks":[],"confidence":80,"entry":"1.2000","stopLoss":"1.1900","takeProfit1":"1.2100","takeProfit2":"1.2200","riskReward":"1:2","summary":"Test"}],"noSetupReason":""}',
+      { lastPriceByPair: new Map([["EURUSD", 1.1005]]) },
+    );
+
+    expect(parsed.setups).toHaveLength(0);
+    expect(parsed.noSetupReason).toContain("MARKET_NOW lệch quá xa");
+  });
+
+  test("parseAnalysisResponse drops setups whose price already violated stop loss", () => {
+    const parsed = analyzer.parseAnalysisResponse(
+      '{"summaries":[],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"RB","reasons":[],"risks":[],"confidence":80,"entry":"1.1000","stopLoss":"1.0900","takeProfit1":"1.1200","takeProfit2":"1.1300","riskReward":"1:2","summary":"Test"}],"noSetupReason":""}',
+      { lastPriceByPair: new Map([["EURUSD", 1.085]]) },
+    );
+
+    expect(parsed.setups).toHaveLength(0);
+    expect(parsed.noSetupReason).toContain("đã nằm dưới stop loss");
+  });
+
   test("analyzeAllCharts sends data URLs and parses OpenRouter output", async () => {
     state.call.mockResolvedValueOnce({
       text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
@@ -71,16 +91,19 @@ describe("charts/analyzer", () => {
         chart: { symbol: "EURUSD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
         buffer: Buffer.from("d1"),
         filepath: "/tmp/chart-d1.jpg",
+        lastPrice: 1.101,
       },
       {
         chart: { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
         buffer: Buffer.from("h4"),
         filepath: "/tmp/chart-h4.jpg",
+        lastPrice: 1.102,
       },
       {
         chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
         buffer: Buffer.from("m15"),
         filepath: "/tmp/chart-m15.jpg",
+        lastPrice: 1.103,
       },
     ];
     const result = await analyzer.analyzeAllCharts(screenshots);
@@ -104,16 +127,19 @@ describe("charts/analyzer", () => {
         chart: { symbol: "EUR/USD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
         buffer: Buffer.from("d1"),
         filepath: "/tmp/chart-d1.jpg",
+        lastPrice: 1.101,
       },
       {
         chart: { symbol: "EUR/USD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
         buffer: Buffer.from("h4"),
         filepath: "/tmp/chart-h4.jpg",
+        lastPrice: 1.102,
       },
       {
         chart: { symbol: "EUR/USD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
         buffer: Buffer.from("m15"),
         filepath: "/tmp/chart-m15.jpg",
+        lastPrice: 1.103,
       },
     ];
 
@@ -135,16 +161,19 @@ describe("charts/analyzer", () => {
         chart: { symbol: "EURUSD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
         buffer: Buffer.from("d1"),
         filepath: "/tmp/chart-d1.jpg",
+        lastPrice: 1.101,
       },
       {
         chart: { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
         buffer: Buffer.from("h4"),
         filepath: "/tmp/chart-h4.jpg",
+        lastPrice: 1.102,
       },
       {
         chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
         buffer: Buffer.from("m15"),
         filepath: "/tmp/chart-m15.jpg",
+        lastPrice: 1.103,
       },
     ];
 
@@ -158,59 +187,6 @@ describe("charts/analyzer", () => {
     expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("noSetupReason");
     expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("EMA20 slope");
     expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("RB, ARB, IRB, BB, FB, SB, DD");
-  });
-
-  test("confirmHighConfidenceSetups uses the primary timeframe for provenance", async () => {
-    state.call.mockResolvedValueOnce({
-      text: '{"confirmed":true,"confidence":91,"comment":"OK"}',
-      usage: { promptTokens: 4, completionTokens: 2 },
-    });
-
-    const screenshots: ScreenshotResult[] = [
-      {
-        chart: { symbol: "EURUSD", name: "EUR/USD D1", timeframe: "D1", interval: "D", description: "" },
-        buffer: Buffer.from("d1"),
-        filepath: "/tmp/chart-d1.jpg",
-      },
-      {
-        chart: { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
-        buffer: Buffer.from("h4"),
-        filepath: "/tmp/chart-h4.jpg",
-      },
-      {
-        chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
-        buffer: Buffer.from("m15"),
-        filepath: "/tmp/chart-m15.jpg",
-      },
-    ];
-
-    const result = await analyzer.confirmHighConfidenceSetups(
-      [
-        {
-          pair: "EUR/USD",
-          direction: "LONG",
-          setup: "RB",
-          primaryTimeframe: "M15",
-          reasons: ["EMA20 flat to up"],
-          risks: ["False break"],
-          confidence: 88,
-          entry: "1.1",
-          stopLoss: "1.09",
-          takeProfit1: "1.12",
-          takeProfit2: "1.13",
-          riskReward: "1:2",
-          summary: "Valid",
-          sourceCharts: [
-            { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", filepath: "/tmp/chart-h4.jpg" },
-            { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", filepath: "/tmp/chart-m15.jpg" },
-          ],
-        },
-      ],
-      screenshots,
-    );
-
-    expect(result[0].telegramChart?.timeframe).toBe("M15");
-    expect(result[0].telegramChart?.filepath).toBe("/tmp/chart-m15.jpg");
-    expect(state.call.mock.calls[0][0].userContent[1].text).toContain("- Pair: EUR/USD");
+    expect(request.userContent.map((part: { type: string; text?: string }) => part.text ?? "").join(" ")).toContain("LAST_PRICE=1.101");
   });
 });

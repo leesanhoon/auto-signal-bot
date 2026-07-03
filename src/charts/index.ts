@@ -1,21 +1,20 @@
 import "../shared/env.js";
 import { captureAllCharts } from "./screenshot.js";
-import { analyzeAllCharts, confirmHighConfidenceSetups } from "./analyzer.js";
+import { analyzeAllCharts } from "./analyzer.js";
 import { saveOpenPosition, savePendingOrder } from "./positions-repository.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner.js";
 import { runCheckPendingOrders } from "./check-pending-orders-runner.js";
 import { sendAllAnalyses, notifyError } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
 import { validateTradeSetupForOpen } from "./position-engine.js";
-import { getConfiguredChartSignalConfidenceThreshold, getConfiguredChartVerifyEnabled } from "./chart-config-env.js";
+import { getConfiguredChartSignalConfidenceThreshold } from "./chart-config-env.js";
 import type { TradeSetup } from "./chart-types.js";
 
 const logger = createLogger("charts:index");
 const AI_VISION_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
-const AI_VERIFY_MODEL = process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
 
-function shouldAutoTrackAsOpen(setup: TradeSetup): boolean {
-  return setup.verifiedConfirmed === true && setup.orderType === "MARKET_NOW";
+function shouldAutoTrackAsOpen(setup: TradeSetup, threshold: number): boolean {
+  return setup.orderType === "MARKET_NOW" && (setup.confidence ?? 0) >= threshold;
 }
 
 async function main(): Promise<void> {
@@ -34,22 +33,9 @@ async function main(): Promise<void> {
   logger.info("Analysis complete");
 
   const threshold = getConfiguredChartSignalConfidenceThreshold();
-  const highConfSetups = result.setups.filter((setup) => (setup.confidence ?? 0) >= threshold);
-  const chartVerifyEnabled = getConfiguredChartVerifyEnabled();
-  if (highConfSetups.length > 0 && chartVerifyEnabled) {
-    logger.info("Verifying high-confidence setups", { count: highConfSetups.length, model: AI_VERIFY_MODEL });
-    const verified = await confirmHighConfidenceSetups(highConfSetups, screenshots);
-    const verifiedByPair = new Map(verified.map((setup) => [setup.pair, setup]));
-    result.setups = result.setups.map((setup) => verifiedByPair.get(setup.pair) ?? setup);
-    logger.info("Verification complete");
-  } else if (highConfSetups.length > 0) {
-    logger.info("Skipped chart verification because CHART_AI_VERIFY_ENABLED=false", {
-      count: highConfSetups.length,
-    });
-  }
 
   for (const setup of result.setups) {
-    if (shouldAutoTrackAsOpen(setup)) {
+    if (shouldAutoTrackAsOpen(setup, threshold)) {
       try {
         const validation = validateTradeSetupForOpen(setup);
         if (!validation.accepted) {
@@ -84,12 +70,6 @@ async function main(): Promise<void> {
       } catch (error) {
         logger.error("Failed to save pending order", { pair: setup.pair, error });
       }
-    } else if (setup.verifiedConfirmed === true) {
-      logger.info("Skipped save because setup is pending below threshold or not eligible", {
-        pair: setup.pair,
-        orderType: setup.orderType,
-        confidence: setup.confidence,
-      });
     }
   }
 

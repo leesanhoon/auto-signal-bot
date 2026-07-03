@@ -57,7 +57,6 @@ describe("shared/telegram", () => {
       orderType: "BUY_STOP",
       entryCondition: "Chỉ vào khi phá lên 1.1000",
       currentPriceContext: "Giá hiện tại vẫn nằm dưới entry",
-      verifiedConfirmed: true,
     };
 
     const result: AnalysisResult = {
@@ -103,7 +102,6 @@ describe("shared/telegram", () => {
       orderType: "BUY_STOP" as const,
       entryCondition: "Chỉ vào khi phá lên 1.1000",
       currentPriceContext: "Giá hiện tại vẫn nằm dưới entry",
-      verifiedConfirmed: true,
     };
 
     const result: AnalysisResult = {
@@ -127,6 +125,7 @@ describe("shared/telegram", () => {
           },
           buffer: Buffer.from("gbp"),
           filepath: "/tmp/gbp-h4.jpg",
+          lastPrice: null,
         },
       ],
     };
@@ -168,7 +167,6 @@ describe("shared/telegram", () => {
       orderType: "BUY_STOP",
       entryCondition: "Chỉ vào khi phá lên 1.1000",
       currentPriceContext: "Giá hiện tại vẫn nằm dưới entry",
-      verifiedConfirmed: true,
       primaryTimeframe: "M15",
       telegramChart: {
         symbol: "OANDA:EURUSD",
@@ -207,6 +205,7 @@ describe("shared/telegram", () => {
           },
           buffer: fallbackBuffer,
           filepath: "/tmp/fallback.jpg",
+          lastPrice: null,
         },
         {
           chart: {
@@ -218,6 +217,7 @@ describe("shared/telegram", () => {
           },
           buffer: exactBuffer,
           filepath: "/tmp/exact-m15.jpg",
+          lastPrice: null,
         },
       ],
     };
@@ -258,7 +258,6 @@ describe("shared/telegram", () => {
       orderType: "BUY_STOP",
       entryCondition: "Chỉ vào khi phá lên 1.1000",
       currentPriceContext: "Giá hiện tại vẫn nằm dưới entry",
-      verifiedConfirmed: true,
       primaryTimeframe: "M15",
       sourceCharts: [
         {
@@ -285,6 +284,7 @@ describe("shared/telegram", () => {
           },
           buffer: Buffer.from("fallback"),
           filepath: "/tmp/fallback-h4.jpg",
+          lastPrice: null,
         },
       ],
     };

@@ -23,9 +23,16 @@ describe("charts/analyzer batching", () => {
       .mockRejectedValueOnce(new Error("503 UNAVAILABLE"));
 
     const make = (symbol: string, pair: string, timeframe: string) => ({
-      chart: { symbol, name: `${pair} ${timeframe}`, timeframe },
+      chart: {
+        symbol,
+        name: `${pair} ${timeframe}`,
+        timeframe,
+        interval: timeframe === "D1" ? "D" : timeframe === "M15" ? "15" : "240",
+        description: `${pair} ${timeframe}`,
+      },
       buffer: Buffer.from(`${symbol}-${timeframe}`),
       filepath: `/tmp/${symbol}-${timeframe}.jpg`,
+      lastPrice: 1.1,
     });
     const screenshots = [
       make("EURUSD", "EUR/USD", "D1"), make("EURUSD", "EUR/USD", "H4"), make("EURUSD", "EUR/USD", "M15"),

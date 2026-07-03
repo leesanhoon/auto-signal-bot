@@ -1,6 +1,5 @@
 import { withConfiguredRateLimit } from "./rate-limit.js";
 import { createLogger } from "./logger.js";
-import { writeOpenRouterPromptLog } from "./prompt-log.js";
 
 export type OpenRouterRequest = {
   model: string;
@@ -22,7 +21,7 @@ export type OpenRouterRequest = {
 
 export type OpenRouterResponse = {
   text: string;
-  usage: { promptTokens: number; completionTokens: number };
+  usage: { promptTokens: number; completionTokens: number; cachedTokens?: number };
   finishReason?: string;
 };
 
@@ -37,7 +36,11 @@ type ApiResponse = {
       reasoning?: string;
     };
   }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
   error?: { message?: string };
 };
 
@@ -55,16 +58,6 @@ export async function callOpenRouter(
   return withConfiguredRateLimit(
     { key: "openrouter", envVar: "OPENROUTER_RATE_LIMIT_RPM", defaultRpm: 15 },
     async () => {
-      try {
-        const promptLogPath = await writeOpenRouterPromptLog(input);
-        logger.info({ promptLogPath, model: input.model }, "Wrote OpenRouter prompt log");
-      } catch (error) {
-        logger.warn(
-          { error, model: input.model },
-          "Failed to write OpenRouter prompt log",
-        );
-      }
-
       const messages: Array<Record<string, unknown>> = [];
       if (input.systemPrompt)
         messages.push({ role: "system", content: input.systemPrompt });
@@ -122,6 +115,7 @@ export async function callOpenRouter(
         usage: {
           promptTokens: Number(payload.usage?.prompt_tokens ?? 0),
           completionTokens: Number(payload.usage?.completion_tokens ?? 0),
+          cachedTokens: Number(payload.usage?.prompt_tokens_details?.cached_tokens ?? 0),
         },
         finishReason,
       };

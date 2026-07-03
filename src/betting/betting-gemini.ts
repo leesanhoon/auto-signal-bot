@@ -22,24 +22,12 @@ const ANALYZE_MODEL =
   process.env.AI_TEXT_MODEL?.trim() || "deepseek/deepseek-v4-pro";
 const FALLBACK_MODEL =
   process.env.AI_TEXT_FALLBACK_MODEL?.trim() || "deepseek/deepseek-v4-flash";
-const VERIFY_MODEL =
-  process.env.AI_VERIFY_MODEL?.trim() || "moonshotai/kimi-k2.6";
 const ANALYZE_TIMEOUT_MS = parsePositiveEnv(
   "BETTING_AI_ANALYZE_TIMEOUT_MS",
   75_000,
 );
-const VERIFY_TIMEOUT_MS = parsePositiveEnv(
-  "BETTING_AI_VERIFY_TIMEOUT_MS",
-  45_000,
-);
-const REVISE_TIMEOUT_MS = parsePositiveEnv(
-  "BETTING_AI_REVISE_TIMEOUT_MS",
-  60_000,
-);
 const ANALYZE_WEB_RESULTS = 3;
 const MAX_ANALYZE_TOKENS = 1_400;
-const MAX_VERIFY_TOKENS = 400;
-const MAX_REVISE_TOKENS = 1_300;
 
 type OddsCandidate = {
   candidateId: string;
@@ -48,13 +36,6 @@ type OddsCandidate = {
   selection: string;
   odds: number;
 };
-
-export type VerificationReasonCode =
-  | "CONFLICT"
-  | "OVERCLAIM"
-  | "INSUFFICIENT_SUPPORT"
-  | "HARD_INVALID"
-  | "OTHER";
 
 type RequestRunResult = {
   response: Awaited<ReturnType<typeof callOpenRouter>>;
@@ -400,81 +381,6 @@ function buildAnalyzeUserPrompt(): string {
   ].join(" ");
 }
 
-function buildVerificationPrompt(
-  setup: MatchAiAnalysis,
-  payload: MatchOddsPayload,
-): string {
-  return [
-    `Kiểm tra kèo đã hydrate từ snapshot odds.`,
-    `Match: ${payload.home} vs ${payload.away}`,
-    `Recommendation: ${setup.recommendation}`,
-    `Picks: ${(setup.picks ?? []).map((pick) => `${pick.candidateId ?? "-"}:${pick.market} ${pick.selection} @${pick.odds}`).join(" | ")}`,
-    `Xác nhận khi mọi pick đều tồn tại trong snapshot, odds > 1.80 và không có mâu thuẫn lớn.`,
-    `QUY TẮC THANH TOÁN KÈO CHÂU ÂU:`,
-    `- Over/Under X.5: thắng/thua ĐỦ tiền. Không có hòa nửa.`,
-    `- Under X.5 thắng nếu tổng bàn ≤ X.`,
-    `- Over X.5 thắng nếu tổng bàn ≥ X+1.`,
-    `QUY TẮC THANH TOÁN KÈO CHÂU Á:`,
-    `- X.25: nếu tổng bàn = X, thua nửa (Over) hoặc thắng nửa (Under).`,
-    `- X.75: nếu tổng bàn = X+1, thua nửa (Under) hoặc thắng nửa (Over).`,
-    `Ví dụ: Under 2.5 thắng với tỷ số 2-0, 1-1, 0-0, 1-0 (tổng ≤ 2).`,
-    `Trả reasonCode là một trong CONFLICT, OVERCLAIM, INSUFFICIENT_SUPPORT, HARD_INVALID, OTHER.`,
-    `Nếu không có pick hợp lệ hoặc chỉ là đứng ngoài, bác bỏ với reasonCode HARD_INVALID.`,
-    `Chỉ trả JSON với keys confirmed, confidence, reasonCode, comment.`,
-    `Comment ngắn, có dấu tiếng Việt.`,
-  ].join("\n");
-}
-
-function buildRevisePrompt(
-  payload: MatchOddsPayload,
-  original: MatchAiAnalysis,
-  rejectionComment: string,
-): string {
-  return [
-    `Sửa phân tích theo snapshot odds.`,
-    `Match: ${payload.home} vs ${payload.away}`,
-    `Rejected reason: ${rejectionComment}`,
-    `Original recommendation: ${original.recommendation}`,
-    `Original picks: ${(original.picks ?? []).map((pick) => `${pick.candidateId ?? "-"}:${pick.market} ${pick.selection} @${pick.odds}`).join(" | ")}`,
-    `Nếu không còn kèo đạt chuẩn thì recommendation phải là "Đứng ngoài".`,
-    `Không nhắc tới việc bị bác bỏ hay bước thẩm định.`,
-    `Trả đúng schema phân tích như analyze, nhưng không cần marketViews.`,
-    `Picks chỉ được dùng candidateId từ snapshot.`,
-  ].join("\n");
-}
-
-function parseVerificationResponse(text: string): {
-  confirmed: boolean;
-  confidence: number;
-  reasonCode: VerificationReasonCode;
-  comment: string;
-} | null {
-  try {
-    const parsed = JSON.parse(extractJsonObject(text)) as {
-      confirmed?: unknown;
-      confidence?: unknown;
-      reasonCode?: unknown;
-      comment?: unknown;
-    };
-    const reasonCode: VerificationReasonCode =
-      parsed.reasonCode === "CONFLICT" ||
-      parsed.reasonCode === "OVERCLAIM" ||
-      parsed.reasonCode === "INSUFFICIENT_SUPPORT" ||
-      parsed.reasonCode === "HARD_INVALID" ||
-      parsed.reasonCode === "OTHER"
-        ? parsed.reasonCode
-        : "OTHER";
-    return {
-      confirmed: Boolean(parsed.confirmed),
-      confidence: clampConfidence(parsed.confidence),
-      reasonCode,
-      comment: toText(parsed.comment),
-    };
-  } catch {
-    return null;
-  }
-}
-
 function getCandidateById(
   candidatePool: OddsCandidate[],
   candidateId: string,
@@ -649,7 +555,7 @@ async function runOpenRouterStage(
 }
 
 function recordStageUsage(
-  stage: "analyze" | "verify" | "revise" | "combined",
+  stage: "analyze" | "combined",
   response: Awaited<ReturnType<typeof callOpenRouter>>,
   model: string,
   metadata: Record<string, unknown>,
@@ -667,7 +573,7 @@ function recordStageUsage(
 }
 
 function logStageMetrics(
-  stage: "analyze" | "verify" | "revise" | "combined",
+  stage: "analyze" | "combined",
   payload: MatchOddsPayload,
   model: string,
   latencyMs: number,
@@ -702,65 +608,6 @@ function buildAnalyzeRequest(
       model === ANALYZE_MODEL
         ? [{ id: "web", max_results: ANALYZE_WEB_RESULTS }]
         : undefined,
-  };
-}
-
-function buildVerifyRequest(
-  payload: MatchOddsPayload,
-  analysis: MatchAiAnalysis,
-): OpenRouterRequest {
-  return {
-    model: VERIFY_MODEL,
-    systemPrompt: "Bạn là bộ thẩm định odds độc lập. Chỉ trả JSON ngắn.",
-    userContent: [
-      {
-        type: "text",
-        text: `${formatOddsAnalysisInput(payload)}\n\nanalysis=${JSON.stringify(
-          {
-            preferredScoreline: analysis.preferredScoreline,
-            scoreConfidence: analysis.scoreConfidence,
-            recommendation: analysis.recommendation,
-            confidence: analysis.confidence,
-            picks: analysis.picks ?? [],
-          },
-        )}\n\n${buildVerificationPrompt(analysis, payload)}`,
-      },
-    ],
-    maxTokens: MAX_VERIFY_TOKENS,
-    temperature: 0.2,
-    responseFormat: { type: "json_object" },
-    timeoutMs: VERIFY_TIMEOUT_MS,
-    reasoning: { effort: "none", exclude: true },
-  };
-}
-
-function buildReviseRequest(
-  payload: MatchOddsPayload,
-  original: MatchAiAnalysis,
-  rejectionComment: string,
-): OpenRouterRequest {
-  return {
-    model: VERIFY_MODEL,
-    systemPrompt: "Bạn là bộ tái phân tích odds độc lập. Chỉ trả JSON ngắn.",
-    userContent: [
-      {
-        type: "text",
-        text: `${formatOddsAnalysisInput(payload)}\n\n${buildCandidatePoolText(payload)}\n\nrejected=${JSON.stringify(
-          {
-            preferredScoreline: original.preferredScoreline,
-            scoreConfidence: original.scoreConfidence,
-            recommendation: original.recommendation,
-            confidence: original.confidence,
-            picks: original.picks ?? [],
-          },
-        )}\n\nreason=${rejectionComment}\n\n${buildRevisePrompt(payload, original, rejectionComment)}`,
-      },
-    ],
-    maxTokens: MAX_REVISE_TOKENS,
-    temperature: 0.2,
-    responseFormat: { type: "json_object" },
-    timeoutMs: REVISE_TIMEOUT_MS,
-    reasoning: { effort: "none", exclude: true },
   };
 }
 
@@ -829,21 +676,6 @@ export function buildAnalyzeMatchOddsRequest(
   return buildAnalyzeRequest(payload, ANALYZE_MODEL);
 }
 
-export function buildVerifyMatchAnalysisRequest(
-  payload: MatchOddsPayload,
-  analysis: MatchAiAnalysis,
-): OpenRouterRequest {
-  return buildVerifyRequest(payload, analysis);
-}
-
-export function buildReviseMatchAnalysisRequest(
-  payload: MatchOddsPayload,
-  original: MatchAiAnalysis,
-  rejectionComment: string,
-): OpenRouterRequest {
-  return buildReviseRequest(payload, original, rejectionComment);
-}
-
 export function buildMatchAnalysisCandidatePool(
   payload: MatchOddsPayload,
 ): Array<{
@@ -905,133 +737,6 @@ export async function analyzeMatchOdds(
     throw new Error(
       `OpenRouter parse failed. Raw: ${run.response.text.slice(0, 300)}`,
     );
-  }
-  return parsed;
-}
-
-export async function verifyMatchAnalysis(
-  payload: MatchOddsPayload,
-  analysis: MatchAiAnalysis,
-): Promise<{
-  confirmed: boolean;
-  confidence: number;
-  reasonCode: VerificationReasonCode;
-  comment: string;
-}> {
-  const startedAt = Date.now();
-  const request = buildVerifyMatchAnalysisRequest(payload, analysis);
-  const { response, requestCount } = await callOpenRouterWithCount(
-    request,
-    isTransientRetryableError,
-  );
-  const parsed = parseVerificationResponse(response.text);
-  const latencyMs = Date.now() - startedAt;
-  logStageMetrics(
-    "verify",
-    payload,
-    request.model,
-    latencyMs,
-    response,
-    requestCount,
-    false,
-  );
-  recordStageUsage("verify", response, request.model, {
-    latencyMs,
-    requestCount,
-    fallbackUsed: false,
-    timeoutMs: VERIFY_TIMEOUT_MS,
-    reasonCode: parsed?.reasonCode ?? "OTHER",
-  });
-  if (!parsed) {
-    throw new Error(
-      `OpenRouter verify parse failed. Raw: ${response.text.slice(0, 300)}`,
-    );
-  }
-  return parsed;
-}
-
-function shouldRevise(reasonCode: VerificationReasonCode): boolean {
-  return (
-    reasonCode === "CONFLICT" ||
-    reasonCode === "OVERCLAIM" ||
-    reasonCode === "INSUFFICIENT_SUPPORT"
-  );
-}
-
-function buildFallbackRevisedAnalysis(
-  payload: MatchOddsPayload,
-  original: MatchAiAnalysis,
-  rejectionComment: string,
-): MatchAiAnalysis {
-  const shortReason =
-    rejectionComment.trim() ||
-    "Nhận định trước đó không vượt qua bước thẩm định.";
-  const trimmedReason =
-    shortReason.length > 160 ? `${shortReason.slice(0, 157)}...` : shortReason;
-  return {
-    match: `${payload.home} vs ${payload.away}`,
-    preferredScoreline: original.preferredScoreline || "1-1",
-    scoreConfidence: Math.min(original.scoreConfidence || 0, 45),
-    recommendation: "Đứng ngoài.",
-    confidence: Math.min(original.confidence || 0, 45),
-    keyPoints: [
-      "Bước thẩm định độc lập đã bác bỏ nhận định ban đầu.",
-      "Odds hiện tại chưa cho thấy edge rõ ràng để vào kèo.",
-    ],
-    risks: [
-      trimmedReason,
-      "Nhận định thay thế được hạ mức tin cậy để tránh overclaim.",
-    ],
-    summary:
-      "Nhận định gốc bị từ chối trong bước thẩm định độc lập. Bản thay thế chuyển sang góc nhìn bảo thủ vì odds chưa cho edge rõ ràng.",
-    picks: [],
-  };
-}
-
-export async function reviseMatchAnalysis(
-  payload: MatchOddsPayload,
-  original: MatchAiAnalysis,
-  rejectionComment: string,
-): Promise<MatchAiAnalysis> {
-  const startedAt = Date.now();
-  const request = buildReviseMatchAnalysisRequest(
-    payload,
-    original,
-    rejectionComment,
-  );
-  const { response, requestCount } = await callOpenRouterWithCount(
-    request,
-    isTransientRetryableError,
-  );
-  const latencyMs = Date.now() - startedAt;
-  logStageMetrics(
-    "revise",
-    payload,
-    request.model,
-    latencyMs,
-    response,
-    requestCount,
-    false,
-  );
-  recordStageUsage("revise", response, request.model, {
-    latencyMs,
-    requestCount,
-    fallbackUsed: false,
-    timeoutMs: REVISE_TIMEOUT_MS,
-    finishReason: response.finishReason ?? "stop",
-  });
-  if (response.finishReason === "length") {
-    logger.warn(
-      `  ! OpenRouter revise output truncated (finish_reason=length, ${response.usage.completionTokens} tokens) for ${payload.home} vs ${payload.away}; using conservative fallback`,
-    );
-    return buildFallbackRevisedAnalysis(payload, original, rejectionComment);
-  }
-  const parsed = parseMatchAnalysisResponseInternal(response.text, payload);
-  if (!parsed) {
-    logger.warn(
-      `  ! OpenRouter revise parse failed for ${payload.home} vs ${payload.away}; using conservative fallback`,
-    );
-    return buildFallbackRevisedAnalysis(payload, original, rejectionComment);
   }
   return parsed;
 }
@@ -1218,6 +923,7 @@ export async function generateBettingPlan(
     temperature: 0.3,
     responseFormat: { type: "json_object" },
     timeoutMs: PLAN_TIMEOUT_MS,
+    reasoning: { effort: "high" },
   };
 
   const fallbackRequest: OpenRouterRequest = {
@@ -1547,7 +1253,8 @@ export async function generateCombinedAnalysis(
     return plan;
   } catch (primaryError) {
     const forcedFallback =
-      (primaryError as Error & { forceFallback?: boolean }).forceFallback === true;
+      (primaryError as Error & { forceFallback?: boolean }).forceFallback ===
+      true;
     if (!forcedFallback && !isProFallbackTrigger(primaryError)) {
       logger.warn(
         `  ! Combined analysis primary model failed (non-retryable): ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`,

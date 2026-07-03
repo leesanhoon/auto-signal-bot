@@ -253,6 +253,11 @@ function getOrderTypeLabel(orderType?: string): string {
   }
 }
 
+function formatLastPrice(value: number): string {
+  const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
+  return value.toFixed(precision);
+}
+
 function buildCopyableSetup(setup: TradeSetup): string {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
   const arrow = setup.direction === "LONG" ? "🟢" : "🔴";
@@ -270,6 +275,9 @@ function buildCopyableSetup(setup: TradeSetup): string {
     patternInfo,
     setup.orderType ? `🧭 *Loại lệnh:* ${getOrderTypeLabel(setup.orderType)}` : "",
     setup.entryCondition ? `⏳ *Điều kiện vào:* ${setup.entryCondition}` : "",
+    setup.lastPrice !== undefined && setup.lastPrice !== null
+      ? `📍 *Giá thật:* ${formatLastPrice(setup.lastPrice)}`
+      : "",
     setup.currentPriceContext ? `📍 *Giá hiện tại:* ${setup.currentPriceContext}` : "",
     fallbackNote,
     "",

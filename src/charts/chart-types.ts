@@ -21,12 +21,14 @@ export type ChartAnalysisSource = {
   timeframe: ChartTimeframe;
   name: string;
   filepath: string;
+  lastPrice?: number | null;
 };
 
 export type ScreenshotResult = {
   chart: ChartConfig;
   buffer: Buffer;
   filepath: string;
+  lastPrice: number | null;
 };
 
 export type PairSummary = {
@@ -55,14 +57,11 @@ export type TradeSetup = {
   orderType?: ChartOrderType;
   entryCondition?: string;
   currentPriceContext?: string;
-  verifiedConfirmed?: boolean;
-  verifiedConfidence?: number;
-  verifiedComment?: string;
-  verifiedBy?: string;
   autoTracked?: boolean;
   chartFallbackUsed?: boolean;
   sourceCharts?: ChartAnalysisSource[];
   telegramChart?: ChartAnalysisSource;
+  lastPrice?: number | null;
 };
 export type AnalysisResult = {
   summaries: PairSummary[];

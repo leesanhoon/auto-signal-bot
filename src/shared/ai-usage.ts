@@ -57,7 +57,7 @@ export type ClaudeUsageResponseLike = {
 };
 
 export type OpenRouterUsageResponseLike = {
-  usage?: { promptTokens?: number; completionTokens?: number };
+  usage?: { promptTokens?: number; completionTokens?: number; cachedTokens?: number };
 };
 
 export type AiUsageInput = {
@@ -185,10 +185,11 @@ export function extractClaudeUsage(response: ClaudeUsageResponseLike): { inputTo
   };
 }
 
-export function extractOpenRouterUsage(response: OpenRouterUsageResponseLike): { inputTokens: number; outputTokens: number } {
+export function extractOpenRouterUsage(response: OpenRouterUsageResponseLike): { inputTokens: number; outputTokens: number; cachedTokens: number } {
   return {
     inputTokens: normalizeCount(response.usage?.promptTokens),
     outputTokens: normalizeCount(response.usage?.completionTokens),
+    cachedTokens: normalizeCount(response.usage?.cachedTokens),
   };
 }
 
@@ -444,6 +445,14 @@ export async function recordOpenRouterUsage(
   input: Omit<AiUsageInput, "provider" | "inputTokens" | "outputTokens"> & { provider?: "openrouter" },
 ): Promise<void> {
   const usage = extractOpenRouterUsage(response);
+  if (usage.inputTokens > 0 && usage.cachedTokens && usage.cachedTokens > 0) {
+    logger.info("OpenRouter prompt cache hit", {
+      model: input.model,
+      cachedTokens: usage.cachedTokens,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+    });
+  }
   await recordAiUsage({
     provider: "openrouter",
     model: input.model,
@@ -451,6 +460,9 @@ export async function recordOpenRouterUsage(
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     recordedAt: input.recordedAt,
-    metadata: input.metadata,
+    metadata: {
+      ...(input.metadata ?? {}),
+      cachedTokens: usage.cachedTokens,
+    },
   });
 }

@@ -27,7 +27,7 @@ describe("charts/position-decision", () => {
       stopLoss: "1.0960", takeProfit1: "1.1080", takeProfit2: "1.1120", reasons: ["Trend broke"],
       openedAt: "2026-07-01T00:00:00.000Z", status: "open", lastDecision: null,
       lastDecisionConfidence: null, lastDecisionComment: null, lastCheckedAt: null, closedAt: null,
-    }, { chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("chart"), filepath: "/tmp/chart.jpg" });
+    }, { chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("chart"), filepath: "/tmp/chart.jpg", lastPrice: 1.105 });
     expect(result).toMatchObject({ decision: "CLOSE", confidence: 87, comment: "Trend failed" });
     expect(state.call).toHaveBeenCalledTimes(1);
     expect(state.call.mock.calls[0][0].systemPrompt).toContain("All user-facing text must be Vietnamese with accents.");

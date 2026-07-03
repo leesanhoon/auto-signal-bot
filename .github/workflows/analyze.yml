@@ -43,8 +43,6 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           AI_VISION_MODEL: ${{ vars.AI_VISION_MODEL }}
-          AI_CHART_VERIFY_MODEL: ${{ vars.AI_CHART_VERIFY_MODEL }}
-          AI_VERIFY_MODEL: ${{ vars.AI_VERIFY_MODEL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
