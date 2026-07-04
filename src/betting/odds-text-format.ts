@@ -587,18 +587,27 @@ export function formatCombinedAnalysisMessage(
     const lines: string[] = [];
     lines.push(`*${match.matchLabel}* | ${match.kickoff}`);
 
+    // Handicap pick
+    if (match.handicapPick) {
+      const { selection, odds, reason } = match.handicapPick;
+      lines.push(`📐 Chấp: ${selection} @${odds}`);
+      if (reason) lines.push(`   ✅ ${reason}`);
+    } else {
+      lines.push(`📐 Chấp: Đứng ngoài`);
+    }
+
     // Tài/Xỉu pick
     if (match.totalGoalsPick) {
-      const { market, selection, odds, reason } = match.totalGoalsPick;
-      const reasonText = reason ? ` — ${reason}` : "";
-      lines.push(`🎯 ${selection} @${odds}${reasonText}`);
+      const { selection, odds, reason } = match.totalGoalsPick;
+      lines.push(`⚽ Tài/Xỉu: ${selection} @${odds}`);
+      if (reason) lines.push(`   ✅ ${reason}`);
     } else {
-      lines.push(`🎯 Đứng ngoài — không rõ edge tài/xỉu`);
+      lines.push(`⚽ Tài/Xỉu: Đứng ngoài`);
     }
 
     // Predicted score
     lines.push(
-      `⚽ Tỉ số dự đoán: ${match.predictedScore.score} (${match.predictedScore.confidence}%)`,
+      `🎯 Tỉ số: ${match.predictedScore.score} (${match.predictedScore.confidence}%)`,
     );
 
     // Note
@@ -645,18 +654,27 @@ export function formatCachedAnalysisMessage(
     const lines: string[] = [];
     lines.push(`*${analysis.match}*`);
 
+    // Handicap pick
+    if (analysis.handicapPick) {
+      const { selection, odds, reason } = analysis.handicapPick;
+      lines.push(`📐 Chấp: ${selection} @${odds}`);
+      if (reason) lines.push(`   ✅ ${reason}`);
+    } else {
+      lines.push(`📐 Chấp: Đứng ngoài`);
+    }
+
     // Tài/Xỉu pick
     if (analysis.totalGoalsPick) {
-      const { market, selection, odds, reason } = analysis.totalGoalsPick;
-      const reasonText = reason ? ` — ${reason}` : "";
-      lines.push(`🎯 ${selection} @${odds}${reasonText}`);
+      const { selection, odds, reason } = analysis.totalGoalsPick;
+      lines.push(`⚽ Tài/Xỉu: ${selection} @${odds}`);
+      if (reason) lines.push(`   ✅ ${reason}`);
     } else {
-      lines.push(`🎯 Đứng ngoài — không rõ edge tài/xỉu`);
+      lines.push(`⚽ Tài/Xỉu: Đứng ngoài`);
     }
 
     // Predicted score
     lines.push(
-      `⚽ Tỉ số dự đoán: ${analysis.predictedScore.score} (${analysis.predictedScore.confidence}%)`,
+      `🎯 Tỉ số: ${analysis.predictedScore.score} (${analysis.predictedScore.confidence}%)`,
     );
 
     // Note

@@ -20,6 +20,7 @@ export type PredictedScore = {
 
 export type MatchAiAnalysis = {
   match: string;
+  handicapPick: TotalGoalsPick | null;
   totalGoalsPick: TotalGoalsPick | null;
   predictedScore: PredictedScore;
   note?: string;
@@ -49,6 +50,7 @@ export type CombinedAnalysisPlanMatch = {
   matchIndex: number;
   matchLabel: string;
   kickoff: string;
+  handicapPick: TotalGoalsPick | null;
   totalGoalsPick: TotalGoalsPick | null;
   predictedScore: PredictedScore;
   note?: string;

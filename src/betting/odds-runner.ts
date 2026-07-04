@@ -34,6 +34,7 @@ function buildCombinedMatchAnalysis(
 ): MatchAiAnalysis {
   return {
     match: match.matchLabel,
+    handicapPick: match.handicapPick,
     totalGoalsPick: match.totalGoalsPick,
     predictedScore: match.predictedScore,
     note: match.note,

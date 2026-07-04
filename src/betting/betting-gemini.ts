@@ -247,10 +247,16 @@ export function buildCombinedSystemPrompt(): string {
     "Kết hợp dữ liệu odds VÀ ngữ cảnh trận đấu để phân tích. Nếu không có dữ liệu ngữ cảnh, chỉ dựa vào odds.",
     "",
     "YÊU CẦU cho MỖI trận:",
-    "1. Nhận định Tài/Xỉu (tổng bàn thắng): chỉ chọn từ market Tổng bàn châu Á (asia_totals), Tổng bàn châu Âu (eu_totals), hoặc Kết quả + Tổng bàn (result_total_goals). Nếu không rõ edge, trả totalGoalsPick = null.",
-    "   KHÔNG chọn 1X2, Chấp châu Á, GG/NG, Bàn đội, Phạt góc cho mục này.",
-    "2. Dự đoán tỉ số chính xác (predictedScore) kèm % tự tin (0-100), dựa trên odds correct score và các market khác, cân nhắc thêm phong độ nếu có.",
-    "3. (tuỳ chọn) 1 câu note ngắn nếu có điểm đáng chú ý khác.",
+    "1. Nhận định Chấp châu Á (handicapPick): chọn mốc chấp có edge rõ ràng nhất + odds tốt nhất (ngắn nhất) từ market asia_handicap.",
+    "   - Chỉ chọn khi thực sự có lý do rõ ràng để nên chơi (phù hợp phong độ, xu hướng đối đầu, chênh lệch lực lượng...).",
+    "   - Nếu không rõ edge hoặc không đủ dữ liệu để khẳng định, trả handicapPick = null.",
+    "   - Lý do (reason) phải cụ thể: vì sao nên chấp mốc này, ví dụ: 'Đội nhà 5 trận thắng, phòng ngự tốt', 'Đội khách thua liên tiếp', v.v.",
+    "2. Nhận định Tài/Xỉu (tổng bàn thắng): chỉ chọn từ market Tổng bàn châu Á (asia_totals), Tổng bàn châu Âu (eu_totals), hoặc Kết quả + Tổng bàn (result_total_goals).",
+    "   - Lấy odds tốt nhất (ngắn nhất) cho mốc được chọn.",
+    "   - Nếu không rõ edge, trả totalGoalsPick = null.",
+    "   - KHÔNG chọn 1X2, GG/NG, Bàn đội, Phạt góc cho mục này.",
+    "3. Dự đoán tỉ số chính xác (predictedScore) kèm % tự tin (0-100), dựa trên odds correct score và các market khác, cân nhắc thêm phong độ nếu có.",
+    "4. (tuỳ chọn) 1 câu note ngắn nếu có điểm đáng chú ý khác.",
     "",
     "Không cần lên kế hoạch cược, không xiên, không kèo đơn, không chiến lược vốn.",
     "Không tự bịa dữ liệu ngoài input. Tất cả field text tiếng Việt có dấu, ngắn gọn, không markdown, không URL.",
@@ -283,7 +289,7 @@ export function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
     "",
     "YÊU CẦU:",
     "Trả JSON duy nhất theo schema bên dưới.",
-    `QUAN TRỌNG: mảng "matches" PHẢI có ĐÚNG ${payloads.length} phần tử, mỗi phần tử ứng với 1 trận theo matchIndex từ 0 đến ${payloads.length - 1}. KHÔNG được bỏ sót trận nào — nếu trận không có edge tài/xỉu, totalGoalsPick = null nhưng vẫn phải có phần tử cho trận đó với predictedScore.`,
+    `QUAN TRỌNG: mảng "matches" PHẢI có ĐÚNG ${payloads.length} phần tử, mỗi phần tử ứng với 1 trận theo matchIndex từ 0 đến ${payloads.length - 1}. KHÔNG được bỏ sót trận nào — nếu không có edge, field = null nhưng vẫn phải có phần tử cho trận đó với predictedScore.`,
     "```json",
     JSON.stringify(
       {
@@ -293,11 +299,17 @@ export function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
             matchIndex: 0,
             matchLabel: "Portugal vs Croatia",
             kickoff: "Th 6 03/07 06:00",
+            handicapPick: {
+              market: "Chấp châu Á",
+              selection: "H +0.5",
+              odds: 1.92,
+              reason: "Đội nhà thắng 5 trận liên tiếp, phòng ngự cực mạnh, đối thủ rank thấp hơn",
+            },
             totalGoalsPick: {
               market: "Tổng bàn châu Âu",
               selection: "Tài 2.5",
               odds: 1.85,
-              reason: "lý do ngắn",
+              reason: "Cả 2 đội ghi bàn trung bình cao, lịch sử đối đầu >2.5 bàn 80%",
             },
             predictedScore: { score: "2-1", confidence: 55 },
             note: "ghi chú ngắn optional",
@@ -315,6 +327,22 @@ function normalizeCombinedMatch(
   match: Partial<CombinedAnalysisPlanMatch>,
   fallbackLabel: string,
 ): CombinedAnalysisPlanMatch {
+  const handicapPickRaw = match.handicapPick as any;
+  let handicapPick: TotalGoalsPick | null = null;
+  if (handicapPickRaw && typeof handicapPickRaw === "object") {
+    const market = toText(handicapPickRaw.market);
+    const selection = toText(handicapPickRaw.selection);
+    const odds = Number(handicapPickRaw.odds);
+    if (market && selection && Number.isFinite(odds) && odds > 0) {
+      handicapPick = {
+        market,
+        selection,
+        odds,
+        reason: toText(handicapPickRaw.reason) || undefined,
+      };
+    }
+  }
+
   const totalGoalsPickRaw = match.totalGoalsPick as any;
   let totalGoalsPick: TotalGoalsPick | null = null;
   if (totalGoalsPickRaw && typeof totalGoalsPickRaw === "object") {
@@ -343,6 +371,7 @@ function normalizeCombinedMatch(
     matchIndex: match.matchIndex as number,
     matchLabel: toText(match.matchLabel, fallbackLabel),
     kickoff: toText(match.kickoff, ""),
+    handicapPick,
     totalGoalsPick,
     predictedScore,
     note: toText(match.note) || undefined,
