@@ -3,6 +3,7 @@ import {
   extractMatches,
   pickNearestUpcomingDateMatches,
   pickNearestUpcomingMatch,
+  pickNearestUpcomingMatches,
   buildOddsPayload,
 } from "../../src/betting/betting.js";
 import * as bettingApi from "../../src/betting/betting-api.js";
@@ -379,6 +380,150 @@ describe("betting.ts", () => {
 
       // Should return the one from 2026-07-05 12:00 (smallest kickoffUnix)
       expect(result?.gameId).toBe("1");
+    });
+  });
+
+  describe("pickNearestUpcomingMatches", () => {
+    it("should return empty array for empty input", () => {
+      const result = pickNearestUpcomingMatches([]);
+
+      expect(result).toEqual([]);
+    });
+
+    it("should return the only match", () => {
+      const matches = [
+        {
+          gameId: "1",
+          home: "A",
+          away: "B",
+          kickoffUnix: 100,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+      ];
+
+      const result = pickNearestUpcomingMatches(matches);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(matches[0]);
+    });
+
+    it("should return all matches with same earliest date and kickoff time", () => {
+      const matches = [
+        {
+          gameId: "1",
+          home: "A",
+          away: "B",
+          kickoffUnix: 100,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "2",
+          home: "C",
+          away: "D",
+          kickoffUnix: 101, // Same date+time (rounded to minute)
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "3",
+          home: "E",
+          away: "F",
+          kickoffUnix: 200,
+          date: "2026-07-05",
+          kickoffTime: "14:00", // Different time
+        },
+        {
+          gameId: "4",
+          home: "G",
+          away: "H",
+          kickoffUnix: 300,
+          date: "2026-07-06",
+          kickoffTime: "12:00", // Different date
+        },
+      ];
+
+      const result = pickNearestUpcomingMatches(matches);
+
+      expect(result).toHaveLength(2);
+      expect(result.map((m) => m.gameId)).toEqual(
+        expect.arrayContaining(["1", "2"])
+      );
+      expect(result.every((m) => m.date === "2026-07-05" && m.kickoffTime === "12:00")).toBe(
+        true
+      );
+    });
+
+    it("should prioritize earliest kickoffUnix when multiple dates/times exist", () => {
+      const matches = [
+        {
+          gameId: "3",
+          home: "E",
+          away: "F",
+          kickoffUnix: 300,
+          date: "2026-07-06",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "1",
+          home: "A",
+          away: "B",
+          kickoffUnix: 100,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "2",
+          home: "C",
+          away: "D",
+          kickoffUnix: 200,
+          date: "2026-07-05",
+          kickoffTime: "14:00",
+        },
+      ];
+
+      const result = pickNearestUpcomingMatches(matches);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].gameId).toBe("1");
+      expect(result[0].date).toBe("2026-07-05");
+      expect(result[0].kickoffTime).toBe("12:00");
+    });
+
+    it("should handle matches when earliest is from later date (out-of-order input)", () => {
+      const matches = [
+        {
+          gameId: "1",
+          home: "A",
+          away: "B",
+          kickoffUnix: 100,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "2",
+          home: "C",
+          away: "D",
+          kickoffUnix: 101,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "3",
+          home: "E",
+          away: "F",
+          kickoffUnix: 50, // Earliest but different date/time (impossible in real data but test robustness)
+          date: "2026-07-04",
+          kickoffTime: "12:00",
+        },
+      ];
+
+      const result = pickNearestUpcomingMatches(matches);
+
+      // Should return match 3 since it has the smallest kickoffUnix
+      expect(result).toHaveLength(1);
+      expect(result[0].gameId).toBe("3");
     });
   });
 

@@ -1,12 +1,13 @@
 import { sendMessage } from "../shared/telegram.js";
-import { getConfiguredBookmaker } from "./betting-api.js";
+import { getConfiguredBookmaker, fetchLiveFixtures } from "./betting-api.js";
 import type {
   CombinedAnalysisPlan,
   CombinedAnalysisPlanMatch,
   MatchAiAnalysis,
   MatchOddsPayload,
+  MatchInfo,
 } from "./betting-types.js";
-import { buildOddsPayload, pickNearestUpcomingMatch } from "./betting.js";
+import { buildOddsPayload, pickNearestUpcomingMatches, extractMatches } from "./betting.js";
 import { generateCombinedAnalysis } from "./betting-gemini.js";
 import {
   loadRecentSnapshotsByGameIds,
@@ -86,16 +87,38 @@ async function saveCombinedAnalysisSnapshots(
 export async function runOddsCheck(): Promise<void> {
   logger.info(`🏆 ${LABEL} - Starting combined analysis...\n`);
 
-  const allMatches = await loadUpcomingMatches();
-  const nearestMatch = pickNearestUpcomingMatch(allMatches);
-  const matches = nearestMatch ? [nearestMatch] : [];
+  let matches: MatchInfo[] = [];
+  let isLive = false;
 
-  logger.info(
-    `✓ 1 tran gan nhat sap toi (${nearestMatch?.date ?? "-"})\n`,
-  );
+  // Thử lấy trận đang live trước
+  try {
+    const liveFixtures = await fetchLiveFixtures();
+    const liveMatches = extractMatches(liveFixtures);
+    if (liveMatches.length > 0) {
+      matches = liveMatches;
+      isLive = true;
+      logger.info(`✓ ${liveMatches.length} trận đang LIVE\n`);
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.warn(`  ⚠ Không lấy được trận live (free plan hoặc lỗi): ${msg}`);
+  }
+
+  // Fallback: nếu không có trận live, lấy trận sắp tới từ DB
+  if (matches.length === 0) {
+    const allMatches = await loadUpcomingMatches();
+    matches = pickNearestUpcomingMatches(allMatches);
+    isLive = false;
+    if (matches.length > 0) {
+      logger.info(
+        `✓ ${matches.length} trận sắp tới (${matches[0].date} ${matches[0].kickoffTime})\n`,
+      );
+    }
+  }
+
   if (matches.length === 0) {
     await sendMessage(
-      `⏸ [${LABEL}] Không có trận nào sắp tới trong DB — hãy chạy lại fetch-matches-list.`,
+      `⏸ [${LABEL}] Không có trận nào (live hoặc sắp tới).`,
     );
     return;
   }
@@ -129,12 +152,13 @@ export async function runOddsCheck(): Promise<void> {
     await sendMessage(formatOddsText(match));
   }
 
-  // Kiểm tra cache 30 phút trước khi gọi AI
+  // Kiểm tra cache 30 phút trước khi gọi AI (bỏ qua nếu live mode)
   let plan: CombinedAnalysisPlan | null = null;
   const gameIds = sortedPayload.map((p) => p.gameId);
   const dateStr = vnDateStr(Date.now());
-  if (SKIP_CACHE) {
-    logger.info("⚙ BETTING_SKIP_CACHE=true — bỏ qua cache, luôn gọi AI mới");
+  if (SKIP_CACHE || isLive) {
+    const reason = isLive ? "trận live" : "BETTING_SKIP_CACHE=true";
+    logger.info(`⚙ Bỏ qua cache (${reason}) — luôn gọi AI mới`);
   } else {
     try {
       const cachedSnapshots = await loadRecentSnapshotsByGameIds(

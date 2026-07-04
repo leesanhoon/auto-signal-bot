@@ -59,16 +59,31 @@ function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function filterByConfiguredLeagues(fixtures: Array<{ league: { id: number } }>): Array<{ league: { id: number } }> {
+  const { leagueIds } = getConfig();
+  return fixtures.filter((f) => leagueIds.includes(f.league.id));
+}
+
 /**
  * Danh sách fixtures trong ngày hôm nay, lọc theo league cấu hình (mặc định World Cup).
  * Không gửi `league=`/`season=` qua query — free plan chặn filter theo season hiện tại,
  * nên phải lấy full /fixtures?date= rồi lọc `league.id` ở client.
  */
 export async function fetchFixtures(dateStr: string = todayDateString()): Promise<unknown> {
-  const { leagueIds } = getConfig();
   const json = await fetchJson(`/fixtures?date=${dateStr}`);
   const all = (json.response ?? []) as Array<{ league: { id: number } }>;
-  return { response: all.filter((f) => leagueIds.includes(f.league.id)) };
+  return { response: filterByConfiguredLeagues(all) };
+}
+
+/**
+ * Danh sách fixtures đang diễn ra (live), lọc theo league cấu hình.
+ * Tương tự fetchFixtures nhưng gọi /fixtures?live=all.
+ * Nếu free plan chặn, lỗi sẽ được xử lý ở caller.
+ */
+export async function fetchLiveFixtures(): Promise<unknown> {
+  const json = await fetchJson("/fixtures?live=all");
+  const all = (json.response ?? []) as Array<{ league: { id: number } }>;
+  return { response: filterByConfiguredLeagues(all) };
 }
 
 export type FixtureOdds = { bookmakerName: string; bets: ApiFootballBet[]; updateIso?: string };

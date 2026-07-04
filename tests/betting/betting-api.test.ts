@@ -3,6 +3,7 @@ import {
   getConfiguredBookmaker,
   fetchFixtureOdds,
   fetchFixtureResult,
+  fetchLiveFixtures,
 } from "../../src/betting/betting-api.js";
 import * as rateLimit from "../../src/shared/rate-limit.js";
 
@@ -39,6 +40,124 @@ describe("betting-api.ts", () => {
       expect(() => getConfiguredBookmaker()).toThrow(
         "API_FOOTBALL_KEY environment variable is required",
       );
+    });
+  });
+
+  describe("fetchLiveFixtures", () => {
+    beforeEach(() => {
+      vi.stubEnv("API_FOOTBALL_KEY", "test-key");
+      vi.stubEnv("API_FOOTBALL_LEAGUE", "1,39,2");
+    });
+
+    it("should fetch live fixtures and filter by configured leagues", async () => {
+      const mockJson = {
+        response: [
+          {
+            fixture: { id: 100, date: "2026-07-05T12:00:00Z" },
+            league: { id: 39 }, // Premier League (in config)
+            teams: { home: { name: "Team A" }, away: { name: "Team B" } },
+            goals: { home: 1, away: 0 },
+            score: { fulltime: { home: 1, away: 0 } },
+          },
+          {
+            fixture: { id: 101, date: "2026-07-05T13:00:00Z" },
+            league: { id: 100 }, // Not in config
+            teams: { home: { name: "Team C" }, away: { name: "Team D" } },
+            goals: { home: 0, away: 0 },
+            score: { fulltime: { home: 0, away: 0 } },
+          },
+          {
+            fixture: { id: 102, date: "2026-07-05T14:00:00Z" },
+            league: { id: 1 }, // World Cup (in config)
+            teams: { home: { name: "Team E" }, away: { name: "Team F" } },
+            goals: { home: 2, away: 1 },
+            score: { fulltime: { home: 2, away: 1 } },
+          },
+        ],
+      };
+
+      vi.mocked(rateLimit.withConfiguredRateLimit).mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(mockJson),
+      } as any);
+
+      const result = await fetchLiveFixtures();
+
+      expect(result).toBeDefined();
+      const response = (result as any).response;
+      expect(response).toHaveLength(2);
+      expect(response.map((f: any) => f.fixture.id)).toEqual(
+        expect.arrayContaining([100, 102])
+      );
+      expect(response.every((f: any) => [1, 39, 2].includes(f.league.id))).toBe(
+        true
+      );
+    });
+
+    it("should return empty response when no live fixtures", async () => {
+      const mockJson = { response: [] };
+
+      vi.mocked(rateLimit.withConfiguredRateLimit).mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(mockJson),
+      } as any);
+
+      const result = await fetchLiveFixtures();
+
+      expect(result).toBeDefined();
+      expect((result as any).response).toHaveLength(0);
+    });
+
+    it("should handle API error gracefully (e.g., free plan restriction)", async () => {
+      const mockJson = {
+        errors: ["This endpoint is not available with your plan"],
+      };
+
+      vi.mocked(rateLimit.withConfiguredRateLimit).mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => JSON.stringify(mockJson),
+      } as any);
+
+      await expect(fetchLiveFixtures()).rejects.toThrow("API-Football lỗi");
+    });
+
+    it("should filter correctly when API_FOOTBALL_LEAGUE has custom values", async () => {
+      vi.stubEnv("API_FOOTBALL_LEAGUE", "39");
+
+      const mockJson = {
+        response: [
+          {
+            fixture: { id: 100, date: "2026-07-05T12:00:00Z" },
+            league: { id: 39 },
+            teams: { home: { name: "Team A" }, away: { name: "Team B" } },
+            goals: { home: 1, away: 0 },
+            score: { fulltime: { home: 1, away: 0 } },
+          },
+          {
+            fixture: { id: 101, date: "2026-07-05T13:00:00Z" },
+            league: { id: 1 },
+            teams: { home: { name: "Team C" }, away: { name: "Team D" } },
+            goals: { home: 0, away: 0 },
+            score: { fulltime: { home: 0, away: 0 } },
+          },
+        ],
+      };
+
+      vi.mocked(rateLimit.withConfiguredRateLimit).mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(mockJson),
+      } as any);
+
+      const result = await fetchLiveFixtures();
+
+      const response = (result as any).response;
+      expect(response).toHaveLength(1);
+      expect(response[0].fixture.id).toBe(100);
+      expect(response[0].league.id).toBe(39);
     });
   });
 

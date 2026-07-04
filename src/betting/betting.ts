@@ -37,6 +37,16 @@ export function pickNearestUpcomingMatch(matches: MatchInfo[]): MatchInfo | null
   return matches.reduce((nearest, m) => (m.kickoffUnix < nearest.kickoffUnix ? m : nearest));
 }
 
+/** Trong các trận CHƯA ĐÁ, lấy trận sớm nhất; nếu có nhiều trận cùng ngày+giờ:phút thì lấy hết. */
+export function pickNearestUpcomingMatches(matches: MatchInfo[]): MatchInfo[] {
+  if (matches.length === 0) return [];
+  const sorted = matches.slice().sort((a, b) => a.kickoffUnix - b.kickoffUnix);
+  const nearest = sorted[0];
+  const targetDate = nearest.date;
+  const targetTime = nearest.kickoffTime;
+  return matches.filter((m) => m.date === targetDate && m.kickoffTime === targetTime);
+}
+
 export type OddsFailure = { match: MatchInfo; message: string };
 
 export async function buildOddsPayload(
