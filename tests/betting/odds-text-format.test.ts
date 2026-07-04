@@ -12,7 +12,6 @@ import {
   sortMatchOddsByKickoff,
 } from "../../src/betting/odds-text-format.js";
 import type {
-  BettingPlan,
   CombinedAnalysisPlan,
   MatchOddsPayload,
 } from "../../src/betting/betting-types.js";
