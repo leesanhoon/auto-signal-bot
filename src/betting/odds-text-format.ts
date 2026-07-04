@@ -28,14 +28,12 @@ function fmtSignedPoint(n: number): string {
   return n > 0 ? `+${fmtNum(n)}` : fmtNum(n);
 }
 
-
 function compactText(value: string, maxLength = 80): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length > maxLength
     ? `${normalized.slice(0, maxLength - 1).trimEnd()}…`
     : normalized;
 }
-
 
 export function sortMatchOddsByKickoff(
   payloads: MatchOddsPayload[],
@@ -464,7 +462,6 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
   return lines.join("\n");
 }
 
-
 export function formatOddsFallbackMessage(
   payload: MatchOddsPayload,
   reason: string,
@@ -477,7 +474,6 @@ export function formatOddsFallbackMessage(
     oddsMsg,
   ].join("\n");
 }
-
 
 /**
  * Format odds message for N matches in a combined view — dùng cho kèo ghép.
@@ -521,7 +517,6 @@ export function formatCombinedAnalysisMessage(
 ): string {
   const sections: string[] = [];
   sections.push(`💡 *Tổng quan:* ${plan.summary || "Không có tóm tắt."}`);
-  sections.push("");
 
   const matchSections: string[] = [];
   for (const match of plan.matches) {
@@ -541,7 +536,9 @@ export function formatCombinedAnalysisMessage(
     }
 
     // Predicted score
-    lines.push(`⚽ Tỉ số dự đoán: ${match.predictedScore.score} (${match.predictedScore.confidence}%)`);
+    lines.push(
+      `⚽ Tỉ số dự đoán: ${match.predictedScore.score} (${match.predictedScore.confidence}%)`,
+    );
 
     // Note
     if (match.note) {
@@ -576,7 +573,6 @@ export function formatCachedAnalysisMessage(
   } else {
     sections.push("💡 *Tổng quan:* Không có tóm tắt.");
   }
-  sections.push("");
 
   // Danh sách từng trận
   const matchSections: string[] = [];
@@ -599,7 +595,7 @@ export function formatCachedAnalysisMessage(
 
     // Predicted score
     lines.push(
-      `⚽ Tỉ số dự đoán: ${analysis.predictedScore.score} (${analysis.predictedScore.confidence}%)`
+      `⚽ Tỉ số dự đoán: ${analysis.predictedScore.score} (${analysis.predictedScore.confidence}%)`,
     );
 
     // Note
