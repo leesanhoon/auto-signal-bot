@@ -57,7 +57,7 @@ export async function buildOddsPayload(
       );
       const payload: MatchOddsPayload = { ...match, odds };
       if (correctScore.length > 0) payload.correctScore = correctScore;
-      if (prediction) payload.prediction = prediction as MatchPrediction;
+      if (prediction) payload.prediction = prediction;
       return payload;
     }),
   );
