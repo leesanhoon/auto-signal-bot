@@ -43,3 +43,4 @@ Khi được yêu cầu **review code** (review PR, review file, review diff, v.
 - Trước khi thực hiện task phức tạp, chia nhỏ task và xác nhận hiểu đúng yêu cầu trước khi bắt đầu.
 - Nếu thiếu thông tin quan trọng để lập plan hoặc review chính xác, hỏi lại thay vì đoán.
 - Ưu tiên tính nhất quán: dùng cùng một format ngày tháng (YYYY-MM-DD) và naming convention (kebab-case) cho mọi file plan/review.
+- Không bao giờ được tự commit code.
