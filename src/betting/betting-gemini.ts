@@ -243,13 +243,13 @@ const COMBINED_TOKENS = 5_000;
 export function buildCombinedSystemPrompt(): string {
   return [
     "Bạn là chuyên gia phân tích odds bóng đá.",
-    "Dưới đây là raw odds cho các trận đấu.",
-    "Chỉ dựa vào dữ liệu odds/correct score được cung cấp.",
+    "Dưới đây là raw odds cho các trận đấu, kèm theo dữ liệu ngữ cảnh trận đấu (phong độ, so sánh đội, dự đoán).",
+    "Kết hợp dữ liệu odds VÀ ngữ cảnh trận đấu để phân tích. Nếu không có dữ liệu ngữ cảnh, chỉ dựa vào odds.",
     "",
     "YÊU CẦU cho MỖI trận:",
     "1. Nhận định Tài/Xỉu (tổng bàn thắng): chỉ chọn từ market Tổng bàn châu Á (asia_totals), Tổng bàn châu Âu (eu_totals), hoặc Kết quả + Tổng bàn (result_total_goals). Nếu không rõ edge, trả totalGoalsPick = null.",
     "   KHÔNG chọn 1X2, Chấp châu Á, GG/NG, Bàn đội, Phạt góc cho mục này.",
-    "2. Dự đoán tỉ số chính xác (predictedScore) kèm % tự tin (0-100), dựa trên odds correct score và các market khác.",
+    "2. Dự đoán tỉ số chính xác (predictedScore) kèm % tự tin (0-100), dựa trên odds correct score và các market khác, cân nhắc thêm phong độ nếu có.",
     "3. (tuỳ chọn) 1 câu note ngắn nếu có điểm đáng chú ý khác.",
     "",
     "Không cần lên kế hoạch cược, không xiên, không kèo đơn, không chiến lược vốn.",

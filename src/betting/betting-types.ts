@@ -136,6 +136,18 @@ export type CompactOdds = {
 export type CorrectScoreOutcome = { score: string; price: number };
 
 /** Odds da rut gon (bo field trung lap, ma hoa ten doi) de tiet kiem token cho AI doc. */
+export type MatchPrediction = {
+  winner: { name: string; comment: string } | null;
+  percent: { home: string; draw: string; away: string };
+  homeForm: string; // "WWDLW" từ last_5.form
+  awayForm: string; // "LDWWL" từ last_5.form
+  homeGoalsFor: string; // goals for trong 5 trận gần nhất
+  homeGoalsAgainst: string; // goals against trong 5 trận gần nhất
+  awayGoalsFor: string;
+  awayGoalsAgainst: string;
+  comparison: Record<string, { home: string; away: string }>; // att%, def%, etc.
+};
+
 export type MatchOddsPayload = {
   gameId: string;
   home: string;
@@ -144,5 +156,7 @@ export type MatchOddsPayload = {
   odds: CompactOdds;
   /** Market "Exact Score" (Correct Score) tu API-Football. */
   correctScore?: CorrectScoreOutcome[];
+  /** Prediction context từ /predictions endpoint (optional). */
+  prediction?: MatchPrediction;
 };
 

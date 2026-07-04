@@ -3,6 +3,7 @@ import type {
   CompactOutcome,
   CombinedAnalysisPlan,
   MatchOddsPayload,
+  MatchPrediction,
 } from "./betting-types.js";
 import type { BettingAnalysisSnapshot } from "./betting-analysis-repository.js";
 
@@ -223,6 +224,57 @@ export function formatOddsText(payload: MatchOddsPayload): string {
   return lines.join("\n");
 }
 
+export function formatPredictionInput(prediction: MatchPrediction): string {
+  const parts: string[] = [];
+
+  // Form (recent 5 matches: W/D/L pattern)
+  if (prediction.homeForm || prediction.awayForm) {
+    parts.push(`Form H=${prediction.homeForm} A=${prediction.awayForm}`);
+  }
+
+  // Win percentage prediction
+  if (prediction.percent?.home || prediction.percent?.draw || prediction.percent?.away) {
+    parts.push(
+      `WinPct H=${prediction.percent.home} D=${prediction.percent.draw} A=${prediction.percent.away}`,
+    );
+  }
+
+  // Goals in last 5 matches
+  if (prediction.homeGoalsFor || prediction.homeGoalsAgainst || prediction.awayGoalsFor || prediction.awayGoalsAgainst) {
+    const hFor = prediction.homeGoalsFor ? `F${prediction.homeGoalsFor}` : "";
+    const hAgainst = prediction.homeGoalsAgainst ? `A${prediction.homeGoalsAgainst}` : "";
+    const aFor = prediction.awayGoalsFor ? `F${prediction.awayGoalsFor}` : "";
+    const aAgainst = prediction.awayGoalsAgainst ? `A${prediction.awayGoalsAgainst}` : "";
+    const hGoals = [hFor, hAgainst].filter(Boolean).join("/");
+    const aGoals = [aFor, aAgainst].filter(Boolean).join("/");
+    if (hGoals || aGoals) {
+      parts.push(`Goals5 H=${hGoals} A=${aGoals}`);
+    }
+  }
+
+  // Predicted winner if available
+  if (prediction.winner?.name) {
+    parts.push(`PredWinner=${prediction.winner.name}`);
+  }
+
+  // Comparison data (prioritize useful keys: att, def, then others)
+  const preferredKeys = ["att", "def", "poisson_distribution", "goals"];
+  const availableKeys = preferredKeys.filter((k) => prediction.comparison[k]);
+  if (availableKeys.length > 0) {
+    const compParts = availableKeys.map((key) => {
+      const h = prediction.comparison[key]?.home ?? "";
+      const a = prediction.comparison[key]?.away ?? "";
+      const shortKey = key === "poisson_distribution" ? "PSN" : key.toUpperCase();
+      return `${shortKey}(H=${h} A=${a})`;
+    });
+    if (compParts.length > 0) {
+      parts.push(`Comp:[${compParts.join("|")}]`);
+    }
+  }
+
+  return parts.length > 0 ? `CONTEXT: ${parts.join(" | ")}` : "";
+}
+
 export function formatOddsAnalysisInput(payload: MatchOddsPayload): string {
   const lines: string[] = [];
   const marketKeys = [
@@ -269,6 +321,15 @@ export function formatOddsAnalysisInput(payload: MatchOddsPayload): string {
       .map((outcome) => `${outcome.score}=${outcome.price}`);
     if (strongestScores.length > 0)
       lines.push(`correct_score_top:${strongestScores.join(",")}`);
+  }
+
+  // Append prediction context if available
+  if (payload.prediction) {
+    const predictionText = formatPredictionInput(payload.prediction);
+    if (predictionText) {
+      lines.push("");
+      lines.push(predictionText);
+    }
   }
 
   return lines.join("\n");
