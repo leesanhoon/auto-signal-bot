@@ -12,12 +12,12 @@ type RetryOptions = {
 
 const DEFAULT_RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
-function getErrorField(error: unknown, key: string): unknown {
+export function getErrorField(error: unknown, key: string): unknown {
   if (!error || typeof error !== "object") return undefined;
   return (error as Record<string, unknown>)[key];
 }
 
-function getStatusCode(error: unknown): number | undefined {
+export function getStatusCode(error: unknown): number | undefined {
   const candidates = [
     getErrorField(error, "status"),
     getErrorField(error, "statusCode"),
@@ -52,6 +52,7 @@ export function isRetryableError(error: unknown): boolean {
   }
 
   const message = error instanceof Error ? error.message : String(error);
+  if (/OpenRouter request failed \((429|500|502|503|504)\):/i.test(message)) return true;
   if (/"code"\s*:\s*(429|500|502|503|504)/.test(message)) return true;
   if (/UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(message))
     return true;

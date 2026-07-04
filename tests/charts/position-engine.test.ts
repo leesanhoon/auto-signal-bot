@@ -1,9 +1,13 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, it, beforeEach, vi } from "vitest";
 import {
   buildOpenPositionInsertRow,
   deriveManagementPatch,
   validateTradeSetupForOpen,
+  calculateRiskRewardPlan,
+  getConfiguredMinRiskRewardRatio,
+  getConfiguredTp1ClosePercent,
 } from "../../src/charts/position-engine.js";
+import type { PositionDecisionOutcome } from "../../src/charts/position-engine.js";
 
 describe("charts/position-engine", () => {
   test("rejects open setups below the minimum risk-reward threshold", () => {
@@ -151,6 +155,160 @@ describe("charts/position-engine", () => {
     expect(outcome.patch).toMatchObject({
       tradeStage: "closed",
       lastManagementAction: "NONE",
+    });
+  });
+
+  describe("calculateRiskRewardPlan - detailed", () => {
+    it("should calculate risk/reward for LONG position", () => {
+      const setup = {
+        direction: "LONG" as const,
+        entry: "100",
+        stopLoss: "95",
+        takeProfit1: "110",
+        takeProfit2: "120",
+      };
+
+      const plan = calculateRiskRewardPlan(setup);
+
+      expect(plan).toBeDefined();
+      expect(plan?.entry).toBe(100);
+      expect(plan?.stopLoss).toBe(95);
+      expect(plan?.risk).toBe(5);
+      expect(plan?.tp1Reward).toBe(10);
+      expect(plan?.tp2Reward).toBe(20);
+      expect(plan?.tp1RiskReward).toBe(2);
+      expect(plan?.tp2RiskReward).toBe(4);
+    });
+
+    it("should calculate risk/reward for SHORT position", () => {
+      const setup = {
+        direction: "SHORT" as const,
+        entry: "100",
+        stopLoss: "105",
+        takeProfit1: "90",
+        takeProfit2: "80",
+      };
+
+      const plan = calculateRiskRewardPlan(setup);
+
+      expect(plan).toBeDefined();
+      expect(plan?.risk).toBe(5);
+      expect(plan?.tp1Reward).toBe(10);
+      expect(plan?.tp2Reward).toBe(20);
+    });
+
+    it("should handle takeProfit2 as null", () => {
+      const setup = {
+        direction: "LONG" as const,
+        entry: "100",
+        stopLoss: "95",
+        takeProfit1: "110",
+        takeProfit2: null,
+      };
+
+      const plan = calculateRiskRewardPlan(setup);
+
+      expect(plan).toBeDefined();
+      expect(plan?.takeProfit2).toBeNull();
+      expect(plan?.tp2Reward).toBeNull();
+      expect(plan?.tp2RiskReward).toBeNull();
+    });
+
+    it("should handle prices with commas", () => {
+      const setup = {
+        direction: "LONG" as const,
+        entry: "1,234.5",
+        stopLoss: "1,200",
+        takeProfit1: "1,300",
+        takeProfit2: "1,400",
+      };
+
+      const plan = calculateRiskRewardPlan(setup);
+
+      expect(plan).toBeDefined();
+      expect(plan?.entry).toBe(1234.5);
+      expect(plan?.stopLoss).toBe(1200);
+      expect(plan?.risk).toBe(34.5);
+    });
+
+    it("should return null when risk <= 0", () => {
+      const setup = {
+        direction: "LONG" as const,
+        entry: "100",
+        stopLoss: "105",
+        takeProfit1: "110",
+        takeProfit2: null,
+      };
+
+      const plan = calculateRiskRewardPlan(setup);
+
+      expect(plan).toBeNull();
+    });
+
+    it("should return null when tp1Reward <= 0", () => {
+      const setup = {
+        direction: "LONG" as const,
+        entry: "100",
+        stopLoss: "95",
+        takeProfit1: "100",
+        takeProfit2: null,
+      };
+
+      const plan = calculateRiskRewardPlan(setup);
+
+      expect(plan).toBeNull();
+    });
+  });
+
+  describe("getConfiguredMinRiskRewardRatio", () => {
+    beforeEach(() => {
+      delete process.env.POSITION_MIN_RISK_REWARD_RATIO;
+    });
+
+    it("should return default 1.5 when env not set", () => {
+      const ratio = getConfiguredMinRiskRewardRatio();
+      expect(ratio).toBe(1.5);
+    });
+
+    it("should parse configured ratio from env", () => {
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO", "2.5");
+      const ratio = getConfiguredMinRiskRewardRatio();
+      expect(ratio).toBe(2.5);
+    });
+
+    it("should return default when env value is invalid", () => {
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO", "invalid");
+      const ratio = getConfiguredMinRiskRewardRatio();
+      expect(ratio).toBe(1.5);
+    });
+  });
+
+  describe("getConfiguredTp1ClosePercent", () => {
+    beforeEach(() => {
+      delete process.env.POSITION_TP1_CLOSE_PERCENT;
+    });
+
+    it("should return default 50 when env not set", () => {
+      const percent = getConfiguredTp1ClosePercent();
+      expect(percent).toBe(50);
+    });
+
+    it("should parse configured percent from env", () => {
+      vi.stubEnv("POSITION_TP1_CLOSE_PERCENT", "75");
+      const percent = getConfiguredTp1ClosePercent();
+      expect(percent).toBe(75);
+    });
+
+    it("should clamp percent to valid range [1, 99]", () => {
+      vi.stubEnv("POSITION_TP1_CLOSE_PERCENT", "150");
+      const percent = getConfiguredTp1ClosePercent();
+      expect(percent).toBe(99);
+    });
+
+    it("should clamp negative percent to minimum 1", () => {
+      vi.stubEnv("POSITION_TP1_CLOSE_PERCENT", "-10");
+      const percent = getConfiguredTp1ClosePercent();
+      expect(percent).toBe(1);
     });
   });
 });

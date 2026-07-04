@@ -432,7 +432,7 @@ function normalizeSetupTimeframe(setup: TradeSetup): ChartTimeframe {
   return raw === "D1" || raw === "H4" || raw === "M15" ? raw : "H4";
 }
 
-function findScreenshotForSetup(
+export function findScreenshotForSetup(
   setup: TradeSetup,
   screenshots: ScreenshotResult[],
 ): { screenshot?: ScreenshotResult; usedFallback: boolean } {

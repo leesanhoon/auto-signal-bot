@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import { buildPositionDecisionMessage, sendAllAnalyses } from "../../src/shared/telegram.js";
-import type { AnalysisResult, TradeSetup } from "../../src/charts/chart-types.js";
+import { buildPositionDecisionMessage, sendAllAnalyses, findScreenshotForSetup } from "../../src/shared/telegram.js";
+import type { AnalysisResult, TradeSetup, ScreenshotResult } from "../../src/charts/chart-types.js";
 
 describe("shared/telegram", () => {
   test("buildPositionDecisionMessage labels original reasons compactly", () => {
@@ -292,5 +292,339 @@ describe("shared/telegram", () => {
     await sendAllAnalyses(result, notifier);
 
     expect(sends.join("\n")).toContain("Ảnh minh họa không đúng khung thời gian gốc (M15)");
+  });
+
+  describe("findScreenshotForSetup", () => {
+    const mockScreenshot = (filepath: string, symbol: string, timeframe: string): ScreenshotResult => ({
+      filepath,
+      chart: { symbol, timeframe, name: `${symbol} ${timeframe}`, interval: "0", description: "" },
+      buffer: Buffer.from("test"),
+      lastPrice: null,
+    });
+
+    test("finds exact triple match (filepath + symbol + timeframe)", () => {
+      const setup: TradeSetup = {
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Test",
+        primaryTimeframe: "H4",
+        reasons: [],
+        risks: [],
+        confidence: 75,
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        riskReward: "1:2",
+        summary: "Test",
+        sourceCharts: [{ filepath: "/exact/path", symbol: "EUR/USD", timeframe: "H4" }],
+      };
+
+      const screenshots = [
+        mockScreenshot("/exact/path", "EUR/USD", "H4"),
+        mockScreenshot("/other/path", "EUR/USD", "H4"),
+      ];
+
+      const { screenshot, usedFallback } = findScreenshotForSetup(setup, screenshots);
+
+      expect(screenshot?.filepath).toBe("/exact/path");
+      expect(usedFallback).toBe(false);
+    });
+
+    test("falls back to symbol + timeframe when no exact filepath match", () => {
+      const setup: TradeSetup = {
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Test",
+        primaryTimeframe: "H4",
+        reasons: [],
+        risks: [],
+        confidence: 75,
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        riskReward: "1:2",
+        summary: "Test",
+        sourceCharts: [{ filepath: "/wrong/path", symbol: "EUR/USD", timeframe: "H4" }],
+      };
+
+      const screenshots = [mockScreenshot("/other/path", "EUR/USD", "H4")];
+
+      const { screenshot, usedFallback } = findScreenshotForSetup(setup, screenshots);
+
+      expect(screenshot?.chart.symbol).toBe("EUR/USD");
+      expect(screenshot?.chart.timeframe).toBe("H4");
+      expect(usedFallback).toBe(false);
+    });
+
+    test("prefers timeframe from sourceCharts over other timeframes", () => {
+      const setup: TradeSetup = {
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Test",
+        primaryTimeframe: "H4",
+        reasons: [],
+        risks: [],
+        confidence: 75,
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        riskReward: "1:2",
+        summary: "Test",
+        sourceCharts: [{ filepath: "/source", symbol: "EUR/USD", timeframe: "H4" }],
+      };
+
+      const screenshots = [
+        mockScreenshot("/other1", "EUR/USD", "H4"),
+        mockScreenshot("/other2", "EUR/USD", "M15"),
+        mockScreenshot("/other3", "GBP/USD", "H4"),
+      ];
+
+      const { screenshot, usedFallback } = findScreenshotForSetup(setup, screenshots);
+
+      expect(screenshot?.chart.timeframe).toBe("H4");
+      expect(usedFallback).toBe(false);
+    });
+
+    test("uses fallback timeframe when preferred not found", () => {
+      const setup: TradeSetup = {
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Test",
+        reasons: [],
+        risks: [],
+        confidence: 75,
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        riskReward: "1:2",
+        summary: "Test",
+        sourceCharts: [{ filepath: "/source", symbol: "EUR/USD", timeframe: "H4" }],
+      };
+
+      const screenshots = [mockScreenshot("/other", "EUR/USD", "H1")];
+
+      const { screenshot, usedFallback } = findScreenshotForSetup(setup, screenshots);
+
+      expect(screenshot?.chart.timeframe).toBe("H1");
+      expect(usedFallback).toBe(true);
+    });
+
+    test("returns undefined screenshot with usedFallback=true when no match found", () => {
+      const setup: TradeSetup = {
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Test",
+        reasons: [],
+        risks: [],
+        confidence: 75,
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        riskReward: "1:2",
+        summary: "Test",
+        sourceCharts: [{ filepath: "/source", symbol: "EUR/USD", timeframe: "H1" }],
+      };
+
+      const screenshots = [mockScreenshot("/other", "GBP/JPY", "D1")];
+
+      const { screenshot, usedFallback } = findScreenshotForSetup(setup, screenshots);
+
+      expect(screenshot).toBeUndefined();
+      expect(usedFallback).toBe(true);
+    });
+
+    test("handles empty sourceCharts array", () => {
+      const setup: TradeSetup = {
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Test",
+        reasons: [],
+        risks: [],
+        confidence: 75,
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        riskReward: "1:2",
+        summary: "Test",
+        sourceCharts: [],
+      };
+
+      const screenshots = [mockScreenshot("/any", "EUR/USD", "H1")];
+
+      const { screenshot, usedFallback } = findScreenshotForSetup(setup, screenshots);
+
+      expect(screenshot).toBeDefined();
+      expect(usedFallback).toBe(true);
+    });
+
+    test("uses telegramChart when sourceCharts not found", () => {
+      const setup: TradeSetup = {
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Test",
+        primaryTimeframe: "H4",
+        reasons: [],
+        risks: [],
+        confidence: 75,
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        riskReward: "1:2",
+        summary: "Test",
+        telegramChart: { filepath: "/telegram", symbol: "EUR/USD", timeframe: "H4" },
+      };
+
+      const screenshots = [mockScreenshot("/telegram", "EUR/USD", "H4")];
+
+      const { screenshot, usedFallback } = findScreenshotForSetup(setup, screenshots);
+
+      expect(screenshot?.filepath).toBe("/telegram");
+      expect(usedFallback).toBe(false);
+    });
+  });
+
+  describe("buildPositionDecisionMessage with various managementActions", () => {
+    test("formats PARTIAL_TP1 action", () => {
+      const message = buildPositionDecisionMessage(
+        {
+          id: 1,
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "Breakout",
+          entry: "1.1000",
+          stopLoss: "1.0980",
+          takeProfit1: "1.1040",
+          takeProfit2: "1.1080",
+          reasons: ["Reason 1"],
+        },
+        {
+          decision: "HOLD",
+          confidence: 85,
+          comment: "Lấy lợi tại TP1",
+          managementAction: "PARTIAL_TP1",
+          partialClosePercent: 50,
+          newStopLoss: null,
+        },
+      );
+
+      expect(message).toContain("Partial TP1");
+      expect(message).toContain("50%");
+    });
+
+    test("formats MOVE_SL_TO_BE action", () => {
+      const message = buildPositionDecisionMessage(
+        {
+          id: 1,
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "Breakout",
+          entry: "1.1000",
+          stopLoss: "1.0980",
+          takeProfit1: "1.1040",
+          takeProfit2: "1.1080",
+          reasons: ["Reason 1"],
+        },
+        {
+          decision: "HOLD",
+          confidence: 85,
+          comment: "Chuyển SL về break-even",
+          managementAction: "MOVE_SL_TO_BE",
+          partialClosePercent: 0,
+          newStopLoss: "1.1000",
+        },
+      );
+
+      expect(message).toContain("dời về breakeven");
+      expect(message).toContain("1.1000");
+    });
+
+    test("formats TRAIL_SL action", () => {
+      const message = buildPositionDecisionMessage(
+        {
+          id: 1,
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "Breakout",
+          entry: "1.1000",
+          stopLoss: "1.0980",
+          takeProfit1: "1.1040",
+          takeProfit2: "1.1080",
+          reasons: ["Reason 1"],
+        },
+        {
+          decision: "HOLD",
+          confidence: 85,
+          comment: "Trailing stop loss",
+          managementAction: "TRAIL_SL",
+          partialClosePercent: 0,
+          newStopLoss: "1.1020",
+        },
+      );
+
+      expect(message).toContain("trailing");
+      expect(message).toContain("1.1020");
+    });
+
+    test("formats TP2_CLOSE action", () => {
+      const message = buildPositionDecisionMessage(
+        {
+          id: 1,
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "Breakout",
+          entry: "1.1000",
+          stopLoss: "1.0980",
+          takeProfit1: "1.1040",
+          takeProfit2: "1.1080",
+          reasons: ["Reason 1"],
+        },
+        {
+          decision: "HOLD",
+          confidence: 95,
+          comment: "Đóng tại TP2",
+          managementAction: "TP2_CLOSE",
+          partialClosePercent: 100,
+          newStopLoss: null,
+        },
+      );
+
+      expect(message).toContain("TP2");
+      expect(message).toContain("95%");
+    });
+
+    test("handles undefined managementAction", () => {
+      const message = buildPositionDecisionMessage(
+        {
+          id: 1,
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "Breakout",
+          entry: "1.1000",
+          stopLoss: "1.0980",
+          takeProfit1: "1.1040",
+          takeProfit2: "1.1080",
+          reasons: ["Reason 1"],
+        },
+        {
+          decision: "HOLD",
+          confidence: 85,
+          comment: "Giữ lệnh",
+          managementAction: undefined,
+          partialClosePercent: 0,
+          newStopLoss: null,
+        },
+      );
+
+      expect(message).toContain("EUR/USD");
+      expect(message).toContain("HOLD");
+      expect(message).not.toThrow;
+    });
   });
 });

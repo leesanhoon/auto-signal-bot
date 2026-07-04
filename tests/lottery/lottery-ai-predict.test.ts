@@ -198,23 +198,6 @@ describe("lottery/lottery-ai-predict", () => {
     expect(stats.units[1].count).toBe(1);
   });
 
-  test("normalizePredictions rejects prediction with digit-number mismatch", () => {
-    // Raw from AI: hundredsDigit says "1" but tensDigit is out of range → should fail digit check
-    const raw = {
-      predictions: [
-        { number: "999", hundredsDigit: "1", tensDigit: "2", unitsDigit: "3", confidence: 0.9, reason: "test" },
-      ],
-    };
-
-    // We can't call normalizePredictions directly since it's not exported.
-    // Instead, test through predictTopNumbersAI with a mocked call.
-    // The valid digits "1","2","3" should produce number "123", not "999"
-    // Since number is reconstructed from digits, the AI's "999" is IGNORED.
-    // So this actually passes — the number field from AI is ignored.
-    // The test for rejection should use invalid digits.
-    expect(true).toBe(true);
-  });
-
   test("predictTopNumbersAI reconstructs number from digits ignoring AI number field", async () => {
     state.call.mockResolvedValueOnce({
       text: JSON.stringify({
@@ -254,6 +237,48 @@ describe("lottery/lottery-ai-predict", () => {
     expect(result[0].unitsDigit).toBe("5");
     // confidence computed from stats: h=1→0.5, t=8→0 (not in data), u=5→0 (not in data, units are 3,6) → avg = 0.166...
     expect(result[0].confidence).toBeCloseTo(1 / 6, 4);
+  });
+
+  test("predictTopNumbersAI filters out predictions with non-digit hundredsDigit/tensDigit/unitsDigit", async () => {
+    state.call.mockResolvedValueOnce({
+      text: JSON.stringify({
+        predictions: [
+          { number: "999", hundredsDigit: "1", tensDigit: "8", unitsDigit: "5", confidence: 0.62, reason: "valid prediction" },
+          { number: "777", hundredsDigit: "7", tensDigit: "ab", unitsDigit: "7", confidence: 0.5, reason: "invalid tensDigit" },
+        ],
+      }),
+      usage: { promptTokens: 10, completionTokens: 5 },
+    });
+
+    const records = [
+      {
+        date: "2026-07-01",
+        weekday: 3,
+        region: "mien-bac" as const,
+        province: "Hà Nội",
+        prizes: {
+          db: "00123",
+          g1: "00456",
+          g2: [],
+          g3: [],
+          g4: [],
+          g5: [],
+          g6: [],
+          g7: [],
+          g8: [],
+        },
+      },
+    ];
+
+    const result = await lotteryAiPredict.predictTopNumbersAI(records, "mien-bac", 3, 5);
+
+    // Only the valid prediction (single-digit hundredsDigit/tensDigit/unitsDigit) survives
+    expect(result).toHaveLength(1);
+    // Reconstructed from digits, ignoring AI's "number" field
+    expect(result[0].number).toBe("185");
+    expect(result[0].hundredsDigit).toBe("1");
+    expect(result[0].tensDigit).toBe("8");
+    expect(result[0].unitsDigit).toBe("5");
   });
 
   test("computeConfidence returns average ratio for valid digits", () => {

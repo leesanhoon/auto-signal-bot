@@ -1,4 +1,4 @@
-import { withRetry } from "../shared/retry.js";
+import { withRetry, isRetryableError, getErrorField, getStatusCode } from "../shared/retry.js";
 import type {
   BettingPlan,
   CombinedAnalysisPlan,
@@ -108,78 +108,23 @@ function isProFallbackTrigger(error: unknown): boolean {
   return /timeout|aborted|empty content/i.test(message);
 }
 
-function isOpenRouterHttpRetryableMessage(message: string): boolean {
-  return /OpenRouter request failed \((429|500|502|503|504)\):/i.test(message);
-}
-
-function isTransientRetryableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  const status =
-    error && typeof error === "object"
-      ? ((error as { status?: unknown; statusCode?: unknown; code?: unknown })
-          .status ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
-          .statusCode ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
-          .code)
-      : undefined;
-
-  if (
-    typeof status === "number" &&
-    Number.isFinite(status) &&
-    [429, 500, 502, 503, 504].includes(status)
-  ) {
-    return true;
-  }
-
-  if (
-    typeof status === "string" &&
-    /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)
-  ) {
-    return true;
-  }
-
-  return (
-    isOpenRouterHttpRetryableMessage(message) ||
-    /"code"\s*:\s*(429|500|502|503|504)|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand|ETIMEDOUT|ECONNRESET|fetch failed|network error|socket hang up|aborted|timeout|empty content/i.test(
-      message,
-    )
-  );
-}
-
 function isAnalyzeRetryableError(error: unknown): boolean {
+  const statusCode = getStatusCode(error);
+  if (statusCode !== undefined && [429, 500, 502, 503, 504].includes(statusCode)) {
+    return true;
+  }
+
+  const status = getErrorField(error, "status");
+  if (typeof status === "string" && /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)) {
+    return true;
+  }
+
   const message = error instanceof Error ? error.message : String(error);
-  const status =
-    error && typeof error === "object"
-      ? ((error as { status?: unknown; statusCode?: unknown; code?: unknown })
-          .status ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
-          .statusCode ??
-        (error as { status?: unknown; statusCode?: unknown; code?: unknown })
-          .code)
-      : undefined;
+  if (/OpenRouter request failed \((429|500|502|503|504)\):/i.test(message)) return true;
+  if (/"code"\s*:\s*(429|500|502|503|504)/.test(message)) return true;
+  if (/UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(message)) return true;
 
-  if (
-    typeof status === "number" &&
-    Number.isFinite(status) &&
-    [429, 500, 502, 503, 504].includes(status)
-  ) {
-    return true;
-  }
-
-  if (
-    typeof status === "string" &&
-    /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)
-  ) {
-    return true;
-  }
-
-  return (
-    isOpenRouterHttpRetryableMessage(message) ||
-    /"code"\s*:\s*(429|500|502|503|504)|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(
-      message,
-    )
-  );
+  return false;
 }
 
 function getMarketLabel(key: (typeof MARKET_KEYS)[number]): string {
@@ -483,7 +428,7 @@ function resolveLegacyPick(
 
 async function callOpenRouterWithCount(
   request: OpenRouterRequest,
-  isRetryable: (error: unknown) => boolean = isTransientRetryableError,
+  isRetryable: (error: unknown) => boolean = isRetryableError,
 ): Promise<{
   response: Awaited<ReturnType<typeof callOpenRouter>>;
   requestCount: number;
@@ -540,7 +485,7 @@ async function runOpenRouterStage(
     const { response: fallbackResponse, requestCount: fallbackCount } =
       await callOpenRouterWithCount(
         options.fallbackRequest!,
-        isTransientRetryableError,
+        isAnalyzeRetryableError,
       );
     const primaryRequestCount = Number(
       (error as Error & { requestCount?: number }).requestCount ?? 0,
@@ -937,7 +882,7 @@ export async function generateBettingPlan(
   try {
     const { response } = await callOpenRouterWithCount(
       primaryRequest,
-      isTransientRetryableError,
+      isRetryableError,
     );
     const plan = parseBettingPlanResponse(response.text);
     if (!plan) {
@@ -964,7 +909,7 @@ export async function generateBettingPlan(
   try {
     const { response } = await callOpenRouterWithCount(
       request,
-      isTransientRetryableError,
+      isRetryableError,
     );
     const plan = parseBettingPlanResponse(response.text);
     if (!plan) {
@@ -1210,7 +1155,7 @@ export async function generateCombinedAnalysis(
   try {
     const { response, requestCount } = await callOpenRouterWithCount(
       primaryRequest,
-      isTransientRetryableError,
+      isRetryableError,
     );
     const latencyMs = Date.now() - startedAt;
     logStageMetrics(
@@ -1274,7 +1219,7 @@ export async function generateCombinedAnalysis(
     try {
       const { response, requestCount } = await callOpenRouterWithCount(
         fallbackRequest,
-        isTransientRetryableError,
+        isRetryableError,
       );
       const totalRequestCount = primaryRequestCount + requestCount;
       const latencyMs = Date.now() - startedAt;
