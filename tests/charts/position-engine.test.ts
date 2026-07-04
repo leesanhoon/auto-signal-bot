@@ -5,6 +5,7 @@ import {
   validateTradeSetupForOpen,
   calculateRiskRewardPlan,
   getConfiguredMinRiskRewardRatio,
+  getConfiguredMinRiskRewardRatioForPattern,
   getConfiguredTp1ClosePercent,
 } from "../../src/charts/position-engine.js";
 import type { PositionDecisionOutcome } from "../../src/charts/position-engine.js";
@@ -310,5 +311,82 @@ describe("charts/position-engine", () => {
       const percent = getConfiguredTp1ClosePercent();
       expect(percent).toBe(1);
     });
+  });
+
+  describe("getConfiguredMinRiskRewardRatioForPattern", () => {
+    beforeEach(() => {
+      delete process.env.POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN;
+      delete process.env.POSITION_MIN_RISK_REWARD_RATIO;
+    });
+
+    it("should return pattern-specific ratio when set", () => {
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "ARB:2.0,RB:1.2,SB:2.0");
+      expect(getConfiguredMinRiskRewardRatioForPattern("ARB")).toBe(2.0);
+      expect(getConfiguredMinRiskRewardRatioForPattern("RB")).toBe(1.2);
+      expect(getConfiguredMinRiskRewardRatioForPattern("SB")).toBe(2.0);
+    });
+
+    it("should fallback to global ratio for unmapped pattern", () => {
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "ARB:2.0,RB:1.2");
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO", "1.8");
+      expect(getConfiguredMinRiskRewardRatioForPattern("BB")).toBe(1.8);
+    });
+
+    it("should ignore invalid pattern values", () => {
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "ARB:2.0,INVALID:abc,RB:1.2");
+      expect(getConfiguredMinRiskRewardRatioForPattern("ARB")).toBe(2.0);
+      expect(getConfiguredMinRiskRewardRatioForPattern("RB")).toBe(1.2);
+      expect(getConfiguredMinRiskRewardRatioForPattern("INVALID")).toBe(1.5); // falls back to default global
+    });
+
+    it("should handle case-insensitive pattern matching", () => {
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "arb:2.0,Rb:1.2");
+      expect(getConfiguredMinRiskRewardRatioForPattern("ARB")).toBe(2.0);
+      expect(getConfiguredMinRiskRewardRatioForPattern("rb")).toBe(1.2);
+      expect(getConfiguredMinRiskRewardRatioForPattern("RB")).toBe(1.2);
+    });
+
+    it("should return global default for null/undefined pattern", () => {
+      vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "ARB:2.0");
+      expect(getConfiguredMinRiskRewardRatioForPattern(null)).toBe(1.5);
+      expect(getConfiguredMinRiskRewardRatioForPattern(undefined)).toBe(1.5);
+    });
+  });
+
+  test("validateTradeSetupForOpen uses pattern-specific threshold", () => {
+    vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "ARB:2.5");
+    vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO", "1.5");
+
+    // ARB with expected R:R 1.8 should fail (below 2.5 threshold)
+    // entry: 1.1000, stopLoss: 1.0900, TP1: 1.1080, TP2: 1.1100
+    // Risk: 0.01, TP1Reward: 0.008 (R:R 0.8), TP2Reward: 0.01 (R:R 1.0)
+    // expectedRR = 50% * 0.8 + 50% * 1.0 = 0.9
+    const arbSetup = {
+      direction: "LONG" as const,
+      setup: "ARB",
+      entry: "1.1000",
+      stopLoss: "1.0900",
+      takeProfit1: "1.1080",
+      takeProfit2: "1.1100",
+    };
+    const arbResult = validateTradeSetupForOpen(arbSetup);
+    expect(arbResult.accepted).toBe(false);
+    expect(arbResult.reason).toContain("R:R");
+
+    // RB with expected R:R 1.8 should pass (uses global 1.5 threshold)
+    // entry: 1.1000, stopLoss: 1.0900, TP1: 1.1180, TP2: 1.1260
+    // Risk: 0.01, TP1Reward: 0.018 (R:R 1.8), TP2Reward: 0.026 (R:R 2.6)
+    // expectedRR = 50% * 1.8 + 50% * 2.6 = 2.2
+    const rbSetup = {
+      direction: "LONG" as const,
+      setup: "RB",
+      entry: "1.1000",
+      stopLoss: "1.0900",
+      takeProfit1: "1.1180",
+      takeProfit2: "1.1260",
+    };
+    const rbResult = validateTradeSetupForOpen(rbSetup);
+    expect(rbResult.accepted).toBe(true);
+    expect(rbResult.plan).not.toBeNull();
   });
 });

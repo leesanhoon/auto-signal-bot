@@ -4,10 +4,14 @@ import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
 import { callOpenRouter } from "../shared/openrouter.js";
+import { callOpenRouterWithFallback, parseModelFallbacks } from "../shared/ai-model-fallback.js";
 import type { ScreenshotResult } from "./chart-types.js";
 
 const logger = createLogger("charts:position-decision");
 const MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
+const MODEL_FALLBACKS = parseModelFallbacks(
+  process.env.AI_VISION_MODEL_FALLBACKS?.trim(),
+);
 
 export function cleanResponse(text: string): string {
   return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
@@ -79,9 +83,11 @@ If TP2 is reached, use decision CLOSE and managementAction TP2_CLOSE.
 Comment should be short and practical.`;
   const mime = screenshot.buffer.length >= 8 && screenshot.buffer[0] === 0x89 && screenshot.buffer[1] === 0x50
     ? "image/png" : "image/jpeg";
-  const response = await withRetry(
-    () => callOpenRouter({
-      model: MODEL,
+  const { response, model: usedModel } = await callOpenRouterWithFallback(
+    MODEL,
+    MODEL_FALLBACKS,
+    (model) => ({
+      model,
       systemPrompt: "You manage open trades from chart evidence. Answer only with concise JSON. All user-facing text must be Vietnamese with accents.",
       userContent: [
         { type: "image_url", image_url: { url: `data:${mime};base64,${screenshot.buffer.toString("base64")}` } },
@@ -91,13 +97,11 @@ Comment should be short and practical.`;
       temperature: 0.2,
       responseFormat: { type: "json_object" },
     }),
-    {
-      onRetry: (error, attempt, maxAttempts, delayMs) =>
-        logger.warn(`  ! OpenRouter position decision temporary error for ${position.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`),
-    },
+    (error, attempt, maxAttempts, delayMs) =>
+      logger.warn(`  ! OpenRouter position decision temporary error for ${position.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`),
   );
-  void recordOpenRouterUsage(response, { model: MODEL, source: "chart" });
+  void recordOpenRouterUsage(response, { model: usedModel, source: "chart" });
   const parsed = parseDecisionResponse(response.text);
-  if (!parsed) throw new Error(`OpenRouter position decision parse failed for model ${MODEL}. Raw: ${response.text.slice(0, 300)}`);
+  if (!parsed) throw new Error(`OpenRouter position decision parse failed for model ${usedModel}. Raw: ${response.text.slice(0, 300)}`);
   return parsed;
 }

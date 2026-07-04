@@ -4,6 +4,7 @@ export type ClosedPositionRecord = {
   id: number;
   pair: string;
   direction: "LONG" | "SHORT";
+  setup: string | null;
   entry: string;
   stopLoss: string;
   takeProfit1: string;
@@ -46,6 +47,7 @@ export type PerformanceReport = {
   endAt: string;
   portfolio: PerformanceSummary;
   byPair: PerformanceSummary[];
+  byPattern: PerformanceSummary[];
 };
 
 function round2(value: number): number {
@@ -208,11 +210,24 @@ export function summarizeClosedPositionsPerformance(
     .map(([pair, rows]) => buildSummary(pair, rows))
     .sort((a, b) => b.totalRealizedRiskReward - a.totalRealizedRiskReward || a.label.localeCompare(b.label));
 
+  const byPatternMap = new Map<string, typeof withRealized>();
+  for (const row of withRealized) {
+    const pattern = row.setup && row.setup.trim() ? row.setup.trim() : "Unknown";
+    const existing = byPatternMap.get(pattern) ?? [];
+    existing.push(row);
+    byPatternMap.set(pattern, existing);
+  }
+
+  const byPattern = [...byPatternMap.entries()]
+    .map(([pattern, rows]) => buildSummary(pattern, rows))
+    .sort((a, b) => b.totalRealizedRiskReward - a.totalRealizedRiskReward || a.label.localeCompare(b.label));
+
   return {
     periodLabel: options.periodLabel,
     startAt: options.startAt,
     endAt: options.endAt,
     portfolio: buildSummary("Portfolio", withRealized),
     byPair,
+    byPattern,
   };
 }

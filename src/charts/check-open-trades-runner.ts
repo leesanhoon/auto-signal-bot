@@ -140,20 +140,25 @@ function formatCheckedAt(): string {
   return new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
-async function processPosition(position: Awaited<ReturnType<typeof loadOpenPositions>>[number]): Promise<void> {
+export async function processPosition(position: Awaited<ReturnType<typeof loadOpenPositions>>[number]): Promise<void> {
   const chart = findChartForPair(position.pair, "H4");
   if (!chart) {
     logger.warn("No chart configuration found", { pair: position.pair });
     return;
   }
 
-  const screenshot = await captureVerificationChartScreenshot(chart);
-  await sendPhoto(screenshot.buffer, `📊 ${position.pair} - kiểm tra vị thế (${chart.timeframe})`);
-
-  const decision = await decidePosition(position, screenshot);
   const stats = await fetchCandleRangeStats(chart.symbol, new Date(position.openedAt).getTime());
   const priceDecision = resolvePositionByPrice(position, stats);
-  const effectiveDecision = priceDecision ?? decision;
+
+  let effectiveDecision: Awaited<ReturnType<typeof decidePosition>>;
+  if (priceDecision !== null) {
+    effectiveDecision = priceDecision;
+  } else {
+    const screenshot = await captureVerificationChartScreenshot(chart);
+    await sendPhoto(screenshot.buffer, `📊 ${position.pair} - kiểm tra vị thế (${chart.timeframe})`);
+    const decision = await decidePosition(position, screenshot);
+    effectiveDecision = decision;
+  }
   const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, effectiveDecision);
   await updatePositionDecision(position.id, effectiveDecision, patch);
   if (shouldClose) {

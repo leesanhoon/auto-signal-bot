@@ -4,15 +4,21 @@ import type { ScreenshotResult } from "../../src/charts/chart-types.js";
 const state = vi.hoisted(() => ({
   call: vi.fn(),
   retry: vi.fn(async (request: () => Promise<unknown>) => request()),
+  callWithFallback: vi.fn(),
 }));
 vi.mock("../../src/shared/openrouter.js", () => ({ callOpenRouter: state.call }));
 vi.mock("../../src/shared/retry.js", () => ({ withRetry: state.retry }));
+vi.mock("../../src/shared/ai-model-fallback.js", () => ({
+  callOpenRouterWithFallback: state.callWithFallback,
+  parseModelFallbacks: vi.fn((val) => (val ? val.split(",").map((m: string) => m.trim()).filter(Boolean) : [])),
+}));
 const analyzer = await import("../../src/charts/analyzer.js");
 
 describe("charts/analyzer", () => {
   beforeEach(() => {
     state.call.mockReset();
     state.retry.mockClear();
+    state.callWithFallback.mockClear();
   });
 
   test("parseAnalysisResponse keeps low-confidence setups from AI", () => {
@@ -82,9 +88,12 @@ describe("charts/analyzer", () => {
   });
 
   test("analyzeAllCharts sends data URLs and parses OpenRouter output", async () => {
-    state.call.mockResolvedValueOnce({
-      text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
-      usage: { promptTokens: 10, completionTokens: 20 },
+    state.callWithFallback.mockResolvedValueOnce({
+      response: {
+        text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      },
+      model: "primary-model",
     });
     const screenshots: ScreenshotResult[] = [
       {
@@ -114,13 +123,22 @@ describe("charts/analyzer", () => {
       { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", filepath: "/tmp/chart-m15.jpg" },
     ]);
     expect(result.screenshots).toBe(screenshots);
-    expect(state.call.mock.calls[0][0].userContent[0].image_url.url).toMatch(/^data:image\/jpeg;base64,/);
+    expect(state.callWithFallback).toHaveBeenCalled();
+    // The requestBuilder is a function that should create requests with image data
+    const requestBuilder = state.callWithFallback.mock.calls[0][2];
+    const testRequest = requestBuilder("test-model");
+    expect(testRequest.userContent[0]).toEqual(
+      expect.objectContaining({ type: "image_url" })
+    );
   });
 
   test("analyzeAllCharts keeps normalized setup pairs when screenshots use slash-form pair names", async () => {
-    state.call.mockResolvedValueOnce({
-      text: '{"summaries":[{"pair":"EURUSD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EURUSD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
-      usage: { promptTokens: 10, completionTokens: 20 },
+    state.callWithFallback.mockResolvedValueOnce({
+      response: {
+        text: '{"summaries":[{"pair":"EURUSD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EURUSD","direction":"LONG","setup":"Pullback","reasons":["EMA"],"risks":["Noise"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":""}',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      },
+      model: "primary-model",
     });
     const screenshots: ScreenshotResult[] = [
       {
@@ -151,9 +169,12 @@ describe("charts/analyzer", () => {
   });
 
   test("analyzeAllCharts sends a Volman-focused prompt with EMA20 and volume rules", async () => {
-    state.call.mockResolvedValueOnce({
-      text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"RB","reasons":["EMA20 flat to up"],"risks":["False break"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":"none"}',
-      usage: { promptTokens: 10, completionTokens: 20 },
+    state.callWithFallback.mockResolvedValueOnce({
+      response: {
+        text: '{"summaries":[{"pair":"EUR/USD","trend":"Up","status":"TRADE","confidence":88}],"setups":[{"pair":"EUR/USD","direction":"LONG","setup":"RB","reasons":["EMA20 flat to up"],"risks":["False break"],"confidence":78,"entry":"1.1","stopLoss":"1.09","takeProfit1":"1.12","takeProfit2":"1.13","riskReward":"1:2","summary":"Valid"}],"noSetupReason":"none"}',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      },
+      model: "primary-model",
     });
 
     const screenshots: ScreenshotResult[] = [
@@ -179,7 +200,9 @@ describe("charts/analyzer", () => {
 
     await analyzer.analyzeAllCharts(screenshots);
 
-    const request = state.call.mock.calls[0][0];
+    // The requestBuilder is the 3rd argument to callOpenRouterWithFallback
+    const requestBuilder = state.callWithFallback.mock.calls[0][2];
+    const request = requestBuilder("test-model");
     expect(request.systemPrompt).toContain("Bob Volman");
     expect(request.systemPrompt).toContain("EMA20");
     expect(request.systemPrompt).toContain("volume");

@@ -721,4 +721,22 @@ describe("parseCombinedAnalysisResponse — match parsing & normalization", () =
     expect(resultPartial.predictedScore.score).toBe("1-0");
     expect(resultPartial.predictedScore.confidence).toBe(60);
   });
+
+  test("Test 5: normalizeCombinedMatchForTest filters picks with odds <= 1.8", () => {
+    const matchWithOddsFilter = {
+      matchIndex: 0,
+      matchLabel: "Test Match",
+      kickoff: "15:00",
+      picks: [
+        { market: "eu_totals", selection: "Over 2.5", odds: 1.5, confidence: 70, reason: "Low odds pick" },
+        { market: "asia_handicap", selection: "H+0.75", odds: 1.9, confidence: 75, reason: "Valid odds pick" },
+      ],
+      predictedScore: { score: "2-1", confidence: 80 },
+    };
+    const result = bettingGemini.normalizeCombinedMatchForTest(matchWithOddsFilter, "Trận 0");
+    expect(result.picks).toHaveLength(1);
+    expect(result.picks[0].market).toBe("asia_handicap");
+    expect(result.picks[0].selection).toBe("H+0.75");
+    expect(result.picks[0].odds).toBe(1.9);
+  });
 });

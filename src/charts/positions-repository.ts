@@ -5,7 +5,6 @@ import { getConfiguredPendingOrderExpiryRuns } from "./chart-config-env.js";
 import {
   buildOpenPositionInsertRow,
   deriveManagementPatch,
-  getConfiguredMinRiskRewardRatio,
   type OpenPositionManagementPatch,
   type PositionDecisionOutcome,
 } from "./position-engine.js";
@@ -57,9 +56,7 @@ export type PendingOrderUpdate = {
 };
 
 export async function saveOpenPosition(setup: TradeSetup): Promise<boolean> {
-  const row = buildOpenPositionInsertRow(setup, {
-    minRiskReward: getConfiguredMinRiskRewardRatio(),
-  });
+  const row = buildOpenPositionInsertRow(setup);
   if (!row) {
     logger.warn("Rejected open position due to invalid risk/reward", { pair: setup.pair });
     return false;
@@ -294,7 +291,7 @@ export async function loadOpenPositions(): Promise<OpenPosition[]> {
 export async function loadClosedPositions(since?: string): Promise<ClosedPositionRecord[]> {
   let query = (getDb().from("open_positions") as any)
     .select(
-      "id, pair, direction, entry, stop_loss, take_profit_1, take_profit_2, status, closed_at, tp1_closed_percent, trailing_stop_loss, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, last_management_action, close_reason, realized_risk_reward_ratio, realized_exit_price",
+      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, status, closed_at, tp1_closed_percent, trailing_stop_loss, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, last_management_action, close_reason, realized_risk_reward_ratio, realized_exit_price",
     )
     .eq("status", "closed")
     .order("closed_at", { ascending: true });
@@ -310,6 +307,7 @@ export async function loadClosedPositions(since?: string): Promise<ClosedPositio
     id: number;
     pair: string;
     direction: "LONG" | "SHORT";
+    setup: string | null;
     entry: string;
     stop_loss: string;
     take_profit_1: string;
@@ -329,6 +327,7 @@ export async function loadClosedPositions(since?: string): Promise<ClosedPositio
     id: row.id,
     pair: row.pair,
     direction: row.direction,
+    setup: row.setup,
     entry: row.entry,
     stopLoss: row.stop_loss,
     takeProfit1: row.take_profit_1,
@@ -400,6 +399,7 @@ export async function closePosition(
       id: position.id,
       pair: position.pair,
       direction: position.direction,
+      setup: position.setup,
       entry: position.entry,
       stopLoss: patch?.stopLoss ?? position.stopLoss,
       takeProfit1: position.takeProfit1,

@@ -15,10 +15,14 @@ import {
   callOpenRouter,
   type OpenRouterRequest,
 } from "../shared/openrouter.js";
+import { callOpenRouterWithFallback, parseModelFallbacks } from "../shared/ai-model-fallback.js";
 
 const logger = createLogger("charts:analyzer");
 const ANALYSIS_MODEL =
   process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
+const ANALYSIS_MODEL_FALLBACKS = parseModelFallbacks(
+  process.env.AI_VISION_MODEL_FALLBACKS?.trim(),
+);
 
 type PairScreenshotGroup = { pair: string; screenshots: ScreenshotResult[] };
 
@@ -438,25 +442,24 @@ async function analyzeWithOpenRouter(
   }
   userContent.push({ type: "text", text: buildUserPrompt() });
 
-  const result = await withRetry(
-    () =>
-      callOpenRouter({
-        model: ANALYSIS_MODEL,
-        systemPrompt: buildSystemPrompt(),
-        userContent,
-        maxTokens: 4000,
-        temperature: 0.2,
-        responseFormat: { type: "json_object" },
-      }),
-    {
-      onRetry: (error, attempt, maxAttempts, delayMs) =>
-        logger.warn(
-          `  ! OpenRouter main analysis temporary error (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
-        ),
-    },
+  const { response: result, model: usedModel } = await callOpenRouterWithFallback(
+    ANALYSIS_MODEL,
+    ANALYSIS_MODEL_FALLBACKS,
+    (model) => ({
+      model,
+      systemPrompt: buildSystemPrompt(),
+      userContent,
+      maxTokens: 4000,
+      temperature: 0.2,
+      responseFormat: { type: "json_object" },
+    }),
+    (error, attempt, maxAttempts, delayMs) =>
+      logger.warn(
+        `  ! OpenRouter main analysis temporary error (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
+      ),
   );
   void recordOpenRouterUsage(result, {
-    model: ANALYSIS_MODEL,
+    model: usedModel,
     source: "chart",
   });
   return result.text;

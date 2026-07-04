@@ -29,6 +29,7 @@ const ANALYZE_TIMEOUT_MS = parsePositiveEnv(
   "BETTING_AI_ANALYZE_TIMEOUT_MS",
   75_000,
 );
+const MIN_PICK_ODDS = parsePositiveEnv("BETTING_MIN_PICK_ODDS", 1.8);
 const ANALYZE_WEB_RESULTS = 3;
 const MAX_ANALYZE_TOKENS = 1_400;
 
@@ -249,6 +250,7 @@ export function buildCombinedSystemPrompt(): string {
     "YÊU CẦU cho MỖI trận:",
     "1. Xem xét TẤT CẢ market có trong dữ liệu (asia_handicap, asia_totals, eu_totals, result_total_goals, btts, team_goals, corners, v.v., không giới hạn).",
     "2. Chọn ra các kèo có EDGE rõ ràng và odds hợp lý (không chọn lấy lệ để có nhiều kèo).",
+    "   - Chỉ đề xuất kèo có odds > 1.8 (không lấy kèo odds thấp dù tỉ lệ thắng cao — ưu tiên kèo vừa có xác suất thắng tốt vừa có odds > 1.8).",
     "   - Mỗi kèo gồm: market (tên đúng theo dữ liệu, vd 'asia_handicap'), selection (lựa chọn, vd 'H+0.75'), odds (giá cược), confidence (0-100, xác suất thắng ước tính).",
     "   - Viết reason cụ thể: vì sao nên chơi kèo này (phong độ, chênh lệch đội, xu hướng, odds giá tốt, v.v.).",
     "   - QUAN TRỌNG: xếp hạng picks theo confidence giảm dần (kèo tin cậy nhất đầu tiên).",
@@ -347,7 +349,7 @@ function normalizeCombinedMatch(
         const selection = toText(pick.selection);
         const odds = Number(pick.odds);
         const confidence = clampConfidence(pick.confidence);
-        if (market && selection && Number.isFinite(odds) && odds > 0) {
+        if (market && selection && Number.isFinite(odds) && odds > MIN_PICK_ODDS) {
           return {
             market,
             selection,

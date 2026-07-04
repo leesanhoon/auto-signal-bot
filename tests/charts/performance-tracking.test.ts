@@ -11,6 +11,7 @@ describe("charts/performance-tracking", () => {
         id: 1,
         pair: "EUR/USD",
         direction: "LONG",
+        setup: "RB",
         entry: "1.1000",
         stopLoss: "1.1000",
         takeProfit1: "1.1080",
@@ -42,6 +43,7 @@ describe("charts/performance-tracking", () => {
         id: 2,
         pair: "GBP/USD",
         direction: "SHORT",
+        setup: "ARB",
         entry: "1.2500",
         stopLoss: "1.2540",
         takeProfit1: "1.2420",
@@ -74,6 +76,7 @@ describe("charts/performance-tracking", () => {
           id: 1,
           pair: "EUR/USD",
           direction: "LONG",
+          setup: "RB",
           entry: "1.1000",
           stopLoss: "1.1000",
           takeProfit1: "1.1080",
@@ -94,6 +97,7 @@ describe("charts/performance-tracking", () => {
           id: 2,
           pair: "GBP/USD",
           direction: "SHORT",
+          setup: "ARB",
           entry: "1.2500",
           stopLoss: "1.2540",
           takeProfit1: "1.2420",
@@ -114,6 +118,7 @@ describe("charts/performance-tracking", () => {
           id: 3,
           pair: "EUR/USD",
           direction: "LONG",
+          setup: "RB",
           entry: "1.1000",
           stopLoss: "1.0960",
           takeProfit1: "1.1080",
@@ -160,5 +165,108 @@ describe("charts/performance-tracking", () => {
         totalRealizedRiskReward: 0,
       }),
     ]);
+    expect(report.byPattern).toEqual([
+      expect.objectContaining({
+        label: "ARB",
+        trades: 1,
+        totalRealizedRiskReward: 3,
+      }),
+      expect.objectContaining({
+        label: "RB",
+        trades: 2,
+        totalRealizedRiskReward: 0,
+      }),
+    ]);
+  });
+
+  test("summarizes performance by pattern with Unknown fallback for null/empty setup", () => {
+    const report = summarizeClosedPositionsPerformance(
+      [
+        {
+          id: 1,
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "RB",
+          entry: "1.1000",
+          stopLoss: "1.0980",
+          takeProfit1: "1.1040",
+          takeProfit2: null,
+          status: "closed",
+          closedAt: "2026-07-01T00:00:00.000Z",
+          tp1ClosedPercent: 0,
+          trailingStopLoss: null,
+          riskRewardRatio: 2,
+          tp1RiskRewardRatio: 1,
+          tp2RiskRewardRatio: null,
+          lastManagementAction: "NONE",
+          closeReason: "stop_loss",
+          realizedRiskRewardRatio: 1.5,
+          realizedExitPrice: "1.1020",
+        },
+        {
+          id: 2,
+          pair: "GBP/USD",
+          direction: "SHORT",
+          setup: null,
+          entry: "1.2500",
+          stopLoss: "1.2520",
+          takeProfit1: "1.2480",
+          takeProfit2: null,
+          status: "closed",
+          closedAt: "2026-07-02T00:00:00.000Z",
+          tp1ClosedPercent: 0,
+          trailingStopLoss: null,
+          riskRewardRatio: 2,
+          tp1RiskRewardRatio: 1,
+          tp2RiskRewardRatio: null,
+          lastManagementAction: "NONE",
+          closeReason: "stop_loss",
+          realizedRiskRewardRatio: 0.5,
+          realizedExitPrice: "1.2510",
+        },
+        {
+          id: 3,
+          pair: "EUR/USD",
+          direction: "LONG",
+          setup: "  ",
+          entry: "1.1000",
+          stopLoss: "1.0950",
+          takeProfit1: "1.1060",
+          takeProfit2: null,
+          status: "closed",
+          closedAt: "2026-07-03T00:00:00.000Z",
+          tp1ClosedPercent: 0,
+          trailingStopLoss: null,
+          riskRewardRatio: 2.5,
+          tp1RiskRewardRatio: 1.5,
+          tp2RiskRewardRatio: null,
+          lastManagementAction: "NONE",
+          closeReason: "stop_loss",
+          realizedRiskRewardRatio: -1,
+          realizedExitPrice: "1.0950",
+        },
+      ],
+      {
+        periodLabel: "test",
+        startAt: "01/07/2026",
+        endAt: "03/07/2026",
+      },
+    );
+
+    expect(report.byPattern).toHaveLength(2);
+    expect(report.byPattern[0]).toMatchObject({
+      label: "RB",
+      trades: 1,
+      wins: 1,
+      losses: 0,
+      totalRealizedRiskReward: 1.5,
+    });
+    expect(report.byPattern[1]).toMatchObject({
+      label: "Unknown",
+      trades: 2,
+      wins: 1,
+      losses: 1,
+      totalRealizedRiskReward: -0.5,
+    });
   });
 });

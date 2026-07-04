@@ -1,4 +1,7 @@
 import type { TradeSetup } from "./chart-types.js";
+import { createLogger } from "../shared/logger.js";
+
+const logger = createLogger("charts:position-engine");
 
 export type PositionDecisionAction = "NONE" | "PARTIAL_TP1" | "MOVE_SL_TO_BE" | "TRAIL_SL" | "TP2_CLOSE";
 
@@ -88,6 +91,34 @@ export function getConfiguredMinRiskRewardRatio(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1.5;
 }
 
+export function getConfiguredMinRiskRewardRatioForPattern(pattern: string | null | undefined): number {
+  const patternMap = new Map<string, number>();
+  const raw = process.env.POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN?.trim();
+  if (raw) {
+    const pairs = raw.split(",");
+    for (const pair of pairs) {
+      const [pattStr, valueStr] = pair.split(":").map((s) => s.trim());
+      if (pattStr && valueStr) {
+        const value = Number(valueStr);
+        if (Number.isFinite(value) && value > 0) {
+          patternMap.set(pattStr.toUpperCase(), value);
+        } else {
+          logger.warn(`Invalid POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN entry: ${pair} (non-numeric or <= 0 value)`);
+        }
+      } else {
+        logger.warn(`Malformed POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN entry: ${pair} (missing ':' separator)`);
+      }
+    }
+  }
+
+  const normalizedPattern = pattern && typeof pattern === "string" ? pattern.trim().toUpperCase() : null;
+  if (normalizedPattern && patternMap.has(normalizedPattern)) {
+    return patternMap.get(normalizedPattern)!;
+  }
+
+  return getConfiguredMinRiskRewardRatio();
+}
+
 export function getConfiguredTp1ClosePercent(): number {
   const raw = process.env.POSITION_TP1_CLOSE_PERCENT?.trim();
   if (!raw) return 50;
@@ -96,7 +127,7 @@ export function getConfiguredTp1ClosePercent(): number {
 }
 
 export function calculateRiskRewardPlan(
-  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2">,
+  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "setup">,
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
 ): RiskRewardPlan | null {
   const entry = parsePrice(setup.entry);
@@ -104,7 +135,7 @@ export function calculateRiskRewardPlan(
   const takeProfit1 = parsePrice(setup.takeProfit1);
   const takeProfit2 = setup.takeProfit2 ? parsePrice(setup.takeProfit2) : null;
   const partialClosePercent = clampPercent(options.partialClosePercent ?? getConfiguredTp1ClosePercent());
-  const minRiskReward = options.minRiskReward ?? getConfiguredMinRiskRewardRatio();
+  const minRiskReward = options.minRiskReward ?? getConfiguredMinRiskRewardRatioForPattern(setup.setup);
 
   const risk = setup.direction === "LONG" ? entry - stopLoss : stopLoss - entry;
   const tp1Reward = setup.direction === "LONG" ? takeProfit1 - entry : entry - takeProfit1;
@@ -145,7 +176,7 @@ export function calculateRiskRewardPlan(
 }
 
 export function validateTradeSetupForOpen(
-  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2"> & {
+  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "setup"> & {
     orderType?: TradeSetup["orderType"];
   },
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
