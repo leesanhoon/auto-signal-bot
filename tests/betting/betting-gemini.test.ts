@@ -13,6 +13,11 @@ beforeEach(() => {
   recordOpenRouterUsage.mockReset();
   vi.mocked(openrouter.callOpenRouter).mockReset();
   delete process.env.AI_REASONING_EFFORT;
+  delete process.env.BETTING_PICKS_MARKET_SCOPE;
+});
+
+afterEach(() => {
+  delete process.env.BETTING_PICKS_MARKET_SCOPE;
 });
 
 describe("parseMatchAnalysisResponse", () => {
@@ -189,11 +194,11 @@ describe("parseMatchAnalysisResponse", () => {
             scoreConfidence: 51,
             topPicks: [
               {
-                market: "1X2",
-                selection: "Belgium thắng",
-                odds: 2.1,
+                market: "Tổng bàn châu Âu",
+                selection: "Tài 2.5",
+                odds: 1.85,
                 reason: "Ngon",
-                suitability: "parlay",
+                suitability: "single",
               },
             ],
           },
@@ -257,11 +262,11 @@ describe("parseMatchAnalysisResponse", () => {
               scoreConfidence: 51,
               topPicks: [
                 {
-                  market: "1X2",
-                  selection: "Belgium thắng",
-                  odds: 2.1,
+                  market: "Tổng bàn châu Âu",
+                  selection: "Tài 2.5",
+                  odds: 1.85,
                   reason: "Ngon",
-                  suitability: "parlay",
+                  suitability: "single",
                 },
               ],
             },
@@ -330,11 +335,11 @@ describe("parseMatchAnalysisResponse", () => {
               scoreConfidence: 51,
               topPicks: [
                 {
-                  market: "1X2",
-                  selection: "Belgium thắng",
-                  odds: 2.1,
+                  market: "Tổng bàn châu Âu",
+                  selection: "Tài 2.5",
+                  odds: 1.85,
                   reason: "Ngon",
-                  suitability: "parlay",
+                  suitability: "single",
                 },
               ],
             },
@@ -358,11 +363,11 @@ describe("parseMatchAnalysisResponse", () => {
               scoreConfidence: 51,
               topPicks: [
                 {
-                  market: "1X2",
-                  selection: "Belgium thắng",
-                  odds: 2.1,
+                  market: "Tổng bàn châu Âu",
+                  selection: "Tài 2.5",
+                  odds: 1.85,
                   reason: "Ngon",
-                  suitability: "parlay",
+                  suitability: "single",
                 },
               ],
             },
@@ -772,5 +777,280 @@ describe("parseMatchAnalysisResponse", () => {
 
     expect(parsed?.recommendation).toBe("Đứng ngoài.");
     expect(parsed?.picks).toEqual([]);
+  });
+});
+
+describe("combined analysis — totals-only picks filter", () => {
+  test("a. Lọc bỏ pick không phải tài/xỉu", async () => {
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Tong quan",
+        matches: [
+          {
+            matchIndex: 0,
+            matchLabel: "Belgium vs Senegal",
+            kickoff: "12:00",
+            analysis: "Phan tich",
+            preferredScoreline: "1-0",
+            scoreConfidence: 51,
+            topPicks: [
+              {
+                market: "1X2",
+                selection: "Belgium thắng",
+                odds: 2.1,
+                reason: "Strong team",
+                suitability: "parlay",
+              },
+              {
+                market: "Tổng bàn châu Âu",
+                selection: "Tài 2.5",
+                odds: 1.85,
+                reason: "Ngon",
+                suitability: "single",
+              },
+            ],
+          },
+        ],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 12, completionTokens: 34 },
+      finishReason: "stop",
+    });
+
+    const result = await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.matches[0].topPicks).toHaveLength(1);
+    expect(result?.matches[0].topPicks[0].market).toBe("Tổng bàn châu Âu");
+    expect(result?.matches[0].topPicks[0].selection).toBe("Tài 2.5");
+  });
+
+  test("b. Không lọc nhầm tổng góc", async () => {
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Tong quan",
+        matches: [
+          {
+            matchIndex: 0,
+            matchLabel: "Belgium vs Senegal",
+            kickoff: "12:00",
+            analysis: "Phan tich",
+            preferredScoreline: "1-0",
+            scoreConfidence: 51,
+            topPicks: [
+              {
+                market: "Tổng góc",
+                selection: "Tài 9.5",
+                odds: 1.9,
+                reason: "Corner-related",
+                suitability: "single",
+              },
+              {
+                market: "Tổng bàn châu Âu",
+                selection: "Tài 2.5",
+                odds: 1.85,
+                reason: "Goals estimate",
+                suitability: "single",
+              },
+            ],
+          },
+        ],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 12, completionTokens: 34 },
+      finishReason: "stop",
+    });
+
+    const result = await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.matches[0].topPicks).toHaveLength(1);
+    expect(result?.matches[0].topPicks[0].market).toBe("Tổng bàn châu Âu");
+    expect(result?.matches[0].topPicks[0].selection).toBe("Tài 2.5");
+  });
+
+  test("c. topPicks toàn bộ hợp lệ tài/xỉu → giữ nguyên", async () => {
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Tong quan",
+        matches: [
+          {
+            matchIndex: 0,
+            matchLabel: "Belgium vs Senegal",
+            kickoff: "12:00",
+            analysis: "Phan tich",
+            preferredScoreline: "1-0",
+            scoreConfidence: 51,
+            topPicks: [
+              {
+                market: "Tổng bàn châu Á",
+                selection: "Tài 2.25",
+                odds: 1.9,
+                reason: "Reason 1",
+                suitability: "single",
+              },
+              {
+                market: "Tổng bàn châu Âu",
+                selection: "Xỉu 2.5",
+                odds: 1.95,
+                reason: "Reason 2",
+                suitability: "single",
+              },
+              {
+                market: "KQ+Tổng",
+                selection: "Home & Tài 2.5",
+                odds: 2.05,
+                reason: "Reason 3",
+                suitability: "single",
+              },
+            ],
+          },
+        ],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 12, completionTokens: 34 },
+      finishReason: "stop",
+    });
+
+    const result = await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.matches[0].topPicks).toHaveLength(3);
+    expect(result?.matches[0].topPicks[0].market).toBe("Tổng bàn châu Á");
+    expect(result?.matches[0].topPicks[1].market).toBe("Tổng bàn châu Âu");
+    expect(result?.matches[0].topPicks[2].market).toBe("KQ+Tổng");
+  });
+
+  test("d. topPicks rỗng sau khi lọc → không throw, trả mảng rỗng", async () => {
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Tong quan",
+        matches: [
+          {
+            matchIndex: 0,
+            matchLabel: "Belgium vs Senegal",
+            kickoff: "12:00",
+            analysis: "Phan tich",
+            preferredScoreline: "1-0",
+            scoreConfidence: 51,
+            topPicks: [
+              {
+                market: "1X2",
+                selection: "Belgium thắng",
+                odds: 2.1,
+                reason: "Strong team",
+                suitability: "parlay",
+              },
+              {
+                market: "Chấp Châu Á",
+                selection: "Belgium -0.5",
+                odds: 1.9,
+                reason: "Handicap",
+                suitability: "single",
+              },
+            ],
+          },
+        ],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 12, completionTokens: 34 },
+      finishReason: "stop",
+    });
+
+    const result = await bettingGemini.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.matches[0].topPicks).toEqual([]);
+  });
+
+  test("e. Rollback qua env BETTING_PICKS_MARKET_SCOPE=all", async () => {
+    // Set env var before reloading modules
+    process.env.BETTING_PICKS_MARKET_SCOPE = "all";
+
+    // Reset all modules to force reimport with new env var
+    vi.resetModules();
+
+    // Reimport modules with env var set
+    const bettingGeminiReloaded = await import("../../src/betting/betting-gemini.js");
+
+    const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
+    callOpenRouter.mockResolvedValueOnce({
+      text: JSON.stringify({
+        summary: "Tong quan",
+        matches: [
+          {
+            matchIndex: 0,
+            matchLabel: "Belgium vs Senegal",
+            kickoff: "12:00",
+            analysis: "Phan tich",
+            preferredScoreline: "1-0",
+            scoreConfidence: 51,
+            topPicks: [
+              {
+                market: "1X2",
+                selection: "Belgium thắng",
+                odds: 2.1,
+                reason: "Strong team",
+                suitability: "parlay",
+              },
+            ],
+          },
+        ],
+        parlays: [],
+        remainingSingles: [],
+      }),
+      usage: { promptTokens: 12, completionTokens: 34 },
+      finishReason: "stop",
+    });
+
+    const result = await bettingGeminiReloaded.generateCombinedAnalysis([
+      {
+        gameId: "1",
+        home: "Belgium",
+        away: "Senegal",
+        kickoffUnix: 0,
+        odds: { updatedUnix: 0, legend: "", markets: [] },
+      },
+    ]);
+
+    expect(result?.matches[0].topPicks).toHaveLength(1);
+    expect(result?.matches[0].topPicks[0].market).toBe("1X2");
+    expect(result?.matches[0].topPicks[0].selection).toBe("Belgium thắng");
   });
 });

@@ -2,6 +2,7 @@ import { withRetry, isRetryableError, getErrorField, getStatusCode } from "../sh
 import type {
   BettingPlan,
   CombinedAnalysisPlan,
+  CombinedAnalysisPlanMatch,
   MatchAiAnalysis,
   MatchOddsPayload,
 } from "./betting-types.js";
@@ -59,6 +60,25 @@ const MARKET_KEYS = [
   "corners_totals",
   "corners_totals_eu",
 ] as const;
+
+const PICKS_MARKET_SCOPE: "totals_only" | "all" =
+  process.env.BETTING_PICKS_MARKET_SCOPE?.trim().toLowerCase() === "all"
+    ? "all"
+    : "totals_only";
+
+// Regex nhận diện market Tài/Xỉu (tổng bàn thắng) từ text tự do AI trả về.
+// Không dùng cho corners_totals/corners_totals_eu (đó là tổng góc, KHÔNG phải
+// tổng bàn thắng) — chỉ áp dụng cho asia_totals, eu_totals, result_total_goals.
+// Dùng "tổng"/"tong" đơn lẻ (không bắt buộc theo sau "bàn") để khớp cả label
+// "KQ+Tổng" (result_total_goals) — việc loại trừ "tổng góc" đã được xử lý riêng
+// ở isTotalsGoalsMarketText bên dưới.
+const TOTALS_MARKET_REGEX = /tài|xỉu|tai|xiu|tổng|tong|over|under|o\/u/i;
+
+function isTotalsGoalsMarketText(marketText: string): boolean {
+  const normalized = marketText.toLowerCase();
+  if (/góc|goc|corner/.test(normalized)) return false; // loại trừ tổng góc
+  return TOTALS_MARKET_REGEX.test(normalized);
+}
 
 function parsePositiveEnv(name: string, fallback: number): number {
   const configured = Number(process.env[name]);
@@ -947,6 +967,22 @@ function buildCombinedSystemPrompt(matchCount: number): string {
     "Nếu không rõ edge thì nói Đứng ngoài.",
     "",
     "YÊU CẦU:",
+    ...(PICKS_MARKET_SCOPE === "totals_only"
+      ? [
+          "QUAN TRỌNG - GIỚI HẠN KÈO CHỌN (topPicks):",
+          "- topPicks CHỈ được chọn từ market Tài/Xỉu tổng bàn thắng: Tổng bàn châu Á" +
+            " (asia_totals), Tổng bàn châu Âu (eu_totals), hoặc Kết quả + Tổng bàn" +
+            " (result_total_goals).",
+          "- KHÔNG chọn 1X2, Chấp châu Á, GG/NG, Bàn đội, Phạt góc (kể cả tổng góc)," +
+            " hay bất kỳ market nào khác cho topPicks.",
+          "- Nếu không thấy edge rõ ở market Tài/Xỉu cho 1 trận, để topPicks = [] cho trận đó," +
+            " không chọn tạm market khác để lấp đầy.",
+          "- Giới hạn này CHỈ áp dụng cho topPicks. Các chân trong parlays và" +
+            " remainingSingles (xiên, tỉ số chính xác) vẫn áp dụng quy tắc chọn kèo như" +
+            " mô tả bên dưới (không bị giới hạn tài/xỉu).",
+          "",
+        ]
+      : []),
     "1. Phân tích từng trận: nhận định ngắn, tỉ số dự đoán, kèo nổi bật.",
     "2. Lên kế hoạch cược tổng thể với chiến lược vốn bên dưới.",
     "",
@@ -1010,7 +1046,11 @@ function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
     "YÊU CẦU:",
     "Trả JSON duy nhất theo schema bên dưới.",
     "Mỗi match trong matches cần có matchIndex, matchLabel, kickoff, analysis, preferredScoreline, scoreConfidence, topPicks, keyPoints, risks.",
-    "topPicks mỗi trận tối đa 3 kèo nổi bật, mỗi pick gồm market, selection, odds, suitability, reason.",
+    PICKS_MARKET_SCOPE === "totals_only"
+      ? "topPicks mỗi trận tối đa 3 kèo nổi bật, CHỈ market Tài/Xỉu tổng bàn thắng" +
+        " (Tổng bàn châu Á / Tổng bàn châu Âu / KQ+Tổng), mỗi pick gồm market, selection," +
+        " odds, suitability, reason."
+      : "topPicks mỗi trận tối đa 3 kèo nổi bật, mỗi pick gồm market, selection, odds, suitability, reason.",
     "Nếu không có kèo rõ, topPicks là [].",
     "parlays và remainingSingles tuân theo cấu trúc BettingPlan (xiên + đơn).",
     "Đảm bảo tổng stake ≤ tổng vốn.",
@@ -1028,10 +1068,10 @@ function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
             scoreConfidence: 55,
             topPicks: [
               {
-                market: "1X2",
-                selection: "Portugal thắng",
-                odds: 1.72,
-                suitability: "parlay",
+                market: "Tổng bàn châu Âu",
+                selection: "Tài 2.5",
+                odds: 1.85,
+                suitability: "single",
                 reason: "lý do ngắn",
               },
             ],
@@ -1084,6 +1124,32 @@ function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
   ].join("\n");
 }
 
+function filterTopPicksToTotalsOnly(
+  matches: CombinedAnalysisPlanMatch[],
+): CombinedAnalysisPlanMatch[] {
+  if (PICKS_MARKET_SCOPE !== "totals_only") return matches;
+
+  return matches.map((match) => {
+    const originalPicks = Array.isArray(match.topPicks) ? match.topPicks : [];
+    const filteredPicks = originalPicks.filter((pick) =>
+      isTotalsGoalsMarketText(String(pick.market ?? "")),
+    );
+
+    const removedCount = originalPicks.length - filteredPicks.length;
+    if (removedCount > 0) {
+      const removedMarkets = originalPicks
+        .filter((pick) => !isTotalsGoalsMarketText(String(pick.market ?? "")))
+        .map((pick) => `${pick.market}/${pick.selection}`)
+        .join(", ");
+      logger.warn(
+        `  ! Loại bỏ ${removedCount} pick không phải Tài/Xỉu ở "${match.matchLabel}": ${removedMarkets}`,
+      );
+    }
+
+    return { ...match, topPicks: filteredPicks };
+  });
+}
+
 function parseCombinedAnalysisResponse(
   text: string,
   _payloads: MatchOddsPayload[],
@@ -1114,7 +1180,7 @@ function parseCombinedAnalysisResponse(
 
     return {
       summary: parsed.summary ?? "",
-      matches: parsed.matches,
+      matches: filterTopPicksToTotalsOnly(parsed.matches),
       parlays: Array.isArray(parsed.parlays) ? parsed.parlays : [],
       remainingSingles: Array.isArray(parsed.remainingSingles)
         ? parsed.remainingSingles
