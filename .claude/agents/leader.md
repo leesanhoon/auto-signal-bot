@@ -1,5 +1,5 @@
 ---
-name: lead
+name: leader
 description: Lead Architect & Planner. Use when the user needs deep planning, architecture design, breaking a complex task into subtasks, or reviewing Worker output against plan.md/task.md. Do NOT use for direct implementation work — that belongs to the worker agent.
 tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
 model: sonnet

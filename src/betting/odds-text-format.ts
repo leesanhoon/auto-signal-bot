@@ -3,7 +3,6 @@ import type {
   CompactOutcome,
   CombinedAnalysisPlan,
   MatchOddsPayload,
-  BettingPlan,
 } from "./betting-types.js";
 import type { BettingAnalysisSnapshot } from "./betting-analysis-repository.js";
 
@@ -29,32 +28,6 @@ function fmtSignedPoint(n: number): string {
   return n > 0 ? `+${fmtNum(n)}` : fmtNum(n);
 }
 
-const CIRCLED_DIGITS = [
-  "①",
-  "②",
-  "③",
-  "④",
-  "⑤",
-  "⑥",
-  "⑦",
-  "⑧",
-  "⑨",
-  "⑩",
-  "⑪",
-  "⑫",
-  "⑬",
-  "⑭",
-  "⑮",
-  "⑯",
-  "⑰",
-  "⑱",
-  "⑲",
-  "⑳",
-] as const;
-
-function circledNumber(index: number): string {
-  return CIRCLED_DIGITS[index] ?? `${index + 1}`;
-}
 
 function compactText(value: string, maxLength = 80): string {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -63,83 +36,6 @@ function compactText(value: string, maxLength = 80): string {
     : normalized;
 }
 
-function abbreviateTeamName(value: string): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (!normalized) return normalized;
-
-  const words = normalized.split(" ");
-  if (words.length === 1) {
-    return normalized.length <= 6
-      ? normalized
-      : normalized.slice(0, 4).trimEnd();
-  }
-
-  const initials = words
-    .map((word) => word[0])
-    .filter(Boolean)
-    .join("");
-
-  return initials.length >= 2
-    ? initials.toUpperCase()
-    : compactText(normalized, 8);
-}
-
-function abbreviateMatchLabel(label: string): string {
-  const normalized = label.replace(/\s+/g, " ").trim();
-  const parts = normalized.split(/\s+vs\s+/i);
-  if (parts.length !== 2) return compactText(normalized, 20);
-
-  const [home, away] = parts;
-  return `${abbreviateTeamName(home)} vs ${abbreviateTeamName(away)}`;
-}
-
-function pickPrimaryTopPick(
-  picks: BettingPlan["matches"][number]["topPicks"],
-): BettingPlan["matches"][number]["topPicks"][number] | undefined {
-  if (!Array.isArray(picks) || picks.length === 0) return undefined;
-  return (
-    picks.find(
-      (pick) => pick.suitability === "single" || pick.suitability === "both",
-    ) ??
-    picks.find((pick) => pick.suitability === "parlay") ??
-    picks[0]
-  );
-}
-
-function getParlayTypeIcon(type: string): string {
-  const lower = type.toLowerCase();
-  if (lower.includes("tỉ số")) return "🎯";
-  if (lower.includes("xiên 3")) return "⛓️";
-  if (lower.includes("xiên 2")) return "🔗";
-  return "📎";
-}
-
-function riskLabel(combinedOdds: number): string {
-  if (combinedOdds < 3) return "🟢 An toàn";
-  if (combinedOdds < 8) return "🟡 Vừa";
-  return "🔴 Mạo hiểm";
-}
-
-function pickTopRecommendation(
-  payloads: MatchOddsPayload[],
-  plan: CombinedAnalysisPlan,
-): string | undefined {
-  const sorted = [...plan.matches].sort(
-    (a, b) => b.scoreConfidence - a.scoreConfidence,
-  );
-  const best = sorted[0];
-  if (!best) return undefined;
-
-  const pick = pickPrimaryTopPick(best.topPicks);
-  if (!pick) return undefined;
-
-  const fallbackLabel =
-    payloads[best.matchIndex]?.home && payloads[best.matchIndex]?.away
-      ? `${payloads[best.matchIndex].home} vs ${payloads[best.matchIndex].away}`
-      : best.matchLabel;
-
-  return `🏆 *Khuyến nghị chính:* ${compactText(fallbackLabel, 40)} — ${compactText(pick.selection, 48)} @${pick.odds} (TT ${best.scoreConfidence}%)`;
-}
 
 export function sortMatchOddsByKickoff(
   payloads: MatchOddsPayload[],
@@ -568,35 +464,6 @@ export function formatOddsDataMessage(payload: MatchOddsPayload): string {
   return lines.join("\n");
 }
 
-export function formatPicksSummaryBlock(
-  payloads: MatchOddsPayload[],
-  plan: CombinedAnalysisPlan,
-): string {
-  const lines: string[] = ["🎯 *Các kèo được chọn*"];
-
-  const recommendation = pickTopRecommendation(payloads, plan);
-  if (recommendation) lines.push(recommendation, "");
-
-  for (const match of plan.matches) {
-    const payload = payloads[match.matchIndex];
-    const pick = pickPrimaryTopPick(match.topPicks);
-    if (!payload || !pick) continue;
-    const matchLabel = compactText(
-      match.matchLabel || `${payload.home} vs ${payload.away}`,
-      40,
-    );
-    const selection = compactText(pick.selection, 48);
-    lines.push(
-      `*${matchLabel}* | ${selection} @${pick.odds} | TS: ${compactText(match.preferredScoreline, 16)} (TT ${match.scoreConfidence}%)`,
-    );
-  }
-
-  if (lines.length === 1) {
-    lines.push("Không có kèo được chọn.");
-  }
-
-  return lines.join("\n");
-}
 
 export function formatOddsFallbackMessage(
   payload: MatchOddsPayload,
@@ -611,52 +478,6 @@ export function formatOddsFallbackMessage(
   ].join("\n");
 }
 
-export function formatBettingPlanMessage(plan: BettingPlan): string {
-  const sections: string[] = [];
-  let parlayIndex = 0;
-  let singleIndex = 0;
-
-  // Parlays grouped by type
-  if (plan.parlays.length > 0) {
-    const grouped = new Map<string, typeof plan.parlays>();
-    for (const p of plan.parlays) {
-      const list = grouped.get(p.type) ?? [];
-      list.push(p);
-      grouped.set(p.type, list);
-    }
-
-    for (const [type, pList] of grouped) {
-      const typeIcon = getParlayTypeIcon(type);
-      const lines = pList.map((p) => {
-        const legs = p.legs
-          .map(
-            (l) =>
-              `${abbreviateMatchLabel(l.matchLabel)}: ${compactText(l.pick.selection, 32)} @${l.pick.odds}`,
-          )
-          .join(" | ");
-        const displayIndex = circledNumber(parlayIndex);
-        parlayIndex += 1;
-        return [
-          `${displayIndex} ${typeIcon} *${type}* — x${p.combinedOdds.toFixed(2)} · ${riskLabel(p.combinedOdds)}`,
-          `   ${legs}`,
-        ].join("\n");
-      });
-      sections.push(lines.join("\n\n"));
-    }
-  }
-
-  // Singles
-  if (plan.remainingSingles.length > 0) {
-    const lines = plan.remainingSingles.map((s) => {
-      const displayIndex = circledNumber(singleIndex);
-      singleIndex += 1;
-      return `${displayIndex} ${abbreviateMatchLabel(s.matchLabel)}: ${s.pick.selection} @${s.pick.odds}`;
-    });
-    sections.push(`📌 *KÈO ĐƠN*\n${lines.join("\n")}`);
-  }
-
-  return sections.join("\n\n");
-}
 
 /**
  * Format odds message for N matches in a combined view — dùng cho kèo ghép.
@@ -694,9 +515,52 @@ export function formatCombinedOddsMessage(
   return blockParts.join("\n\n");
 }
 
+export function formatCombinedAnalysisMessage(
+  payloads: MatchOddsPayload[],
+  plan: CombinedAnalysisPlan,
+): string {
+  const sections: string[] = [];
+  sections.push(`💡 *Tổng quan:* ${plan.summary || "Không có tóm tắt."}`);
+  sections.push("");
+
+  const matchSections: string[] = [];
+  for (const match of plan.matches) {
+    const payload = payloads[match.matchIndex];
+    if (!payload) continue;
+
+    const lines: string[] = [];
+    lines.push(`*${match.matchLabel}* | ${match.kickoff}`);
+
+    // Tài/Xỉu pick
+    if (match.totalGoalsPick) {
+      const { market, selection, odds, reason } = match.totalGoalsPick;
+      const reasonText = reason ? ` — ${reason}` : "";
+      lines.push(`🎯 ${selection} @${odds}${reasonText}`);
+    } else {
+      lines.push(`🎯 Đứng ngoài — không rõ edge tài/xỉu`);
+    }
+
+    // Predicted score
+    lines.push(`⚽ Tỉ số dự đoán: ${match.predictedScore.score} (${match.predictedScore.confidence}%)`);
+
+    // Note
+    if (match.note) {
+      lines.push(`📝 ${match.note}`);
+    }
+
+    matchSections.push(lines.join("\n"));
+  }
+
+  if (matchSections.length > 0) {
+    sections.push(matchSections.join("\n\n"));
+  }
+
+  return sections.join("\n\n");
+}
+
 /**
  * Format message từ danh sách BettingAnalysisSnapshot đã cache (không gọi AI).
- * Dùng khi cache hit cho tất cả gameIds trong payload — thay thế buildCombinedAnalysisMessage.
+ * Dùng khi cache hit cho tất cả gameIds trong payload.
  */
 export function formatCachedAnalysisMessage(
   payloads: MatchOddsPayload[],
@@ -712,50 +576,42 @@ export function formatCachedAnalysisMessage(
   } else {
     sections.push("💡 *Tổng quan:* Không có tóm tắt.");
   }
+  sections.push("");
 
-  // Danh sách kèo từng trận (đầy đủ như fresh)
+  // Danh sách từng trận
   const matchSections: string[] = [];
   for (const payload of payloads) {
     const snap = snapshotByGameId.get(payload.gameId);
     if (!snap) continue;
     const analysis = snap.analysis;
-    const picks = analysis.picks ?? [];
 
     const lines: string[] = [];
     lines.push(`*${analysis.match}*`);
 
-    // Preferred scoreline
-    if (analysis.preferredScoreline) {
-      lines.push(`TS: ${analysis.preferredScoreline} (${analysis.scoreConfidence}%)`);
+    // Tài/Xỉu pick
+    if (analysis.totalGoalsPick) {
+      const { market, selection, odds, reason } = analysis.totalGoalsPick;
+      const reasonText = reason ? ` — ${reason}` : "";
+      lines.push(`🎯 ${selection} @${odds}${reasonText}`);
+    } else {
+      lines.push(`🎯 Đứng ngoài — không rõ edge tài/xỉu`);
     }
 
-    // Key points
-    if (analysis.keyPoints && analysis.keyPoints.length > 0) {
-      for (const kp of analysis.keyPoints) {
-        lines.push(`• ${kp}`);
-      }
-    }
+    // Predicted score
+    lines.push(
+      `⚽ Tỉ số dự đoán: ${analysis.predictedScore.score} (${analysis.predictedScore.confidence}%)`
+    );
 
-    // Risks
-    if (analysis.risks && analysis.risks.length > 0) {
-      for (const risk of analysis.risks) {
-        lines.push(`⚠️ ${risk}`);
-      }
-    }
-
-    // Picks
-    if (picks.length > 0) {
-      for (const pick of picks) {
-        const reason = pick.reason ? ` — ${pick.reason}` : "";
-        lines.push(`🎯 ${pick.selection} @${pick.odds}${reason}`);
-      }
+    // Note
+    if (analysis.note) {
+      lines.push(`📝 ${analysis.note}`);
     }
 
     matchSections.push(lines.join("\n"));
   }
 
   if (matchSections.length > 0) {
-    sections.push(`🎯 *Các kèo được chọn (từ cache)*\n\n${matchSections.join("\n\n")}`);
+    sections.push(matchSections.join("\n\n"));
   }
 
   return sections.join("\n\n");

@@ -11,15 +11,12 @@ import { generateCombinedAnalysis } from "./betting-gemini.js";
 import {
   loadRecentSnapshotsByGameIds,
   saveBettingAnalysisSnapshot,
-  savePlanCache,
-  loadRecentPlanCache,
 } from "./betting-analysis-repository.js";
 import { loadUpcomingMatches } from "./match-repository.js";
 import {
-  formatBettingPlanMessage,
   formatCachedAnalysisMessage,
   formatOddsText,
-  formatPicksSummaryBlock,
+  formatCombinedAnalysisMessage,
   sortMatchOddsByKickoff,
 } from "./odds-text-format.js";
 import { createLogger } from "../shared/logger.js";
@@ -33,39 +30,31 @@ function buildCombinedMatchAnalysis(
   payload: MatchOddsPayload,
   match: CombinedAnalysisPlanMatch,
 ): MatchAiAnalysis {
-  const topPicks = Array.isArray(match.topPicks) ? match.topPicks : [];
-  const keyPoints = Array.isArray(match.keyPoints) ? match.keyPoints.slice(0, 2) : [];
-  const risks = Array.isArray(match.risks) ? match.risks.slice(0, 2) : [];
-
   return {
     match: match.matchLabel,
-    preferredScoreline: match.preferredScoreline,
-    scoreConfidence: match.scoreConfidence,
-    recommendation: match.analysis,
-    confidence: Math.max(0, Math.min(100, match.scoreConfidence)),
-    picks: topPicks.map((pick) => ({
-      market: pick.market,
-      selection: pick.selection,
-      odds: pick.odds,
-      reason: pick.reason,
-      suitability: pick.suitability as "parlay" | "single" | "both" | undefined,
-    })),
-    keyPoints,
-    risks,
-    summary: match.analysis,
+    totalGoalsPick: match.totalGoalsPick,
+    predictedScore: match.predictedScore,
+    note: match.note,
+    summary: "",
+    // Backward compat fields for betting-backtest
+    preferredScoreline: match.predictedScore.score,
+    scoreConfidence: match.predictedScore.confidence,
+    recommendation: match.totalGoalsPick ? "Có nhận định" : "Đứng ngoài",
+    confidence: match.predictedScore.confidence,
+    picks: match.totalGoalsPick
+      ? [
+          {
+            market: match.totalGoalsPick.market,
+            selection: match.totalGoalsPick.selection,
+            odds: match.totalGoalsPick.odds,
+            reason: match.totalGoalsPick.reason,
+          },
+        ]
+      : [],
+    keyPoints: [],
+    risks: [],
     verificationStatus: "skipped",
   };
-}
-
-function buildCombinedAnalysisMessage(
-  payloads: MatchOddsPayload[],
-  plan: CombinedAnalysisPlan,
-): string {
-  const sections: string[] = [];
-  sections.push(`💡 *Tổng quan:* ${plan.summary || "Không có tóm tắt."}`);
-  sections.push(formatPicksSummaryBlock(payloads, plan));
-
-  return sections.join("\n\n");
 }
 
 async function saveCombinedAnalysisSnapshots(
@@ -142,27 +131,10 @@ export async function runOddsCheck(): Promise<void> {
       if (cachedSnapshots.length === gameIds.length) {
         logger.info("↻ Dùng lại phân tích đã cache trong 30 phút gần nhất, bỏ qua gọi AI");
         const cachedMessage = formatCachedAnalysisMessage(sortedPayload, cachedSnapshots);
-
-        // Cố tải plan cache để hiển thị kèo ghép
-        let planBlock = "";
-        try {
-          const cachedPlan = await loadRecentPlanCache(dateStr, gameIds, 30 * 60 * 1000);
-          if (cachedPlan) {
-            planBlock = formatBettingPlanMessage(cachedPlan);
-          } else {
-            planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Dữ liệu không còn, cần chạy phân tích lại để xem kèo ghép đề xuất.";
-          }
-        } catch {
-          planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Lỗi khi đọc dữ liệu, cần chạy phân tích lại.";
-        }
-
-        // Gộp message cache + plan
         const fullMessage = [
-          "📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC (CACHE)*",
+          "📋 *PHÂN TÍCH TÀI/XỈU + TỈ SỐ (CACHE)*",
           "",
           cachedMessage.trim(),
-          "═══════════════════════",
-          planBlock.trim(),
         ]
           .filter(Boolean)
           .join("\n\n");
@@ -190,32 +162,18 @@ export async function runOddsCheck(): Promise<void> {
     return;
   }
 
-  // Gộp analysis + plan thành 1 message
-  const combinedMessage = buildCombinedAnalysisMessage(payload, plan);
-  const planBlock = formatBettingPlanMessage(plan);
-  if (combinedMessage.trim() || planBlock.trim()) {
+  // Gộp analysis thành 1 message
+  const combinedMessage = formatCombinedAnalysisMessage(sortedPayload, plan);
+  if (combinedMessage.trim()) {
     const fullMessage = [
-      "📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC*",
+      "📋 *PHÂN TÍCH TÀI/XỈU + TỈ SỐ*",
       "",
       combinedMessage.trim(),
-      "═══════════════════════",
-      planBlock.trim(),
     ].filter(Boolean).join("\n\n");
     await sendMessage(fullMessage);
   }
 
-  await saveCombinedAnalysisSnapshots(payload, plan);
-
-  // Lưu plan cache để tái sử dụng lần tới nếu cache hit
-  try {
-    const dateStr = vnDateStr(Date.now());
-    const gameIds = sortedPayload.map((p) => p.gameId);
-    await savePlanCache(dateStr, gameIds, plan);
-  } catch (cacheSaveError) {
-    logger.warn(
-      `  ⚠ Failed to save plan cache: ${cacheSaveError instanceof Error ? cacheSaveError.message : String(cacheSaveError)}`,
-    );
-  }
+  await saveCombinedAnalysisSnapshots(sortedPayload, plan);
 
   logger.info(`\n✅ Da phan tich xong ${payload.length} tran (combined mode).`);
 }

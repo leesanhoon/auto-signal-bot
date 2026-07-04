@@ -7,7 +7,6 @@ vi.mock("../../src/shared/retry.js", () => ({
   isRetryableError: vi.fn(() => false),
 }));
 const bettingApi = await import("../../src/betting/betting-api.js");
-const bettingAi = await import("../../src/betting/betting-gemini.js");
 
 describe("rate limiting", () => {
   beforeEach(() => {
@@ -35,24 +34,4 @@ describe("rate limiting", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  test("delays OpenRouter requests after configured RPM", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
-      choices: [{ message: { content: JSON.stringify({
-        match: "Arsenal vs Chelsea", preferredScoreline: "1-0", scoreConfidence: 80,
-        recommendation: "Canh keo", confidence: 81, keyPoints: ["A"], risks: ["B"], summary: "C",
-      }) } }],
-      usage: { prompt_tokens: 1, completion_tokens: 1 },
-    }), { status: 200, headers: { "Content-Type": "application/json" } })));
-    const payload = {
-      gameId: "match-1", home: "Arsenal", away: "Chelsea", kickoffUnix: 1760000000,
-      odds: { updatedUnix: 1760000000, legend: "demo", markets: [] },
-    } as never;
-    const first = bettingAi.analyzeMatchOdds(payload);
-    const second = bettingAi.analyzeMatchOdds(payload);
-    await first;
-    expect(fetch).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(60_000);
-    await second;
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
 });

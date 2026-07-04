@@ -1,5 +1,5 @@
 import { getDb } from "../shared/db.js";
-import type { MatchAiAnalysis, MatchOddsPayload, CombinedAnalysisPlan } from "./betting-types.js";
+import type { MatchAiAnalysis, MatchOddsPayload } from "./betting-types.js";
 
 export type BettingAnalysisSnapshot = {
   id?: number;
@@ -124,66 +124,3 @@ export async function loadRecentSnapshotsByGameIds(
   }
 }
 
-/**
- * Lưu kế hoạch đặt cược (parlay + kèo đơn) cho ngày cụ thể.
- * Dùng `date` làm primary key — chỉ 1 plan per ngày.
- * Luôn refresh `created_at` mỗi lần lưu (kể cả upsert) để theo dõi khi nào plan được cập nhật lần cuối.
- */
-export async function savePlanCache(
-  date: string,
-  gameIds: string[],
-  plan: CombinedAnalysisPlan,
-): Promise<void> {
-  const { error } = await (getDb().from("betting_plan_cache") as any).upsert(
-    {
-      date,
-      game_ids: gameIds,
-      plan,
-      created_at: new Date().toISOString(),
-    },
-    { onConflict: "date" },
-  );
-
-  if (error) throw new Error(`savePlanCache failed: ${error.message}`);
-}
-
-/**
- * Đọc plan cache cho ngày hôm nay (hoặc ngày vừa chỉ định), nếu:
- * - Tồn tại trong DB
- * - Được tạo trong vòng `withinMs` gần đây
- * - Tập gameIds khớp hoàn toàn với tập đang cần (cùng số lượng, cùng các id)
- * Nếu lỗi DB, gameIds không khớp, hoặc hết hạn → trả null (coi như cache miss) — KHÔNG throw.
- */
-export async function loadRecentPlanCache(
-  date: string,
-  gameIds: string[],
-  withinMs: number,
-): Promise<CombinedAnalysisPlan | null> {
-  if (gameIds.length === 0) return null;
-  try {
-    const sinceIso = new Date(Date.now() - withinMs).toISOString();
-    const { data, error } = await (getDb().from("betting_plan_cache") as any)
-      .select("plan, game_ids, created_at")
-      .eq("date", date)
-      .gte("created_at", sinceIso);
-
-    if (error || !data || data.length === 0) return null;
-
-    const row = data[0];
-    const cachedGameIds = row.game_ids ?? [];
-    const sortedCached = [...cachedGameIds].sort();
-    const sortedNeeded = [...gameIds].sort();
-
-    // Kiểm tra tập gameIds khớp nhau
-    if (
-      sortedCached.length !== sortedNeeded.length ||
-      !sortedCached.every((id, i) => id === sortedNeeded[i])
-    ) {
-      return null; // gameIds không khớp → cache miss
-    }
-
-    return row.plan as CombinedAnalysisPlan;
-  } catch {
-    return null;
-  }
-}

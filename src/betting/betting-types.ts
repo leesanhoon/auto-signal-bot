@@ -6,32 +6,38 @@ export type ApiFootballFixture = {
   };
 };
 
+export type TotalGoalsPick = {
+  market: string;
+  selection: string;
+  odds: number;
+  reason?: string;
+};
+
+export type PredictedScore = {
+  score: string;
+  confidence: number;
+};
+
 export type MatchAiAnalysis = {
   match: string;
+  totalGoalsPick: TotalGoalsPick | null;
+  predictedScore: PredictedScore;
+  note?: string;
+  summary: string;
+  // Backward compat fields (kept for betting-backtest.ts which we can't modify)
   preferredScoreline: string;
   scoreConfidence: number;
   recommendation: string;
   confidence: number;
-  keyPoints: string[];
-  risks: string[];
-  summary: string;
-  picks?: Array<{
-    candidateId?: string;
+  picks: Array<{
     market: string;
     selection: string;
     odds: number;
     reason?: string;
-    confidence?: number;
-    /** "parlay" = phù hợp xiên, "single" = kèo đơn, "both" = cả hai, undefined = mặc định */
-    suitability?: "parlay" | "single" | "both";
-    /** Gợi ý ghép xiên: "cùng cửa với trận X" hoặc "ngược cửa trận Y" */
-    parlayNote?: string;
   }>;
-  marketViews?: Array<{
-    market: string;
-    assessment: string;
-    odds: number | null;
-  }>;
+  keyPoints: string[];
+  risks: string[];
+  // Verification fields
   verificationStatus?: "confirmed" | "revised" | "failed" | "skipped";
   verifiedConfirmed?: boolean;
   verifiedConfidence?: number;
@@ -85,11 +91,18 @@ export type BettingPlan = {
   summary: string;
 };
 
+export type CombinedAnalysisPlanMatch = {
+  matchIndex: number;
+  matchLabel: string;
+  kickoff: string;
+  totalGoalsPick: TotalGoalsPick | null;
+  predictedScore: PredictedScore;
+  note?: string;
+};
+
 export type CombinedAnalysisPlan = {
   summary: string;
   matches: CombinedAnalysisPlanMatch[];
-  parlays: BettingParlay[];
-  remainingSingles: BettingPlanSingle[];
 };
 
 export type MatchInfo = {
@@ -133,14 +146,3 @@ export type MatchOddsPayload = {
   correctScore?: CorrectScoreOutcome[];
 };
 
-export type CombinedAnalysisPlanMatch = {
-  matchIndex: number;
-  matchLabel: string;
-  kickoff: string;
-  analysis: string;
-  preferredScoreline: string;
-  scoreConfidence: number;
-  topPicks: BettingPlanPick[];
-  keyPoints: string[];
-  risks: string[];
-};
