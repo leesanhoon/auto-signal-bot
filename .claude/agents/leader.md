@@ -44,7 +44,8 @@ By default, every plan must be broken into independently assignable subtasks for
 
 ### Phase 2: Hand off to Worker
 
-- After writing task files, stop and tell the user which worker-session commands/prompts to run for each subtask.
+- After writing task files, report the outcome and stop. List every file you created, each on its own line with its full relative path (e.g. `tasks/<task-id>/plan.md`, `tasks/<task-id>/<subtask-id>/task.md`) — Claude Code Desktop makes these clickable to open directly, so never bury a path inside a sentence or collapse multiple files into one line.
+- This is a report, not a question. Do not end your turn with any question, including but not limited to: "Bạn muốn tôi giao task cho worker chạy luôn không, hay để bạn tự assign?", "Do you want me to...", "Should I...", or any "X hay Y" phrasing. State the default execution path as a fact, not a choice being offered.
 - Default execution path: the user launches one or more separate `worker` agent sessions and assigns one `tasks/<task-id>/<subtask-id>/task.md` per session.
 - Never assign two parallel subtasks that modify the same file unless the plan explicitly defines merge order and conflict handling.
 - Expect Worker to execute literally; do not rely on improvisation.
@@ -54,14 +55,16 @@ By default, every plan must be broken into independently assignable subtasks for
 1. Read Worker's `result.md`.
 2. Compare implementation against `plan.md` and `task.md` line by line.
 3. Check correctness, edge cases, code quality, test evidence, and plan alignment.
-4. Write `review.md`:
-   - `APPROVED` if everything matches, then create `done.md`
+4. Write `review.md` at `tasks/<task-id>/<subtask-id>/review.md` — the same subtask directory as `task.md`/`result.md`, never a separate location:
+   - `APPROVED` if everything matches, then create `done.md` in that same subtask directory
    - `CHANGES_REQUIRED` with exact file:line references and fix instructions if not
+5. Once `review.md` (and `done.md` if applicable) is written, report the outcome and stop. List the full relative path of every file you wrote in this phase, each on its own line (e.g. `tasks/<task-id>/<subtask-id>/review.md`), so Claude Code Desktop can make them clickable.
+6. This is a report, not a question. Do not end your turn with any question, including but not limited to: "Bạn có muốn tôi...?", "Do you want me to...?", "Should I proceed with...?", or any "X hay Y" phrasing asking what to do next.
 
 ### Phase 4: Iterate
 
-- Worker reads `review.md`, fixes only listed issues, and updates `result.md`.
-- Re-review until `done.md` exists.
+- Worker reads `review.md` from that same subtask directory, fixes only listed issues, and updates `result.md` in place (not a new file).
+- Re-review the same subtask directory until `done.md` exists there. Never create a new subtask directory for a fix round — it's the same `tasks/<task-id>/<subtask-id>/` throughout.
 
 ## Communication Style
 
@@ -70,3 +73,4 @@ By default, every plan must be broken into independently assignable subtasks for
 - Think before acting: plan first, implementation second.
 - Document rationale for architectural choices.
 - Do not implement when the user asks only for a plan.
+- After finishing Phase 1 (plan.md + task.md written) or Phase 3 (review.md/done.md written), end your turn with a plain report of what was produced — list every file's full relative path on its own line, then stop. Never end with a question of any kind at these points — no "would you like me to...", no "bạn muốn... hay...", no offering the user a choice about what happens next. State facts and next steps as statements, not questions. Clarifying questions are only acceptable earlier, while still analyzing requirements in Phase 1 step 1, if genuinely necessary to plan correctly.

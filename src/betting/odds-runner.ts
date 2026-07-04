@@ -27,6 +27,7 @@ import { vnDateStr } from "../shared/vn-time.js";
 
 const logger = createLogger("betting:odds-runner");
 const LABEL = "Match Odds";
+const SKIP_CACHE = process.env.BETTING_SKIP_CACHE?.trim().toLowerCase() === "true";
 
 function buildCombinedMatchAnalysis(
   payload: MatchOddsPayload,
@@ -133,41 +134,45 @@ export async function runOddsCheck(): Promise<void> {
   let plan: CombinedAnalysisPlan | null = null;
   const gameIds = sortedPayload.map((p) => p.gameId);
   const dateStr = vnDateStr(Date.now());
-  try {
-    const cachedSnapshots = await loadRecentSnapshotsByGameIds(gameIds, 30 * 60 * 1000);
-    if (cachedSnapshots.length === gameIds.length) {
-      logger.info("↻ Dùng lại phân tích đã cache trong 30 phút gần nhất, bỏ qua gọi AI");
-      const cachedMessage = formatCachedAnalysisMessage(sortedPayload, cachedSnapshots);
+  if (SKIP_CACHE) {
+    logger.info("⚙ BETTING_SKIP_CACHE=true — bỏ qua cache, luôn gọi AI mới");
+  } else {
+    try {
+      const cachedSnapshots = await loadRecentSnapshotsByGameIds(gameIds, 30 * 60 * 1000);
+      if (cachedSnapshots.length === gameIds.length) {
+        logger.info("↻ Dùng lại phân tích đã cache trong 30 phút gần nhất, bỏ qua gọi AI");
+        const cachedMessage = formatCachedAnalysisMessage(sortedPayload, cachedSnapshots);
 
-      // Cố tải plan cache để hiển thị kèo ghép
-      let planBlock = "";
-      try {
-        const cachedPlan = await loadRecentPlanCache(dateStr, gameIds, 30 * 60 * 1000);
-        if (cachedPlan) {
-          planBlock = formatBettingPlanMessage(cachedPlan);
-        } else {
-          planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Dữ liệu không còn, cần chạy phân tích lại để xem kèo ghép đề xuất.";
+        // Cố tải plan cache để hiển thị kèo ghép
+        let planBlock = "";
+        try {
+          const cachedPlan = await loadRecentPlanCache(dateStr, gameIds, 30 * 60 * 1000);
+          if (cachedPlan) {
+            planBlock = formatBettingPlanMessage(cachedPlan);
+          } else {
+            planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Dữ liệu không còn, cần chạy phân tích lại để xem kèo ghép đề xuất.";
+          }
+        } catch {
+          planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Lỗi khi đọc dữ liệu, cần chạy phân tích lại.";
         }
-      } catch {
-        planBlock = "⚠️ *KẾ HOẠCH ĐẶT CƯỢC:* Lỗi khi đọc dữ liệu, cần chạy phân tích lại.";
-      }
 
-      // Gộp message cache + plan
-      const fullMessage = [
-        "📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC (CACHE)*",
-        "",
-        cachedMessage.trim(),
-        "═══════════════════════",
-        planBlock.trim(),
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-      await sendMessage(fullMessage);
-      logger.info(`\n✅ Da phan tich xong ${sortedPayload.length} tran (cache).`);
-      return;
+        // Gộp message cache + plan
+        const fullMessage = [
+          "📋 *PHÂN TÍCH + KẾ HOẠCH ĐẶT CƯỢC (CACHE)*",
+          "",
+          cachedMessage.trim(),
+          "═══════════════════════",
+          planBlock.trim(),
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+        await sendMessage(fullMessage);
+        logger.info(`\n✅ Da phan tich xong ${sortedPayload.length} tran (cache).`);
+        return;
+      }
+    } catch {
+      // Lỗi khi đọc cache — coi như cache miss, fallback về gọi AI
     }
-  } catch {
-    // Lỗi khi đọc cache — coi như cache miss, fallback về gọi AI
   }
 
   try {

@@ -1,6 +1,8 @@
 import { withRetry, isRetryableError, getErrorField, getStatusCode } from "../shared/retry.js";
 import type {
   BettingPlan,
+  BettingParlay,
+  BettingPlanSingle,
   CombinedAnalysisPlan,
   CombinedAnalysisPlanMatch,
   MatchAiAnalysis,
@@ -365,6 +367,7 @@ function parseDirectPicks(
 
   const candidatePool = buildCandidatePool(payload);
   const used = new Set<string>();
+  const usedMarketSelection = new Set<string>();
   const picks: NonNullable<MatchAiAnalysis["picks"]> = [];
 
   for (const item of rawPicks) {
@@ -401,6 +404,9 @@ function parseDirectPicks(
     const resolvedId = candidate?.candidateId || candidateId || undefined;
     if (resolvedId && used.has(resolvedId)) continue;
 
+    const marketSelectionKey = `${market.trim().toLowerCase()}|${selection.trim().toLowerCase()}`;
+    if (!resolvedId && usedMarketSelection.has(marketSelectionKey)) continue;
+
     const suitabilityRaw = raw.suitability;
     const suitabilityVal =
       suitabilityRaw === "parlay" ||
@@ -423,6 +429,7 @@ function parseDirectPicks(
       ...(parlayNoteVal ? { parlayNote: parlayNoteVal } : {}),
     });
     if (resolvedId) used.add(resolvedId);
+    if (!resolvedId) usedMarketSelection.add(marketSelectionKey);
     if (picks.length >= 3) break;
   }
 
@@ -663,6 +670,48 @@ export function parseMatchAnalysisResponseForTest(
   payload: MatchOddsPayload,
 ): MatchAiAnalysis | null {
   return parseMatchAnalysisResponseInternal(text, payload);
+}
+
+export function findMissingMatchIndexesForTest(
+  matches: CombinedAnalysisPlanMatch[],
+  payloadCount: number,
+): number[] {
+  return findMissingMatchIndexes(matches, payloadCount);
+}
+
+export function normalizeCombinedMatchForTest(
+  match: Partial<CombinedAnalysisPlanMatch>,
+  fallbackLabel: string,
+): CombinedAnalysisPlanMatch {
+  return normalizeCombinedMatch(match, fallbackLabel);
+}
+
+export function sanitizeParlaysForTest(
+  parlays: unknown,
+  payloadCount: number,
+): BettingParlay[] {
+  return sanitizeParlays(parlays, payloadCount);
+}
+
+export function sanitizeRemainingSinglesForTest(
+  singles: unknown,
+  payloadCount: number,
+): BettingPlanSingle[] {
+  return sanitizeRemainingSingles(singles, payloadCount);
+}
+
+export function findMissingSingleMatchIndexesForTest(
+  singles: BettingPlanSingle[],
+  payloadCount: number,
+): number[] {
+  return findMissingSingleMatchIndexes(singles, payloadCount);
+}
+
+export function parseDirectPicksForTest(
+  rawPicks: unknown,
+  payload: MatchOddsPayload,
+): NonNullable<MatchAiAnalysis["picks"]> {
+  return parseDirectPicks(rawPicks, payload);
 }
 
 export async function analyzeMatchOdds(
@@ -951,7 +1000,7 @@ export async function generateBettingPlan(
 
 // ── Combined Analysis + Plan Generator (single prompt) ──
 
-function buildCombinedSystemPrompt(matchCount: number): string {
+export function buildCombinedSystemPrompt(matchCount: number): string {
   const totalCapital = matchCount * 1_000_000;
   const parlayStake = 50_000;
   const pairCount = (matchCount * (matchCount - 1)) / 2;
@@ -996,6 +1045,8 @@ function buildCombinedSystemPrompt(matchCount: number): string {
     "QUY TẮC CHỌN KÈO CHO XIÊN:",
     "- Xiên ALL: chọn 1 kèo CHẮC NHẤT mỗi trận (GG/NG, Tài/Xỉu EU, 1X2 ngắn). Odds mỗi chân ~1.3–2.0.",
     "- Xiên 2: ghép 2 trận có cùng xu hướng (vd: cả 2 đội mạnh hơn đều thắng, hoặc cả 2 đều Under).",
+    "- Xiên 3: chọn 3 trận có edge rõ nhất, MỖI xiên 3 phải có ĐÚNG 3 chân (legs), và BẮT BUỘC ít nhất 1 chân trong 3 chân đó dùng market 'Tỷ số chính xác' (correct score) lấy từ ứng viên tỉ số của trận đó — 2 chân còn lại có thể dùng 1X2/GG-NG/Tài-Xỉu EU.",
+    "- Chỉ tạo xiên 3 khi matchCount >= 3 và có ≥3 trận có edge (nếu không đủ, để trống).",
     "- Xiên tỉ số: chọn tỉ số chính xác mỗi trận mà AI tự tin nhất.",
     "- Không ghép kèo Chấp Á mốc .25/.75 vào xiên (thanh toán nửa phức tạp).",
     "- Mỗi xiên 2 nên chọn kèo từ 2 trận KHÁC NHAU.",
@@ -1019,7 +1070,7 @@ function buildCombinedSystemPrompt(matchCount: number): string {
   ].join("\n");
 }
 
-function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
+export function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
   const matchBlocks = payloads.map((payload, i) => {
     const kickoff = new Date(payload.kickoffUnix * 1000).toLocaleString(
       "vi-VN",
@@ -1046,6 +1097,7 @@ function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
     "YÊU CẦU:",
     "Trả JSON duy nhất theo schema bên dưới.",
     "Mỗi match trong matches cần có matchIndex, matchLabel, kickoff, analysis, preferredScoreline, scoreConfidence, topPicks, keyPoints, risks.",
+    `QUAN TRỌNG: mảng "matches" PHẢI có ĐÚNG ${payloads.length} phần tử, mỗi phần tử ứng với 1 trận đã liệt kê ở trên theo matchIndex từ 0 đến ${payloads.length - 1}. KHÔNG được bỏ sót trận nào — nếu một trận không có kèo đáng chú ý, vẫn phải thêm phần tử cho trận đó với topPicks: [] và analysis nêu rõ lý do đứng ngoài.`,
     PICKS_MARKET_SCOPE === "totals_only"
       ? "topPicks mỗi trận tối đa 3 kèo nổi bật, CHỈ market Tài/Xỉu tổng bàn thắng" +
         " (Tổng bàn châu Á / Tổng bàn châu Âu / KQ+Tổng), mỗi pick gồm market, selection," +
@@ -1087,16 +1139,36 @@ function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
                 matchIndex: 0,
                 matchLabel: "Portugal vs Croatia",
                 pick: {
+                  market: "1X2",
+                  selection: "1",
+                  odds: 1.7,
+                  reason: "ngắn",
+                },
+              },
+              {
+                matchIndex: 1,
+                matchLabel: "Spain vs Italy",
+                pick: {
                   market: "GG/NG",
                   selection: "NG",
-                  odds: 1.62,
+                  odds: 1.6,
+                  reason: "ngắn",
+                },
+              },
+              {
+                matchIndex: 2,
+                matchLabel: "Germany vs France",
+                pick: {
+                  market: "Tỷ số chính xác",
+                  selection: "2-1",
+                  odds: 6.5,
                   reason: "ngắn",
                 },
               },
             ],
-            combinedOdds: 4.5,
+            combinedOdds: 16.32,
             stake: 50000,
-            potentialWin: 225000,
+            potentialWin: 816000,
           },
         ],
         remainingSingles: [
@@ -1120,6 +1192,7 @@ function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
     ),
     "```",
     "combinedOdds = tích odds các chân trong xiên. stake = tiền đặt. potentialWin = stake * combinedOdds.",
+    "Nếu có ≥3 trận đủ dữ liệu, BẮT BUỘC có ít nhất 1 phần tử trong parlays với type='xiên 3' (đúng 3 legs, ít nhất 1 leg market='Tỷ số chính xác'). Nếu không đủ 3 trận có edge, bỏ qua yêu cầu này.",
     "Nếu không có đủ kèo tốt thì parlays hoặc remainingSingles có thể là mảng rỗng.",
   ].join("\n");
 }
@@ -1150,9 +1223,329 @@ function filterTopPicksToTotalsOnly(
   });
 }
 
+function normalizeCombinedMatch(
+  match: Partial<CombinedAnalysisPlanMatch>,
+  fallbackLabel: string,
+): CombinedAnalysisPlanMatch {
+  return {
+    matchIndex: match.matchIndex as number,
+    matchLabel: toText(match.matchLabel, fallbackLabel),
+    kickoff: toText(match.kickoff, ""),
+    analysis: match.analysis ?? "",
+    preferredScoreline: toText(match.preferredScoreline, "Chưa có tỷ số ưu tiên"),
+    scoreConfidence: clampConfidence(match.scoreConfidence),
+    topPicks: Array.isArray(match.topPicks) ? match.topPicks : [],
+    keyPoints: Array.isArray(match.keyPoints) ? match.keyPoints : [],
+    risks: Array.isArray(match.risks) ? match.risks : [],
+  };
+}
+
+function findMissingMatchIndexes(
+  matches: CombinedAnalysisPlanMatch[],
+  payloadCount: number,
+): number[] {
+  if (payloadCount === 0) return [];
+
+  const presentIndexes = new Set<number>();
+  for (const match of matches) {
+    if (typeof match.matchIndex === "number") {
+      presentIndexes.add(match.matchIndex);
+    }
+  }
+
+  const missing: number[] = [];
+  for (let i = 0; i < payloadCount; i++) {
+    if (!presentIndexes.has(i)) {
+      missing.push(i);
+    }
+  }
+
+  return missing;
+}
+
+function sanitizeParlays(
+  parlays: unknown,
+  payloadCount: number,
+): BettingParlay[] {
+  if (!Array.isArray(parlays)) return [];
+
+  const result: BettingParlay[] = [];
+  for (let i = 0; i < parlays.length; i++) {
+    const item = parlays[i];
+    if (!item || typeof item !== "object") {
+      logger.warn("  ! sanitizeParlays: bỏ qua item không phải object");
+      continue;
+    }
+
+    const p = item as Record<string, unknown>;
+
+    // Validate required fields
+    const type = toText(p.type);
+    if (!type) {
+      logger.warn(
+        `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — type rỗng`,
+      );
+      continue;
+    }
+
+    const legs = p.legs;
+    if (!Array.isArray(legs) || legs.length === 0) {
+      logger.warn(
+        `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — legs không phải mảng hoặc rỗng`,
+      );
+      continue;
+    }
+
+    const combinedOdds = Number(p.combinedOdds);
+    if (!Number.isFinite(combinedOdds) || combinedOdds <= 0) {
+      logger.warn(
+        `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — combinedOdds không hợp lệ (${p.combinedOdds})`,
+      );
+      continue;
+    }
+
+    const stake = Number(p.stake);
+    if (!Number.isFinite(stake) || stake <= 0) {
+      logger.warn(
+        `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — stake không hợp lệ (${p.stake})`,
+      );
+      continue;
+    }
+
+    const potentialWin = Number(p.potentialWin);
+    if (!Number.isFinite(potentialWin)) {
+      logger.warn(
+        `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — potentialWin không hợp lệ (${p.potentialWin})`,
+      );
+      continue;
+    }
+
+    // Validate legs structure
+    let legsValid = true;
+    for (const leg of legs) {
+      if (!leg || typeof leg !== "object") {
+        logger.warn(
+          `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — leg không phải object`,
+        );
+        legsValid = false;
+        break;
+      }
+
+      const l = leg as Record<string, unknown>;
+      const matchIndex = Number(l.matchIndex);
+      if (
+        !Number.isFinite(matchIndex) ||
+        matchIndex < 0 ||
+        matchIndex >= payloadCount ||
+        !Number.isInteger(matchIndex)
+      ) {
+        logger.warn(
+          `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — leg có matchIndex không hợp lệ (${l.matchIndex}), payloadCount=${payloadCount}`,
+        );
+        legsValid = false;
+        break;
+      }
+
+      const pick = l.pick;
+      if (!pick || typeof pick !== "object") {
+        logger.warn(
+          `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — leg missing pick hoặc không phải object`,
+        );
+        legsValid = false;
+        break;
+      }
+
+      const pk = pick as Record<string, unknown>;
+      const market = toText(pk.market);
+      if (!market) {
+        logger.warn(
+          `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — leg có pick.market rỗng`,
+        );
+        legsValid = false;
+        break;
+      }
+
+      const selection = toText(pk.selection);
+      if (!selection) {
+        logger.warn(
+          `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — leg có pick.selection rỗng`,
+        );
+        legsValid = false;
+        break;
+      }
+
+      const odds = Number(pk.odds);
+      if (!Number.isFinite(odds) || odds <= 0) {
+        logger.warn(
+          `  ! sanitizeParlays: bỏ qua parlay (index=${i}) — leg có pick.odds không hợp lệ (${pk.odds})`,
+        );
+        legsValid = false;
+        break;
+      }
+    }
+
+    if (!legsValid) continue;
+
+    // Check for xiên 3 specific requirements (log but don't drop)
+    const isXien3 = /xiên\s*3/i.test(type);
+    if (isXien3) {
+      if (legs.length !== 3) {
+        logger.warn(
+          `  ! sanitizeParlays: xiên 3 (index=${i}) không đủ 3 legs (nhận được ${legs.length})`,
+        );
+      }
+
+      const hasCorrectScoreLeg = legs.some((leg) => {
+        if (!leg || typeof leg !== "object") return false;
+        const l = leg as Record<string, unknown>;
+        const pick = l.pick;
+        if (!pick || typeof pick !== "object") return false;
+        const pk = pick as Record<string, unknown>;
+        const market = toText(pk.market);
+        return market.toLowerCase().includes("tỷ số chính xác");
+      });
+
+      if (!hasCorrectScoreLeg) {
+        logger.warn(
+          `  ! sanitizeParlays: xiên 3 (index=${i}) thiếu chân dùng market 'Tỷ số chính xác'`,
+        );
+      }
+    }
+
+    result.push(p as BettingParlay);
+  }
+
+  return result;
+}
+
+function sanitizeRemainingSingles(
+  singles: unknown,
+  payloadCount: number,
+): BettingPlanSingle[] {
+  if (!Array.isArray(singles)) return [];
+
+  const result: BettingPlanSingle[] = [];
+  const seenMatchBetType = new Set<string>();
+  for (const item of singles) {
+    if (!item || typeof item !== "object") {
+      logger.warn("  ! sanitizeRemainingSingles: bỏ qua item không phải object");
+      continue;
+    }
+    const s = item as Record<string, unknown>;
+    const matchIndex = Number(s.matchIndex);
+
+    // Validate matchIndex
+    if (!Number.isFinite(matchIndex) || matchIndex < 0 || matchIndex >= payloadCount || !Number.isInteger(matchIndex)) {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single với matchIndex không hợp lệ (${s.matchIndex}), payloadCount=${payloadCount}`,
+      );
+      continue;
+    }
+
+    // Validate pick
+    const pick = s.pick;
+    if (!pick || typeof pick !== "object") {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single matchIndex=${matchIndex} — pick missing hoặc không phải object`,
+      );
+      continue;
+    }
+    const p = pick as Record<string, unknown>;
+    const market = toText(p.market);
+    const selection = toText(p.selection);
+    const odds = Number(p.odds);
+
+    if (!market) {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single matchIndex=${matchIndex} — pick.market rỗng`,
+      );
+      continue;
+    }
+    if (!selection) {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single matchIndex=${matchIndex} — pick.selection rỗng`,
+      );
+      continue;
+    }
+    if (!Number.isFinite(odds) || odds <= 0) {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single matchIndex=${matchIndex} — pick.odds không hợp lệ (${p.odds})`,
+      );
+      continue;
+    }
+
+    // Validate stake
+    const stake = Number(s.stake);
+    if (!Number.isFinite(stake) || stake <= 0) {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single matchIndex=${matchIndex} — stake không hợp lệ (${s.stake})`,
+      );
+      continue;
+    }
+
+    // Validate potentialWin (allow 0)
+    const potentialWin = Number(s.potentialWin);
+    if (!Number.isFinite(potentialWin)) {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single matchIndex=${matchIndex} — potentialWin không hợp lệ (${s.potentialWin})`,
+      );
+      continue;
+    }
+
+    const betType = toText(s.betType, "");
+    const dedupeKey = `${matchIndex}|${betType.trim().toLowerCase()}`;
+    if (seenMatchBetType.has(dedupeKey)) {
+      logger.warn(
+        `  ! sanitizeRemainingSingles: bỏ qua single trùng lặp matchIndex=${matchIndex}, betType="${betType}" (đã có 1 single cùng loại cho trận này)`,
+      );
+      continue;
+    }
+    seenMatchBetType.add(dedupeKey);
+
+    result.push({
+      matchIndex,
+      matchLabel: toText(s.matchLabel, ""),
+      betType,
+      pick: {
+        market,
+        selection,
+        odds,
+        reason: toText(p.reason, ""),
+      },
+      stake,
+      potentialWin,
+    });
+  }
+
+  return result;
+}
+
+function findMissingSingleMatchIndexes(
+  singles: BettingPlanSingle[],
+  payloadCount: number,
+): number[] {
+  if (payloadCount === 0) return [];
+
+  const presentIndexes = new Set<number>();
+  for (const single of singles) {
+    if (typeof single.matchIndex === "number") {
+      presentIndexes.add(single.matchIndex);
+    }
+  }
+
+  const missing: number[] = [];
+  for (let i = 0; i < payloadCount; i++) {
+    if (!presentIndexes.has(i)) {
+      missing.push(i);
+    }
+  }
+
+  return missing;
+}
+
 function parseCombinedAnalysisResponse(
   text: string,
-  _payloads: MatchOddsPayload[],
+  payloads: MatchOddsPayload[],
 ): CombinedAnalysisPlan | null {
   try {
     const cleaned = extractJsonObject(text);
@@ -1177,14 +1570,18 @@ function parseCombinedAnalysisResponse(
         return null;
       }
     }
+    const normalizedMatches = parsed.matches.map((m) =>
+      normalizeCombinedMatch(m, "Trận " + m.matchIndex),
+    );
 
     return {
       summary: parsed.summary ?? "",
-      matches: filterTopPicksToTotalsOnly(parsed.matches),
-      parlays: Array.isArray(parsed.parlays) ? parsed.parlays : [],
-      remainingSingles: Array.isArray(parsed.remainingSingles)
-        ? parsed.remainingSingles
-        : [],
+      matches: filterTopPicksToTotalsOnly(normalizedMatches),
+      parlays: sanitizeParlays(parsed.parlays, payloads.length),
+      remainingSingles: sanitizeRemainingSingles(
+        parsed.remainingSingles,
+        payloads.length,
+      ),
     };
   } catch (err) {
     logger.warn(
@@ -1261,6 +1658,46 @@ export async function generateCombinedAnalysis(
       logger.warn(
         `  ! Combined analysis parse failed for primary. Raw (first 1000): ${response.text.slice(0, 1000)}`,
       );
+    } else {
+      const missingIndexes = findMissingMatchIndexes(plan.matches, payloads.length);
+      if (missingIndexes.length > 0) {
+        const missingMatches = missingIndexes
+          .map((i) => `${payloads[i].home} vs ${payloads[i].away}`)
+          .join(", ");
+        logger.warn(
+          `  ! Combined analysis thiếu ${missingIndexes.length}/${payloads.length} trận: ${missingMatches}; trying fallback model`,
+        );
+        throw Object.assign(
+          new Error(
+            `combined response missing ${missingIndexes.length}/${payloads.length} matches`,
+          ),
+          {
+            requestCount,
+            forceFallback: true,
+          },
+        );
+      }
+
+      // Log missing singles coverage (warn only, no fallback)
+      const missingSingleIndexes = findMissingSingleMatchIndexes(
+        plan.remainingSingles,
+        payloads.length,
+      );
+      if (missingSingleIndexes.length > 0) {
+        logger.warn(
+          `  ! remainingSingles thiếu ${missingSingleIndexes.length}/${payloads.length} trận: ${missingSingleIndexes.map((i) => `${payloads[i].home} vs ${payloads[i].away}`).join(", ")}`,
+        );
+      }
+
+      // Log missing xiên 3 coverage (warn only, no fallback)
+      const xien3Count = plan.parlays.filter((p) =>
+        /xiên\s*3/i.test(p.type),
+      ).length;
+      if (payloads.length >= 3 && xien3Count === 0) {
+        logger.warn(
+          `  ! Combined analysis không có xiên 3 nào dù đủ ${payloads.length} trận (yêu cầu ≥3 trận)`,
+        );
+      }
     }
     return plan;
   } catch (primaryError) {
@@ -1318,6 +1755,37 @@ export async function generateCombinedAnalysis(
         logger.warn(
           `  ! Combined analysis parse failed for fallback. Raw (first 1000): ${response.text.slice(0, 1000)}`,
         );
+      } else {
+        const missingIndexes = findMissingMatchIndexes(plan.matches, payloads.length);
+        if (missingIndexes.length > 0) {
+          const missingMatches = missingIndexes
+            .map((i) => `${payloads[i].home} vs ${payloads[i].away}`)
+            .join(", ");
+          logger.warn(
+            `  ! Combined analysis fallback vẫn thiếu ${missingIndexes.length}/${payloads.length} trận sau fallback: ${missingMatches}; trả về plan không đầy đủ`,
+          );
+        }
+
+        // Log missing singles coverage for fallback (warn only)
+        const missingSingleIndexes = findMissingSingleMatchIndexes(
+          plan.remainingSingles,
+          payloads.length,
+        );
+        if (missingSingleIndexes.length > 0) {
+          logger.warn(
+            `  ! remainingSingles thiếu ${missingSingleIndexes.length}/${payloads.length} trận: ${missingSingleIndexes.map((i) => `${payloads[i].home} vs ${payloads[i].away}`).join(", ")}`,
+          );
+        }
+
+        // Log missing xiên 3 coverage for fallback (warn only)
+        const xien3Count = plan.parlays.filter((p) =>
+          /xiên\s*3/i.test(p.type),
+        ).length;
+        if (payloads.length >= 3 && xien3Count === 0) {
+          logger.warn(
+            `  ! Combined analysis không có xiên 3 nào dù đủ ${payloads.length} trận (yêu cầu ≥3 trận)`,
+          );
+        }
       }
       return plan;
     } catch (error) {
