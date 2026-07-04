@@ -256,17 +256,17 @@ describe("odds-compact.ts", () => {
       expect(hcpMarket!.outcomes.length).toBeGreaterThan(0);
     });
 
-    it("should filter out low odds from Goals Over/Under (MIN_TOTALS_PRICE=1.7)", () => {
+    it("should include all odds including low prices from Goals Over/Under", () => {
       const bets: ApiFootballBet[] = [
         {
           id: 1,
           name: "Goals Over/Under",
           bookmakers: [],
           values: [
-            { value: "Over 3.5", odd: "1.5" }, // too low
-            { value: "Under 3.5", odd: "1.6" }, // too low
-            { value: "Over 2.5", odd: "1.8" }, // valid
-            { value: "Under 2.5", odd: "2.0" }, // valid
+            { value: "Over 3.5", odd: "1.5" },
+            { value: "Under 3.5", odd: "1.6" },
+            { value: "Over 2.5", odd: "1.8" },
+            { value: "Under 2.5", odd: "2.0" },
           ],
         },
       ];
@@ -277,19 +277,20 @@ describe("odds-compact.ts", () => {
       );
 
       expect(totalsMarket).toBeDefined();
-      // Should only include 2.5 mốc (both 1.8 and 2.0 >= 1.7)
+      // Should include all points (no price filtering)
       const points = totalsMarket!.outcomes.map((o) => o.point);
-      expect(points).not.toContain(3.5);
+      expect(points).toContain(3.5);
+      expect(points).toContain(2.5);
     });
 
-    it("should always keep 0.5 for team_goals_away even if low odds", () => {
+    it("should include all prices for team_goals_away including 0.5", () => {
       const bets: ApiFootballBet[] = [
         {
           id: 1,
           name: "Total - Away",
           bookmakers: [],
           values: [
-            { value: "Over 0.5", odd: "1.6" }, // below threshold, but should be kept
+            { value: "Over 0.5", odd: "1.6" },
             { value: "Under 0.5", odd: "2.1" },
           ],
         },
@@ -383,8 +384,8 @@ describe("odds-compact.ts", () => {
     });
   });
 
-  describe("compactTotals with low prices", () => {
-    it("should filter out points where all prices < 1.7", () => {
+  describe("compactTotals with all prices included", () => {
+    it("should include all points regardless of price", () => {
       const bets: ApiFootballBet[] = [
         {
           id: 1,
@@ -402,9 +403,9 @@ describe("odds-compact.ts", () => {
         (m) => m.key === "asia_totals" || m.key === "eu_totals",
       );
 
-      // 4.5 should be filtered out
+      // 4.5 should be included (no price filtering)
       const allOutcomes = totalsMarkets.flatMap((m) => m.outcomes);
-      expect(allOutcomes.some((o) => o.point === 4.5)).toBe(false);
+      expect(allOutcomes.some((o) => o.point === 4.5)).toBe(true);
     });
 
     it("should keep point if minimum price >= 1.7", () => {

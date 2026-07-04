@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   extractMatches,
   pickNearestUpcomingDateMatches,
+  pickNearestUpcomingMatch,
   buildOddsPayload,
 } from "../../src/betting/betting.js";
 import * as bettingApi from "../../src/betting/betting-api.js";
@@ -285,6 +286,99 @@ describe("betting.ts", () => {
       expect(result[0].gameId).toBe("1");
       expect(result[1].gameId).toBe("2");
       expect(result[2].gameId).toBe("3");
+    });
+  });
+
+  describe("pickNearestUpcomingMatch", () => {
+    it("should return null for empty input", () => {
+      const result = pickNearestUpcomingMatch([]);
+
+      expect(result).toBeNull();
+    });
+
+    it("should return the only match", () => {
+      const matches = [
+        {
+          gameId: "1",
+          home: "A",
+          away: "B",
+          kickoffUnix: 100,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+      ];
+
+      const result = pickNearestUpcomingMatch(matches);
+
+      expect(result).toEqual(matches[0]);
+    });
+
+    it("should return match with smallest kickoffUnix", () => {
+      const matches = [
+        {
+          gameId: "2",
+          home: "C",
+          away: "D",
+          kickoffUnix: 200,
+          date: "2026-07-05",
+          kickoffTime: "14:00",
+        },
+        {
+          gameId: "1",
+          home: "A",
+          away: "B",
+          kickoffUnix: 100,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "3",
+          home: "E",
+          away: "F",
+          kickoffUnix: 300,
+          date: "2026-07-06",
+          kickoffTime: "16:00",
+        },
+      ];
+
+      const result = pickNearestUpcomingMatch(matches);
+
+      expect(result?.gameId).toBe("1");
+      expect(result?.kickoffUnix).toBe(100);
+    });
+
+    it("should handle matches from different dates", () => {
+      const matches = [
+        {
+          gameId: "3",
+          home: "E",
+          away: "F",
+          kickoffUnix: 300,
+          date: "2026-07-06",
+          kickoffTime: "16:00",
+        },
+        {
+          gameId: "1",
+          home: "A",
+          away: "B",
+          kickoffUnix: 100,
+          date: "2026-07-05",
+          kickoffTime: "12:00",
+        },
+        {
+          gameId: "2",
+          home: "C",
+          away: "D",
+          kickoffUnix: 200,
+          date: "2026-07-05",
+          kickoffTime: "14:00",
+        },
+      ];
+
+      const result = pickNearestUpcomingMatch(matches);
+
+      // Should return the one from 2026-07-05 12:00 (smallest kickoffUnix)
+      expect(result?.gameId).toBe("1");
     });
   });
 

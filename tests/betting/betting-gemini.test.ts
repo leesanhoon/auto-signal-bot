@@ -20,8 +20,8 @@ afterEach(() => {
   delete process.env.BETTING_PICKS_MARKET_SCOPE;
 });
 
-describe("combined analysis — totals-only picks filter", () => {
-  test("a. Lọc bỏ pick không phải tài/xỉu", async () => {
+describe("combined analysis — flexible picks", () => {
+  test("a. Picks array có thể chứa các market khác nhau (không giới hạn tài/xỉu)", async () => {
     const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
     callOpenRouter.mockResolvedValueOnce({
       text: JSON.stringify({
@@ -31,12 +31,15 @@ describe("combined analysis — totals-only picks filter", () => {
             matchIndex: 0,
             matchLabel: "Belgium vs Senegal",
             kickoff: "12:00",
-            totalGoalsPick: {
-              market: "Tổng bàn châu Âu",
-              selection: "Tài 2.5",
-              odds: 1.85,
-              reason: "Strong attacking play",
-            },
+            picks: [
+              {
+                market: "eu_totals",
+                selection: "Over 2.5",
+                odds: 1.85,
+                confidence: 75,
+                reason: "Strong attacking play",
+              },
+            ],
             predictedScore: { score: "2-1", confidence: 65 },
           },
         ],
@@ -55,12 +58,12 @@ describe("combined analysis — totals-only picks filter", () => {
       },
     ]);
 
-    expect(result?.matches[0].totalGoalsPick).not.toBeNull();
-    expect(result?.matches[0].totalGoalsPick?.market).toBe("Tổng bàn châu Âu");
-    expect(result?.matches[0].totalGoalsPick?.selection).toBe("Tài 2.5");
+    expect(result?.matches[0].picks).not.toBeNull();
+    expect(result?.matches[0].picks[0].market).toBe("eu_totals");
+    expect(result?.matches[0].picks[0].selection).toBe("Over 2.5");
   });
 
-  test("b. Tổng góc không được gửi — chỉ tài/xỉu thôi", async () => {
+  test("b. Picks array có thể chứa multiple picks đã xếp hạng theo confidence", async () => {
     const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
     callOpenRouter.mockResolvedValueOnce({
       text: JSON.stringify({
@@ -70,12 +73,15 @@ describe("combined analysis — totals-only picks filter", () => {
             matchIndex: 0,
             matchLabel: "Belgium vs Senegal",
             kickoff: "12:00",
-            totalGoalsPick: {
-              market: "Tổng bàn châu Âu",
-              selection: "Tài 2.5",
-              odds: 1.85,
-              reason: "Goals estimate",
-            },
+            picks: [
+              {
+                market: "eu_totals",
+                selection: "Over 2.5",
+                odds: 1.85,
+                confidence: 75,
+                reason: "Goals estimate",
+              },
+            ],
             predictedScore: { score: "2-0", confidence: 70 },
           },
         ],
@@ -94,11 +100,11 @@ describe("combined analysis — totals-only picks filter", () => {
       },
     ]);
 
-    expect(result?.matches[0].totalGoalsPick?.market).toBe("Tổng bàn châu Âu");
-    expect(result?.matches[0].totalGoalsPick?.selection).toBe("Tài 2.5");
+    expect(result?.matches[0].picks[0].market).toBe("eu_totals");
+    expect(result?.matches[0].picks[0].selection).toBe("Over 2.5");
   });
 
-  test("c. totalGoalsPick có thể là từ Tổng bàn châu Á, châu Âu, hay KQ+Tổng", async () => {
+  test("c. picks có thể là từ các market khác nhau (eu_totals, asia_totals, result_total_goals, v.v.)", async () => {
     const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
     callOpenRouter.mockResolvedValueOnce({
       text: JSON.stringify({
@@ -108,12 +114,15 @@ describe("combined analysis — totals-only picks filter", () => {
             matchIndex: 0,
             matchLabel: "Belgium vs Senegal",
             kickoff: "12:00",
-            totalGoalsPick: {
-              market: "KQ+Tổng",
-              selection: "Home & Tài 2.5",
-              odds: 2.05,
-              reason: "Strong home advantage with goals",
-            },
+            picks: [
+              {
+                market: "result_total_goals",
+                selection: "H-O2.5",
+                odds: 2.05,
+                confidence: 80,
+                reason: "Strong home advantage with goals",
+              },
+            ],
             predictedScore: { score: "2-0", confidence: 75 },
           },
         ],
@@ -132,8 +141,8 @@ describe("combined analysis — totals-only picks filter", () => {
       },
     ]);
 
-    expect(result?.matches[0].totalGoalsPick?.market).toBe("KQ+Tổng");
-    expect(result?.matches[0].totalGoalsPick?.selection).toBe("Home & Tài 2.5");
+    expect(result?.matches[0].picks[0].market).toBe("result_total_goals");
+    expect(result?.matches[0].picks[0].selection).toBe("H-O2.5");
   });
 
   test("d. totalGoalsPick có thể null nếu không rõ edge", async () => {
@@ -170,16 +179,7 @@ describe("combined analysis — totals-only picks filter", () => {
     expect(result?.matches[0].note).toBe("Balanced teams, uncertain");
   });
 
-  test("e. Rollback qua env BETTING_PICKS_MARKET_SCOPE=all cho phép nhận market bất kỳ", async () => {
-    // Set env var before reloading modules
-    process.env.BETTING_PICKS_MARKET_SCOPE = "all";
-
-    // Reset all modules to force reimport with new env var
-    vi.resetModules();
-
-    // Reimport modules with env var set
-    const bettingGeminiReloaded = await import("../../src/betting/betting-gemini.js");
-
+  test("e. Picks array có thể chứa market bất kỳ (không giới hạn như system cũ)", async () => {
     const callOpenRouter = vi.mocked(openrouter.callOpenRouter);
     callOpenRouter.mockResolvedValueOnce({
       text: JSON.stringify({
@@ -189,12 +189,15 @@ describe("combined analysis — totals-only picks filter", () => {
             matchIndex: 0,
             matchLabel: "Belgium vs Senegal",
             kickoff: "12:00",
-            totalGoalsPick: {
-              market: "1X2",
-              selection: "Belgium thắng",
-              odds: 2.1,
-              reason: "Strong team",
-            },
+            picks: [
+              {
+                market: "h2h",
+                selection: "Belgium",
+                odds: 2.1,
+                confidence: 80,
+                reason: "Strong team",
+              },
+            ],
             predictedScore: { score: "2-0", confidence: 72 },
           },
         ],
@@ -203,7 +206,7 @@ describe("combined analysis — totals-only picks filter", () => {
       finishReason: "stop",
     });
 
-    const result = await bettingGeminiReloaded.generateCombinedAnalysis([
+    const result = await bettingGemini.generateCombinedAnalysis([
       {
         gameId: "1",
         home: "Belgium",
@@ -213,8 +216,8 @@ describe("combined analysis — totals-only picks filter", () => {
       },
     ]);
 
-    expect(result?.matches[0].totalGoalsPick?.market).toBe("1X2");
-    expect(result?.matches[0].totalGoalsPick?.selection).toBe("Belgium thắng");
+    expect(result?.matches[0].picks[0].market).toBe("h2h");
+    expect(result?.matches[0].picks[0].selection).toBe("Belgium");
   });
 });
 
@@ -324,24 +327,30 @@ describe("generateCombinedAnalysis — match coverage validation", () => {
             matchIndex: 0,
             matchLabel: "Belgium vs Senegal",
             kickoff: "12:00",
-            totalGoalsPick: {
-              market: "Tổng bàn châu Âu",
-              selection: "Tài 2.5",
-              odds: 1.85,
-              reason: "Strong attack",
-            },
+            picks: [
+              {
+                market: "eu_totals",
+                selection: "Over 2.5",
+                odds: 1.85,
+                confidence: 75,
+                reason: "Strong attack",
+              },
+            ],
             predictedScore: { score: "2-1", confidence: 70 },
           },
           {
             matchIndex: 1,
             matchLabel: "Spain vs Austria",
             kickoff: "14:00",
-            totalGoalsPick: {
-              market: "Tổng bàn châu Âu",
-              selection: "Xỉu 2.5",
-              odds: 1.90,
-              reason: "Defensive match",
-            },
+            picks: [
+              {
+                market: "eu_totals",
+                selection: "Under 2.5",
+                odds: 1.90,
+                confidence: 65,
+                reason: "Defensive match",
+              },
+            ],
             predictedScore: { score: "1-0", confidence: 65 },
           },
         ],
@@ -372,8 +381,8 @@ describe("generateCombinedAnalysis — match coverage validation", () => {
 
     // Verify result has full coverage with correct data
     expect(result?.matches).toHaveLength(2);
-    expect(result?.matches[0].totalGoalsPick?.selection).toBe("Tài 2.5");
-    expect(result?.matches[1].totalGoalsPick?.selection).toBe("Xỉu 2.5");
+    expect(result?.matches[0].picks[0].selection).toBe("Over 2.5");
+    expect(result?.matches[1].picks[0].selection).toBe("Under 2.5");
     expect(result?.matches[0].predictedScore.confidence).toBe(70);
     expect(result?.matches[1].predictedScore.confidence).toBe(65);
     expect(result?.summary).toBe("Tong quan");
@@ -551,7 +560,8 @@ describe("combined analysis prompt — xiên 3 correct score spec", () => {
 
   test("buildCombinedSystemPrompt() must contain key requirements for simplified betting", () => {
     const prompt = bettingGemini.buildCombinedSystemPrompt();
-    expect(prompt).toContain("Tài/Xỉu");
+    expect(prompt).toContain("market");
+    expect(prompt).toContain("picks");
     expect(prompt).toContain("tỉ số chính xác");
     expect(prompt).toContain("predictedScore");
     // Should NOT contain parlay/xiên guidance since it's simplified
@@ -563,11 +573,12 @@ describe("combined analysis prompt — xiên 3 correct score spec", () => {
     // Should include match labels
     expect(prompt).toContain("Portugal vs Croatia");
     expect(prompt).toContain("Spain vs Italy");
-    // Should contain the simplified JSON schema
-    expect(prompt).toContain("totalGoalsPick");
+    // Should contain the new picks array schema
+    expect(prompt).toContain("picks");
     expect(prompt).toContain("predictedScore");
+    expect(prompt).toContain("confidence");
     // Should include example values from the schema
-    expect(prompt).toContain("Tài 2.5");
+    expect(prompt).toContain("H+0.5");
     expect(prompt).toContain("2-1");
   });
 
@@ -575,8 +586,9 @@ describe("combined analysis prompt — xiên 3 correct score spec", () => {
     const prompt = bettingGemini.buildCombinedSystemPrompt();
     expect(prompt).not.toContain("xiên 3");
     expect(prompt).not.toContain("kèo xiên");
-    expect(prompt).toContain("Tài/Xỉu");
+    expect(prompt).toContain("picks");
     expect(prompt).toContain("predictedScore");
+    expect(prompt).toContain("confidence");
   });
 });
 
@@ -674,34 +686,38 @@ describe("parseCombinedAnalysisResponse — match parsing & normalization", () =
     expect(result?.matches[0].predictedScore.confidence).toBe(100);
   });
 
-  test("Test 4: Unit test normalizeCombinedMatchForTest", () => {
+  test("Test 4: Unit test normalizeCombinedMatchForTest with picks array", () => {
     const fullMatch = {
       matchIndex: 0,
       matchLabel: "Belgium vs Senegal",
       kickoff: "12:00",
-      totalGoalsPick: { market: "Tổng bàn châu Âu", selection: "Tài 2.5", odds: 1.85, reason: "Strong attack" },
+      picks: [
+        { market: "eu_totals", selection: "Over 2.5", odds: 1.85, confidence: 75, reason: "Strong attack" },
+        { market: "asia_handicap", selection: "H+0.75", odds: 1.9, confidence: 65, reason: "Home dominance" },
+      ],
       predictedScore: { score: "2-1", confidence: 85 },
       note: "Defensive slip in second half expected",
     };
     const resultFull = bettingGemini.normalizeCombinedMatchForTest(fullMatch, "Trận 0");
     expect(resultFull.matchLabel).toBe("Belgium vs Senegal");
     expect(resultFull.kickoff).toBe("12:00");
-    expect(resultFull.totalGoalsPick).not.toBeNull();
-    expect(resultFull.totalGoalsPick?.market).toBe("Tổng bàn châu Âu");
-    expect(resultFull.totalGoalsPick?.selection).toBe("Tài 2.5");
+    expect(resultFull.picks).toHaveLength(2);
+    expect(resultFull.picks[0].market).toBe("eu_totals");
+    expect(resultFull.picks[0].selection).toBe("Over 2.5");
+    expect(resultFull.picks[0].confidence).toBe(75);
     expect(resultFull.predictedScore.score).toBe("2-1");
     expect(resultFull.predictedScore.confidence).toBe(85);
     expect(resultFull.note).toBe("Defensive slip in second half expected");
 
     const partialMatch = {
       matchIndex: 1,
-      totalGoalsPick: null,
+      picks: [],
       predictedScore: { score: "1-0", confidence: 60 },
     };
     const resultPartial = bettingGemini.normalizeCombinedMatchForTest(partialMatch, "Trận 1");
     expect(resultPartial.matchLabel).toBe("Trận 1");
     expect(resultPartial.kickoff).toBe("");
-    expect(resultPartial.totalGoalsPick).toBeNull();
+    expect(resultPartial.picks).toHaveLength(0);
     expect(resultPartial.predictedScore.score).toBe("1-0");
     expect(resultPartial.predictedScore.confidence).toBe(60);
   });

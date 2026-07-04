@@ -6,7 +6,7 @@ import type {
   MatchAiAnalysis,
   MatchOddsPayload,
 } from "./betting-types.js";
-import { buildOddsPayload, pickNearestUpcomingDateMatches } from "./betting.js";
+import { buildOddsPayload, pickNearestUpcomingMatch } from "./betting.js";
 import { generateCombinedAnalysis } from "./betting-gemini.js";
 import {
   loadRecentSnapshotsByGameIds,
@@ -36,24 +36,15 @@ function buildCombinedMatchAnalysis(
     match: match.matchLabel,
     handicapPick: match.handicapPick,
     totalGoalsPick: match.totalGoalsPick,
+    picks: match.picks,
     predictedScore: match.predictedScore,
     note: match.note,
     summary,
     // Backward compat fields for betting-backtest
     preferredScoreline: match.predictedScore.score,
     scoreConfidence: match.predictedScore.confidence,
-    recommendation: match.totalGoalsPick ? "Có nhận định" : "Đứng ngoài",
+    recommendation: match.picks.length > 0 ? "Có nhận định" : "Đứng ngoài",
     confidence: match.predictedScore.confidence,
-    picks: match.totalGoalsPick
-      ? [
-          {
-            market: match.totalGoalsPick.market,
-            selection: match.totalGoalsPick.selection,
-            odds: match.totalGoalsPick.odds,
-            reason: match.totalGoalsPick.reason,
-          },
-        ]
-      : [],
     keyPoints: [],
     risks: [],
     verificationStatus: "skipped",
@@ -95,9 +86,12 @@ async function saveCombinedAnalysisSnapshots(
 export async function runOddsCheck(): Promise<void> {
   logger.info(`🏆 ${LABEL} - Starting combined analysis...\n`);
 
-  const matches = pickNearestUpcomingDateMatches(await loadUpcomingMatches());
+  const allMatches = await loadUpcomingMatches();
+  const nearestMatch = pickNearestUpcomingMatch(allMatches);
+  const matches = nearestMatch ? [nearestMatch] : [];
+
   logger.info(
-    `✓ ${matches.length} tran chua da cua ngay gan nhat (${matches[0]?.date ?? "-"})\n`,
+    `✓ 1 tran gan nhat sap toi (${nearestMatch?.date ?? "-"})\n`,
   );
   if (matches.length === 0) {
     await sendMessage(

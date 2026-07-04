@@ -31,6 +31,12 @@ export function pickNearestUpcomingDateMatches(matches: MatchInfo[]): MatchInfo[
   return filteredMatches.length >= 3 ? filteredMatches : matches.slice(0, 3);
 }
 
+/** Chọn đúng 1 trận sắp diễn ra gần nhất (kickoffUnix nhỏ nhất). */
+export function pickNearestUpcomingMatch(matches: MatchInfo[]): MatchInfo | null {
+  if (matches.length === 0) return null;
+  return matches.reduce((nearest, m) => (m.kickoffUnix < nearest.kickoffUnix ? m : nearest));
+}
+
 export type OddsFailure = { match: MatchInfo; message: string };
 
 export async function buildOddsPayload(

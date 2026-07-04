@@ -13,6 +13,14 @@ export type TotalGoalsPick = {
   reason?: string;
 };
 
+export type MatchPick = {
+  market: string;
+  selection: string;
+  odds: number;
+  confidence: number;
+  reason?: string;
+};
+
 export type PredictedScore = {
   score: string;
   confidence: number;
@@ -22,6 +30,7 @@ export type MatchAiAnalysis = {
   match: string;
   handicapPick: TotalGoalsPick | null;
   totalGoalsPick: TotalGoalsPick | null;
+  picks: MatchPick[];
   predictedScore: PredictedScore;
   note?: string;
   summary: string;
@@ -30,12 +39,6 @@ export type MatchAiAnalysis = {
   scoreConfidence: number;
   recommendation: string;
   confidence: number;
-  picks: Array<{
-    market: string;
-    selection: string;
-    odds: number;
-    reason?: string;
-  }>;
   keyPoints: string[];
   risks: string[];
   // Verification fields
@@ -52,6 +55,7 @@ export type CombinedAnalysisPlanMatch = {
   kickoff: string;
   handicapPick: TotalGoalsPick | null;
   totalGoalsPick: TotalGoalsPick | null;
+  picks: MatchPick[];
   predictedScore: PredictedScore;
   note?: string;
 };

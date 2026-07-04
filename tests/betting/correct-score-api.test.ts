@@ -55,7 +55,7 @@ describe("extractCorrectScore", () => {
     expect(result[0].score).toBe("2-1");
   });
 
-  test("filters outcomes with price >= 30", () => {
+  test("returns all outcomes without price filtering", () => {
     const bets: ApiFootballBet[] = [
       {
         id: 1,
@@ -71,9 +71,9 @@ describe("extractCorrectScore", () => {
 
     const result = extractCorrectScore(bets);
 
-    expect(result).toHaveLength(2);
-    expect(result.map((o) => o.score)).toEqual(["1-0", "2-2"]);
-    expect(result.map((o) => o.price)).toEqual([5, 29.99]);
+    expect(result).toHaveLength(4);
+    expect(result.map((o) => o.score)).toEqual(["1-0", "2-2", "0-5", "5-5"]);
+    expect(result.map((o) => o.price)).toEqual([5, 29.99, 30, 100]);
   });
 
   test("maps fields correctly: value.value -> score, value.odd -> price (number)", () => {
@@ -96,7 +96,7 @@ describe("extractCorrectScore", () => {
     ]);
   });
 
-  test("handles unparseable odd string (NaN) - filtered out since NaN < 30 is false", () => {
+  test("includes all valid scores even with unparseable odds (NaN becomes NaN)", () => {
     const bets: ApiFootballBet[] = [
       {
         id: 1,
@@ -111,9 +111,10 @@ describe("extractCorrectScore", () => {
 
     const result = extractCorrectScore(bets);
 
-    // N/A parses to NaN, and NaN < 30 is false, so it gets filtered out
-    expect(result).toHaveLength(2);
-    expect(result.map((o) => o.score)).toEqual(["1-0", "0-0"]);
+    // N/A parses to NaN, but now we include all values (NaN is included)
+    expect(result).toHaveLength(3);
+    expect(result.map((o) => o.score)).toEqual(["1-0", "2-1", "0-0"]);
+    expect(result[1].price).toBeNaN();
   });
 
   test("handles mixed case variations of exact score", () => {
@@ -131,7 +132,7 @@ describe("extractCorrectScore", () => {
     expect(result[0].score).toBe("2-0");
   });
 
-  test("returns only outcomes below price threshold when multiple exist", () => {
+  test("returns all outcomes regardless of price", () => {
     const bets: ApiFootballBet[] = [
       {
         id: 1,
@@ -148,7 +149,8 @@ describe("extractCorrectScore", () => {
 
     const result = extractCorrectScore(bets);
 
-    expect(result).toHaveLength(3);
-    expect(result.map((o) => o.score)).toEqual(["0-0", "1-1", "2-2"]);
+    expect(result).toHaveLength(5);
+    expect(result.map((o) => o.score)).toEqual(["0-0", "1-1", "2-2", "3-3", "4-4"]);
+    expect(result.map((o) => o.price)).toEqual([10, 20, 29.5, 50, 100]);
   });
 });

@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   loadRecentSnapshotsByGameIds: vi.fn(),
   getConfiguredBookmaker: vi.fn(),
   pickNearestUpcomingDateMatches: vi.fn(),
+  pickNearestUpcomingMatch: vi.fn(),
 }));
 
 vi.mock("../../src/shared/telegram.js", () => ({ sendMessage: state.sendMessage }));
@@ -18,6 +19,7 @@ vi.mock("../../src/betting/betting-api.js", () => ({ getConfiguredBookmaker: sta
 vi.mock("../../src/betting/betting.js", () => ({
   buildOddsPayload: state.buildOddsPayload,
   pickNearestUpcomingDateMatches: state.pickNearestUpcomingDateMatches,
+  pickNearestUpcomingMatch: state.pickNearestUpcomingMatch,
 }));
 vi.mock("../../src/betting/betting-gemini.js", () => ({
   generateCombinedAnalysis: state.generateCombinedAnalysis,
@@ -69,9 +71,11 @@ describe("betting/odds-runner combined flow", () => {
     state.loadRecentSnapshotsByGameIds.mockReset();
     state.getConfiguredBookmaker.mockReset();
     state.pickNearestUpcomingDateMatches.mockReset();
+    state.pickNearestUpcomingMatch.mockReset();
     state.sendMessage.mockResolvedValue(undefined);
     state.getConfiguredBookmaker.mockReturnValue("bookmaker");
     state.pickNearestUpcomingDateMatches.mockImplementation((matches: unknown[]) => matches);
+    state.pickNearestUpcomingMatch.mockImplementation((matches: any[]) => matches?.[0] ?? null);
     state.loadRecentSnapshotsByGameIds.mockResolvedValue([]);
     state.loadUpcomingMatches.mockResolvedValue([
       {
@@ -105,14 +109,18 @@ describe("betting/odds-runner combined flow", () => {
           matchIndex: 0,
           matchLabel: "Team A vs Team B",
           kickoff: "2026-07-02 12:00",
-          totalGoalsPick: { market: "Tài/Xỉu", selection: "Tài 2.5", odds: 1.85, reason: "Dàn áp" },
+          handicapPick: null,
+          totalGoalsPick: null,
+          picks: [{ market: "eu_totals", selection: "Over 2.5", odds: 1.85, confidence: 75, reason: "Dàn áp" }],
           predictedScore: { score: "2-1", confidence: 65 },
         },
         {
           matchIndex: 1,
           matchLabel: "Team C vs Team D",
           kickoff: "2026-07-02 14:00",
+          handicapPick: null,
           totalGoalsPick: null,
+          picks: [],
           predictedScore: { score: "1-1", confidence: 45 },
         },
       ],

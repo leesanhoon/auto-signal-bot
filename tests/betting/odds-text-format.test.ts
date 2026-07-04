@@ -392,7 +392,8 @@ describe("formatCachedAnalysisMessage", () => {
       correctScore: null,
       analysis: {
         match: "Home vs Away",
-        totalGoalsPick: { market: "Tài/Xỉu", selection: "Tài 2.5", odds: 1.9, reason: "Strong form" },
+        totalGoalsPick: null,
+        handicapPick: null,
         predictedScore: { score: "2-1", confidence: 70 },
         summary: "Home team expected to win comfortably.",
         preferredScoreline: "2-1",
@@ -401,7 +402,9 @@ describe("formatCachedAnalysisMessage", () => {
         confidence: 70,
         keyPoints: [],
         risks: [],
-        picks: [],
+        picks: [
+          { market: "eu_totals", selection: "Over 2.5", odds: 1.9, confidence: 75, reason: "Strong form" },
+        ],
       },
       verifiedConfirmed: null,
       verifiedConfidence: null,
@@ -411,14 +414,20 @@ describe("formatCachedAnalysisMessage", () => {
 
     const text = formatCachedAnalysisMessage([payload], [snapshot]);
 
-    // Overview from summary
-    expect(text).toContain("💡 *Tổng quan:* Home team expected to win comfortably.");
-    // Match analysis block
-    expect(text).toContain("*Home vs Away*");
-    // Tài/Xỉu pick
-    expect(text).toContain("🎯 Tài 2.5 @1.9 — Strong form");
-    // Predicted score
-    expect(text).toContain("⚽ Tỉ số dự đoán: 2-1 (70%)");
+    // Overview from summary with new format
+    expect(text).toContain("💡 *TỔNG QUAN (TỪ CACHE)*");
+    expect(text).toContain("Home team expected to win comfortably.");
+    // Match analysis block with new format
+    expect(text).toContain("🏟️  *Home vs Away*");
+    // Picks section with euro totals - check for the formatted pick line
+    expect(text).toContain("eu_totals");
+    expect(text).toContain("Over 2.5");
+    expect(text).toContain("1.9");
+    expect(text).toContain("Strong form");
+    // Predicted score with new format
+    expect(text).toContain("DỰ ĐOÁN TỈ SỐ");
+    expect(text).toContain("2-1");
+    expect(text).toContain("70%");
   });
 
   test("shows fallback summary and omits picks section when snapshots array is empty", () => {
@@ -432,10 +441,11 @@ describe("formatCachedAnalysisMessage", () => {
 
     const text = formatCachedAnalysisMessage([payload], []);
 
-    // Fallback summary
-    expect(text).toContain("💡 *Tổng quan:* Không có tóm tắt.");
+    // Fallback summary with new format
+    expect(text).toContain("💡 *TỔNG QUAN (TỪ CACHE)*");
+    expect(text).toContain("Không có tóm tắt.");
     // No match picks section
-    expect(text).not.toContain("🎯 *Các kèo được chọn (từ cache)*");
+    expect(text).not.toContain("🏟️  *X vs Y*");
   });
 
   test("skips payload when no snapshot matches its gameId", () => {

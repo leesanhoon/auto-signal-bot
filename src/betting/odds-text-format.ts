@@ -577,7 +577,10 @@ export function formatCombinedAnalysisMessage(
   plan: CombinedAnalysisPlan,
 ): string {
   const sections: string[] = [];
-  sections.push(`💡 *Tổng quan:* ${plan.summary || "Không có tóm tắt."}`);
+
+  // Header with summary
+  sections.push("💡 *TỔNG QUAN*");
+  sections.push(plan.summary || "Không có tóm tắt.");
 
   const matchSections: string[] = [];
   for (const match of plan.matches) {
@@ -585,34 +588,89 @@ export function formatCombinedAnalysisMessage(
     if (!payload) continue;
 
     const lines: string[] = [];
-    lines.push(`*${match.matchLabel}* | ${match.kickoff}`);
 
-    // Handicap pick
-    if (match.handicapPick) {
-      const { selection, odds, reason } = match.handicapPick;
-      lines.push(`📐 Chấp: ${selection} @${odds}`);
-      if (reason) lines.push(`   ✅ ${reason}`);
-    } else {
-      lines.push(`📐 Chấp: Đứng ngoài`);
+    // Match header with divider
+    lines.push("━━━━━━━━━━━━━━━━━━━━━━━━");
+    lines.push(`🏟️  *${match.matchLabel}*`);
+    lines.push(`📅 ${match.kickoff}`);
+    lines.push("━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // Main odds context - Single main pick for each market (1.8-2.3 range)
+    lines.push("");
+    lines.push("📊 *ODDS CHÍNH*");
+
+    const oddsItems: string[] = [];
+
+    // Handicap - tìm mốc tốt nhất trong vùng 1.8-2.3
+    const hcp = findMarket(payload, "asia_handicap");
+    if (hcp?.outcomes.length) {
+      const filtered = hcp.outcomes.filter(o => o.price >= 1.8 && o.price <= 2.3);
+      if (filtered.length > 0) {
+        const points = [...new Set(filtered.map(o => Math.abs(o.point ?? 0)))];
+        for (const pt of points.sort((a, b) => Math.abs(a - 0.75) - Math.abs(b - 0.75))) {
+          const hOutcome = filtered.find(o => o.name === "H" && Math.abs(Math.abs(o.point ?? 0) - pt) < 0.01);
+          const aOutcome = filtered.find(o => o.name === "A" && Math.abs(Math.abs(o.point ?? 0) - pt) < 0.01);
+          if (hOutcome && aOutcome) {
+            const sign = hOutcome.point ? (hOutcome.point > 0 ? "+" : "-") : "+";
+            oddsItems.push(`Chấp: H${sign}${pt} @${hOutcome.price}  |  A${sign === "+" ? "-" : "+"}${pt} @${aOutcome.price}`);
+            break;
+          }
+        }
+      }
     }
 
-    // Tài/Xỉu pick
-    if (match.totalGoalsPick) {
-      const { selection, odds, reason } = match.totalGoalsPick;
-      lines.push(`⚽ Tài/Xỉu: ${selection} @${odds}`);
-      if (reason) lines.push(`   ✅ ${reason}`);
+    // Totals - chỉ lấy mốc 2.5 hoặc 2.0 nếu có
+    const euTot = findMarket(payload, "eu_totals");
+    if (euTot?.outcomes.length) {
+      const validPoints = [2.5, 2.0, 2.75];
+      for (const mainPt of validPoints) {
+        const over = euTot.outcomes.find(o => o.name === "Over" && Math.abs((o.point ?? 0) - mainPt) < 0.01);
+        const under = euTot.outcomes.find(o => o.name === "Under" && Math.abs((o.point ?? 0) - mainPt) < 0.01);
+        if (over && under) {
+          oddsItems.push(`Tài/Xỉu: Tài ${mainPt} @${over.price}  |  Xỉu ${mainPt} @${under.price}`);
+          break;
+        }
+      }
+    }
+
+    if (oddsItems.length > 0) {
+      lines.push(oddsItems.join("\n"));
+    }
+
+    // Picks section with ranking
+    lines.push("");
+    if (match.picks.length > 0) {
+      lines.push(`🎯 *NHẬN ĐỊNH - ${match.picks.length} KÈOS NÊN CHƠI:*`);
+      lines.push("");
+
+      for (let i = 0; i < match.picks.length; i++) {
+        const pick = match.picks[i];
+        const prefix = i === 0 ? "👑 **#1 - CHÍNH THỨC**" : i === 1 ? "💚 **#2 - PHỤ**" : `🔵 **#${i + 1}**`;
+        const confLevel = pick.confidence >= 80 ? "🔥" : pick.confidence >= 70 ? "✅" : "⚠️";
+
+        lines.push(`${prefix}`);
+        lines.push(`${confLevel} Confidence: ${pick.confidence}%`);
+        lines.push(`   📌 ${pick.market}: *${pick.selection}* @ ${pick.odds}`);
+
+        if (pick.reason) {
+          lines.push(`   💬 "${pick.reason}"`);
+        }
+
+        if (i < match.picks.length - 1) lines.push("");
+      }
     } else {
-      lines.push(`⚽ Tài/Xỉu: Đứng ngoài`);
+      lines.push("⚠️  *KHÔNG CÓ KÈO ĐỦ TIN CẬY*");
+      lines.push("   → Nên đứng ngoài và theo dõi thêm");
     }
 
     // Predicted score
-    lines.push(
-      `🎯 Tỉ số: ${match.predictedScore.score} (${match.predictedScore.confidence}%)`,
-    );
+    lines.push("");
+    const scoreIcon = match.predictedScore.confidence >= 70 ? "🎯" : "📊";
+    lines.push(`${scoreIcon} *DỰ ĐOÁN TỈ SỐ:* ${match.predictedScore.score} (${match.predictedScore.confidence}% tự tin)`);
 
     // Note
     if (match.note) {
-      lines.push(`📝 ${match.note}`);
+      lines.push(`📝 *GHI CHÚ:* ${match.note}`);
     }
 
     matchSections.push(lines.join("\n"));
@@ -636,12 +694,13 @@ export function formatCachedAnalysisMessage(
   const snapshotByGameId = new Map(snapshots.map((s) => [s.gameId, s]));
   const sections: string[] = [];
 
-  // Tổng quan từ summary của trận đầu
+  // Header with summary
+  sections.push("💡 *TỔNG QUAN (TỪ CACHE)*");
   const first = snapshots[0];
   if (first?.analysis?.summary) {
-    sections.push(`💡 *Tổng quan:* ${first.analysis.summary}`);
+    sections.push(first.analysis.summary);
   } else {
-    sections.push("💡 *Tổng quan:* Không có tóm tắt.");
+    sections.push("Không có tóm tắt.");
   }
 
   // Danh sách từng trận
@@ -652,34 +711,88 @@ export function formatCachedAnalysisMessage(
     const analysis = snap.analysis;
 
     const lines: string[] = [];
-    lines.push(`*${analysis.match}*`);
 
-    // Handicap pick
-    if (analysis.handicapPick) {
-      const { selection, odds, reason } = analysis.handicapPick;
-      lines.push(`📐 Chấp: ${selection} @${odds}`);
-      if (reason) lines.push(`   ✅ ${reason}`);
-    } else {
-      lines.push(`📐 Chấp: Đứng ngoài`);
+    // Match header with divider
+    lines.push("━━━━━━━━━━━━━━━━━━━━━━━━");
+    lines.push(`🏟️  *${analysis.match}*`);
+    lines.push("━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // Main odds context - Single main pick for each market (1.8-2.3 range)
+    lines.push("");
+    lines.push("📊 *ODDS CHÍNH*");
+
+    const oddsItems: string[] = [];
+
+    // Handicap - tìm mốc tốt nhất trong vùng 1.8-2.3
+    const hcp = findMarket(payload, "asia_handicap");
+    if (hcp?.outcomes.length) {
+      const filtered = hcp.outcomes.filter(o => o.price >= 1.8 && o.price <= 2.3);
+      if (filtered.length > 0) {
+        const points = [...new Set(filtered.map(o => Math.abs(o.point ?? 0)))];
+        for (const pt of points.sort((a, b) => Math.abs(a - 0.75) - Math.abs(b - 0.75))) {
+          const hOutcome = filtered.find(o => o.name === "H" && Math.abs(Math.abs(o.point ?? 0) - pt) < 0.01);
+          const aOutcome = filtered.find(o => o.name === "A" && Math.abs(Math.abs(o.point ?? 0) - pt) < 0.01);
+          if (hOutcome && aOutcome) {
+            const sign = hOutcome.point ? (hOutcome.point > 0 ? "+" : "-") : "+";
+            oddsItems.push(`Chấp: H${sign}${pt} @${hOutcome.price}  |  A${sign === "+" ? "-" : "+"}${pt} @${aOutcome.price}`);
+            break;
+          }
+        }
+      }
     }
 
-    // Tài/Xỉu pick
-    if (analysis.totalGoalsPick) {
-      const { selection, odds, reason } = analysis.totalGoalsPick;
-      lines.push(`⚽ Tài/Xỉu: ${selection} @${odds}`);
-      if (reason) lines.push(`   ✅ ${reason}`);
+    // Totals - chỉ lấy mốc 2.5 hoặc 2.0 nếu có
+    const euTot = findMarket(payload, "eu_totals");
+    if (euTot?.outcomes.length) {
+      const validPoints = [2.5, 2.0, 2.75];
+      for (const mainPt of validPoints) {
+        const over = euTot.outcomes.find(o => o.name === "Over" && Math.abs((o.point ?? 0) - mainPt) < 0.01);
+        const under = euTot.outcomes.find(o => o.name === "Under" && Math.abs((o.point ?? 0) - mainPt) < 0.01);
+        if (over && under) {
+          oddsItems.push(`Tài/Xỉu: Tài ${mainPt} @${over.price}  |  Xỉu ${mainPt} @${under.price}`);
+          break;
+        }
+      }
+    }
+
+    if (oddsItems.length > 0) {
+      lines.push(oddsItems.join("\n"));
+    }
+
+    // Picks section with ranking
+    lines.push("");
+    if (analysis.picks.length > 0) {
+      lines.push(`🎯 *NHẬN ĐỊNH - ${analysis.picks.length} KÈOS NÊN CHƠI:*`);
+      lines.push("");
+
+      for (let i = 0; i < analysis.picks.length; i++) {
+        const pick = analysis.picks[i];
+        const prefix = i === 0 ? "👑 **#1 - CHÍNH THỨC**" : i === 1 ? "💚 **#2 - PHỤ**" : `🔵 **#${i + 1}**`;
+        const confLevel = pick.confidence >= 80 ? "🔥" : pick.confidence >= 70 ? "✅" : "⚠️";
+
+        lines.push(`${prefix}`);
+        lines.push(`${confLevel} Confidence: ${pick.confidence}%`);
+        lines.push(`   📌 ${pick.market}: *${pick.selection}* @ ${pick.odds}`);
+
+        if (pick.reason) {
+          lines.push(`   💬 "${pick.reason}"`);
+        }
+
+        if (i < analysis.picks.length - 1) lines.push("");
+      }
     } else {
-      lines.push(`⚽ Tài/Xỉu: Đứng ngoài`);
+      lines.push("⚠️  *KHÔNG CÓ KÈO ĐỦ TIN CẬY*");
+      lines.push("   → Nên đứng ngoài và theo dõi thêm");
     }
 
     // Predicted score
-    lines.push(
-      `🎯 Tỉ số: ${analysis.predictedScore.score} (${analysis.predictedScore.confidence}%)`,
-    );
+    lines.push("");
+    const scoreIcon = analysis.predictedScore.confidence >= 70 ? "🎯" : "📊";
+    lines.push(`${scoreIcon} *DỰ ĐOÁN TỈ SỐ:* ${analysis.predictedScore.score} (${analysis.predictedScore.confidence}% tự tin)`);
 
     // Note
     if (analysis.note) {
-      lines.push(`📝 ${analysis.note}`);
+      lines.push(`📝 *GHI CHÚ:* ${analysis.note}`);
     }
 
     matchSections.push(lines.join("\n"));

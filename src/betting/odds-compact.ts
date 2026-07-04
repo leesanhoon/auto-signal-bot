@@ -7,24 +7,21 @@ export const NAME_LEGEND =
   "Point trong asia_handicap/asia_totals/eu_totals/result_total_goals/corners_handicap/corners_totals/corners_totals_eu/team_goals_home/team_goals_away giữ nguyên dấu từ nguồn. " +
   "asia_totals/corners_totals là Tài Xỉu Asian (mốc .25/.75, cược chia 2 nửa); eu_totals/corners_totals_eu là Tài Xỉu European (mốc .5, cược nguyên) — 2 cách tính khác nhau, không gộp chung. " +
   "corners_1x2/corners_handicap/corners_totals/corners_totals_eu là kèo phạt góc (Corners 1x2 / Corners Asian Handicap / Corners Over Under Asian / Corners Over Under European). " +
-  "btts (Both Teams Score) là kèo GG/NG. team_goals_home/team_goals_away là Tài Xỉu số bàn thắng riêng của từng đội (Total - Home / Total - Away).";
+  "btts (Both Teams Score) là kèo GG/NG. team_goals_home/team_goals_away là Tài Xỉu số bàn thắng riêng của từng đội (Total - Home / Total - Away). " +
+  "Market không có trong danh sách trên sẽ giữ nguyên tên gốc từ bookmaker (dưới dạng slug).";
 
-const EQUILIBRIUM_PRICE_RANGE = { low: 1.8, high: 2.0 };
-const MIN_TOTALS_PRICE = 1.7;
-/** Mốc handicap "giữa" — luôn giữ (chọn đúng dấu gần equilibrium), không cần xét vùng giá trị. */
+/** Mốc handicap "giữa" — luôn giữ (chọn đúng dấu), không cần xét vùng giá trị. */
 const GOAL_MIDDLE_HANDICAP_LEVELS = [0.75, 1];
-/** Mốc handicap "biên" — chỉ giữ khi odds nằm trong vùng giá trị (equilibrium). */
-const GOAL_EDGE_HANDICAP_LEVELS = [0, 0.25, 1.25];
-/** Mốc Corners HCP — biên độ corner lớn hơn bàn thắng nên dùng mốc riêng, luôn giữ (chọn đúng dấu). */
+/** Mốc Corners HCP — luôn giữ (chọn đúng dấu). */
 const CORNERS_MIDDLE_HANDICAP_LEVELS = [1.5, 2, 2.5, 3.5];
-
-function distanceToRange(price: number, low: number, high: number): number {
-  if (price >= low && price <= high) return 0;
-  return price < low ? low - price : price - high;
-}
 
 function findBet(bets: ApiFootballBet[], name: string): ApiFootballBet | undefined {
   return bets.find((b) => b.name.toLowerCase() === name.toLowerCase());
+}
+
+/** Convert market name to slug (e.g., "First Half Winner" → "first_half_winner") */
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 function compact3Way(bet: ApiFootballBet | undefined): CompactOutcome[] {
@@ -43,12 +40,8 @@ function parseSidePoint(value: string): { side: "H" | "A"; point: number } | nul
 }
 
 /**
- * "Asian Handicap" — mỗi mốc tuyệt đối (level) thường có 2 dòng API mirror nhau (vd point -1 và
- * point +1, mỗi dòng có cả H/A). Chỉ 1 trong 2 dấu là kèo "main" gần equilibrium; dấu còn lại
- * lệch quá xa (gần như 1.0x hoặc rất cao) nên giữ cả 2 sẽ trông như bị đảo chiều. Vì vậy với mỗi
- * level chỉ chọn đúng 1 dấu (gần equilibrium nhất) để giữ.
- * Mốc giữa (level) luôn giữ (đã chọn đúng dấu); mốc biên (goal: 0, 0.25, 1.25) chỉ giữ khi giá
- * nằm trong vùng giá trị (equilibrium).
+ * "Asian Handicap" — giữ tất cả mốc (không lọc theo giá). Mỗi mốc có thể có 2 dòng API mirror (H/A)
+ * nhưng cả 2 đều giữ để cho AI chọn lựa.
  */
 function compactHandicap(bet: ApiFootballBet | undefined, isCorners = false): CompactOutcome[] {
   if (!bet) return [];
@@ -59,43 +52,7 @@ function compactHandicap(bet: ApiFootballBet | undefined, isCorners = false): Co
     })
     .filter((v): v is { side: "H" | "A"; point: number; price: number } => v !== null);
 
-  if (parsed.length === 0) return [];
-
-  const middleLevels = isCorners ? CORNERS_MIDDLE_HANDICAP_LEVELS : GOAL_MIDDLE_HANDICAP_LEVELS;
-  const edgeLevels = isCorners ? [] : GOAL_EDGE_HANDICAP_LEVELS;
-
-  const avgPriceAtPoint = (point: number): number => {
-    const entries = parsed.filter((p) => p.point === point);
-    return entries.reduce((sum, p) => sum + p.price, 0) / entries.length;
-  };
-
-  const pointsByLevel = new Map<number, number[]>();
-  for (const p of parsed) {
-    const level = Math.abs(p.point);
-    const points = pointsByLevel.get(level) ?? [];
-    if (!points.includes(p.point)) points.push(p.point);
-    pointsByLevel.set(level, points);
-  }
-
-  const keepPoints = new Set<number>();
-  for (const [level, points] of pointsByLevel) {
-    if (!middleLevels.includes(level) && !edgeLevels.includes(level)) continue;
-
-    let bestPoint = points[0];
-    let bestDist = distanceToRange(avgPriceAtPoint(bestPoint), EQUILIBRIUM_PRICE_RANGE.low, EQUILIBRIUM_PRICE_RANGE.high);
-    for (const point of points.slice(1)) {
-      const dist = distanceToRange(avgPriceAtPoint(point), EQUILIBRIUM_PRICE_RANGE.low, EQUILIBRIUM_PRICE_RANGE.high);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestPoint = point;
-      }
-    }
-
-    if (edgeLevels.includes(level) && bestDist > 0) continue;
-    keepPoints.add(bestPoint);
-  }
-
-  return parsed.filter((p) => keepPoints.has(p.point)).map((p) => ({ name: p.side, price: p.price, point: p.point }));
+  return parsed.map((p) => ({ name: p.side, price: p.price, point: p.point }));
 }
 
 /** "Over 1.5" / "Under 1.5" -> { side: "Over"|"Under", point: number }. */
@@ -106,11 +63,9 @@ function parseTotalPoint(value: string): { side: "Over" | "Under"; point: number
 }
 
 /**
- * "Goals Over/Under" — chỉ giữ mốc có odds (Over và Under) đều ≥ 1.70, bỏ mốc lệch quá xa.
- * `alwaysKeepPoints` cho phép ép giữ thêm vài mốc cụ thể dù không đạt ngưỡng giá (vd 0.5 cho
- * team_goals_away, vì O0.5/U0.5 luôn cần hiển thị để biết khả năng đội đó trắng tay/ghi bàn).
+ * "Goals Over/Under" — giữ tất cả mốc (không lọc theo giá).
  */
-function compactTotals(bet: ApiFootballBet | undefined, alwaysKeepPoints: number[] = []): CompactOutcome[] {
+function compactTotals(bet: ApiFootballBet | undefined, _alwaysKeepPoints: number[] = []): CompactOutcome[] {
   if (!bet) return [];
   const parsed = bet.values
     .map((v) => {
@@ -119,17 +74,7 @@ function compactTotals(bet: ApiFootballBet | undefined, alwaysKeepPoints: number
     })
     .filter((v): v is { side: "Over" | "Under"; point: number; price: number } => v !== null);
 
-  if (parsed.length === 0) return [];
-
-  const minPriceByPoint = new Map<number, number>();
-  for (const p of parsed) {
-    const existing = minPriceByPoint.get(p.point);
-    if (existing === undefined || p.price < existing) minPriceByPoint.set(p.point, p.price);
-  }
-
-  return parsed
-    .filter((p) => alwaysKeepPoints.includes(p.point) || (minPriceByPoint.get(p.point) ?? 0) >= MIN_TOTALS_PRICE)
-    .map((p) => ({ name: p.side, price: p.price, point: p.point }));
+  return parsed.map((p) => ({ name: p.side, price: p.price, point: p.point }));
 }
 
 /** Mốc .25/.75 là Asian Total (cược chia 2 nửa); mốc .5/.0 là European Total (cược nguyên). */
@@ -183,30 +128,55 @@ function compactBtts(bet: ApiFootballBet | undefined): CompactOutcome[] {
 }
 
 /**
- * Map các bet API-Football sang format compact — chỉ giữ market core cho phân tích S1
- * (H2H, Asian Handicap, Goals Over/Under, KQ+Tổng, Correct Score, Phạt góc, GG/NG). Bỏ H1/H2
- * (độ ưu tiên thấp, không dùng cho main bet S1).
+ * Map các bet API-Football sang format compact — xử lý core market (H2H, Asian Handicap, etc.)
+ * và passthrough các market khác chưa xử lý (H1/H2, v.v.) giữ nguyên tên.
  */
 export function compactOdds(bets: ApiFootballBet[], updateIso: string | undefined, _match: MatchInfo): CompactOdds {
   const markets: CompactMarket[] = [];
+  const processedBetNames = new Set<string>();
 
-  pushIfNotEmpty(markets, "h2h", compact3Way(findBet(bets, "Match Winner")));
-  pushIfNotEmpty(markets, "asia_handicap", compactHandicap(findBet(bets, "Asian Handicap")));
+  // Process known markets
+  const knownMarkets = [
+    { betName: "Match Winner", key: "h2h", processor: compact3Way },
+    { betName: "Asian Handicap", key: "asia_handicap", processor: (b: ApiFootballBet | undefined) => compactHandicap(b) },
+    { betName: "Goals Over/Under", key: null, processor: null }, // Special: split by line type
+    { betName: "Result/Total Goals", key: "result_total_goals", processor: compactResultTotal },
+    { betName: "Both Teams Score", key: "btts", processor: compactBtts },
+    { betName: "Total - Home", key: "team_goals_home", processor: (b: ApiFootballBet | undefined) => compactTotals(b) },
+    { betName: "Total - Away", key: "team_goals_away", processor: (b: ApiFootballBet | undefined) => compactTotals(b) },
+    { betName: "Corners 1x2", key: "corners_1x2", processor: compact3Way },
+    { betName: "Corners Asian Handicap", key: "corners_handicap", processor: (b: ApiFootballBet | undefined) => compactHandicap(b, true) },
+    { betName: "Corners Over Under", key: null, processor: null }, // Special: split by line type
+  ];
 
-  const goalsTotals = splitTotalsByLineType(compactTotals(findBet(bets, "Goals Over/Under")));
-  pushIfNotEmpty(markets, "asia_totals", goalsTotals.asia);
-  pushIfNotEmpty(markets, "eu_totals", goalsTotals.eu);
+  for (const { betName, key, processor } of knownMarkets) {
+    const bet = findBet(bets, betName);
+    if (bet) processedBetNames.add(bet.name.toLowerCase());
 
-  pushIfNotEmpty(markets, "result_total_goals", compactResultTotal(findBet(bets, "Result/Total Goals")));
-  pushIfNotEmpty(markets, "btts", compactBtts(findBet(bets, "Both Teams Score")));
-  pushIfNotEmpty(markets, "team_goals_home", compactTotals(findBet(bets, "Total - Home")));
-  pushIfNotEmpty(markets, "team_goals_away", compactTotals(findBet(bets, "Total - Away"), [0.5]));
-  pushIfNotEmpty(markets, "corners_1x2", compact3Way(findBet(bets, "Corners 1x2")));
-  pushIfNotEmpty(markets, "corners_handicap", compactHandicap(findBet(bets, "Corners Asian Handicap"), true));
+    if (betName === "Goals Over/Under") {
+      const goalsTotals = splitTotalsByLineType(compactTotals(bet));
+      pushIfNotEmpty(markets, "asia_totals", goalsTotals.asia);
+      pushIfNotEmpty(markets, "eu_totals", goalsTotals.eu);
+    } else if (betName === "Corners Over Under") {
+      const cornersTotals = splitTotalsByLineType(compactTotals(bet));
+      pushIfNotEmpty(markets, "corners_totals", cornersTotals.asia);
+      pushIfNotEmpty(markets, "corners_totals_eu", cornersTotals.eu);
+    } else if (key && processor) {
+      pushIfNotEmpty(markets, key, processor(bet));
+    }
+  }
 
-  const cornersTotals = splitTotalsByLineType(compactTotals(findBet(bets, "Corners Over Under")));
-  pushIfNotEmpty(markets, "corners_totals", cornersTotals.asia);
-  pushIfNotEmpty(markets, "corners_totals_eu", cornersTotals.eu);
+  // Passthrough for unknown markets
+  for (const bet of bets) {
+    if (!processedBetNames.has(bet.name.toLowerCase())) {
+      const key = slugify(bet.name);
+      const outcomes: CompactOutcome[] = bet.values.map((v) => ({
+        name: v.value,
+        price: Number(v.odd),
+      }));
+      pushIfNotEmpty(markets, key, outcomes);
+    }
+  }
 
   const updatedUnix = updateIso ? Math.floor(new Date(updateIso).getTime() / 1000) : Math.floor(Date.now() / 1000);
 
