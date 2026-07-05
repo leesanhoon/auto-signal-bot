@@ -24,17 +24,17 @@ tasks/
 
 ### Claude Code Desktop (`.claude/agents/`)
 
-| Agent | Model | Role |
-|-------|-------|------|
-| `@leader` | sonnet (low effort) | Planner: tạo plan.md + task.md, review result.md |
-| `@worker` | haiku (low effort) | Executor: thực thi task.md chính xác, không deviations |
+| Agent     | Model               | Role                                                   |
+| --------- | ------------------- | ------------------------------------------------------ |
+| `@leader` | sonnet (low effort) | Planner: tạo plan.md + task.md, review result.md       |
+| `@worker` | haiku (low effort)  | Executor: thực thi task.md chính xác, không deviations |
 
 ### Hermes Profiles
 
-| Profile | Model | max_turns | Behavior |
-|---------|-------|-----------|----------|
-| **lead** | `anthropic/claude-sonnet-5` (OpenRouter) | 120 | Plans, breaks work into subtasks, reviews. **Không tự spawn subagents.** |
-| **worker** | `anthropic/claude-haiku-4.5` (OpenRouter) | 40 | Executes assigned `task.md` literally. |
+| Profile    | Model                                     | max_turns | Behavior                                                                 |
+| ---------- | ----------------------------------------- | --------- | ------------------------------------------------------------------------ |
+| **lead**   | `anthropic/claude-sonnet-5` (OpenRouter)  | 120       | Plans, breaks work into subtasks, reviews. **Không tự spawn subagents.** |
+| **worker** | `anthropic/claude-haiku-4.5` (OpenRouter) | 40        | Executes assigned `task.md` literally.                                   |
 
 ## Workflow
 
@@ -62,6 +62,7 @@ Lead                                      Worker
 ## Launch
 
 ### Claude Code Desktop
+
 ```bash
 # Leader: lập plan + tạo subtask files
 claude -p "@leader plan: <mô tả>" --allowedTools "Read,Write,Edit,Bash"
@@ -73,6 +74,7 @@ claude -p "@worker execute tasks/<id>/01-*/task.md" --allowedTools "Read,Write,E
 ```
 
 ### Hermes Desktop
+
 ```bash
 # Launch as Lead
 hermes --profile lead
