@@ -1,98 +1,80 @@
 # Multi-Agent Task Queue Protocol
 
-Canonical protocol: **`CLAUDE.md`** (Claude Code Desktop auto-loads it).
-File này là phiên bản tóm tắt có thêm Hermes-specific instructions.
+This project uses a **file-based task queue** to coordinate between a Lead/Planner agent and Worker/Executor agents.
 
 ## Directory Structure
 
 ```
 tasks/
-├── <task-id>/                    # kebab-case, vd. "add-auth-middleware"
-│   ├── plan.md                   # [Lead] Kiến trúc + phân rã subtask
-│   ├── context.md                # [Lead] Shared context (optional)
-│   ├── 01-<subtask-id>/          # Subtask giao cho worker
-│   │   ├── task.md               # [Lead] Task cụ thể, self-contained
-│   │   ├── result.md             # [Worker] Kết quả thực thi
-│   │   ├── review.md             # [Lead] Review kết quả
-│   │   ├── done.md               # [Lead] Approval cuối cùng
-│   │   └── blocked.md            # [Worker] Bị chặn
+├── <task-id>/                    # kebab-case parent task, e.g. "add-auth-middleware"
+│   ├── plan.md                   # [Lead] Detailed architecture plan + subtask breakdown
+│   ├── context.md                # [Lead] Optional shared background / references
+│   ├── review.md                 # [Lead] Final review across all subtasks
+│   ├── done.md                   # [Lead] Final approval
+│   ├── 01-<subtask-id>/          # [Lead] Independently assignable subtask
+│   │   ├── task.md               # [Lead] Specific executable task for one worker profile session
+│   │   ├── result.md             # [Worker] Execution results
+│   │   └── blocked.md            # [Worker] Blocked — needs clarification
 │   └── 02-<subtask-id>/
-│       └── ...
+│       ├── task.md
+│       ├── result.md
+│       └── blocked.md
 ```
 
-## Roles
+## Protocol
 
-### Claude Code Desktop (`.claude/agents/`)
+### Roles
 
-| Agent     | Model               | Role                                                   |
-| --------- | ------------------- | ------------------------------------------------------ |
-| `@leader` | sonnet (low effort) | Planner: tạo plan.md + task.md, review result.md       |
-| `@worker` | haiku (low effort)  | Executor: thực thi task.md chính xác, không deviations |
+| Role | Provider | Model | Effort | Behavior |
+|------|----------|-------|--------|----------|
+| **Lead** | OpenRouter (or `anthropic`/`openai-codex`) | `anthropic/claude-sonnet-5` (or `gpt-5.5`) | medium/high | Plans, breaks work into worker-ready subtasks, reviews, coordinates via files. Does not auto-spawn subagents unless explicitly requested. |
+| **Worker** | OpenRouter (or `openai-codex`) | `anthropic/claude-haiku-4.5` (or `gpt-5.4-mini`) | low | Executes assigned `tasks/<task-id>/<subtask-id>/task.md` exactly as specified. No deviations, no extras. Fast, cheap execution. |
 
-### Hermes Profiles
-
-| Profile    | Model                                     | max_turns | Behavior                                                                 |
-| ---------- | ----------------------------------------- | --------- | ------------------------------------------------------------------------ |
-| **lead**   | `anthropic/claude-sonnet-5` (OpenRouter)  | 120       | Plans, breaks work into subtasks, reviews. **Không tự spawn subagents.** |
-| **worker** | `anthropic/claude-haiku-4.5` (OpenRouter) | 40        | Executes assigned `task.md` literally.                                   |
-
-## Workflow
+### Workflow Steps
 
 ```
-Lead                                      Worker
+Lead                                      Worker profile sessions
+  │                                         
+  ├── Writes parent plan.md                 
+  ├── Breaks plan into subtasks             
+  ├── Creates 01-*/task.md, 02-*/task.md    
+  ├── Marks parallelizable/dependencies     
+  │                                         
+  │                                    ┌──── worker A reads 01-*/task.md
+  │                                    │     executes precisely
+  │                                    ├──── writes 01-*/result.md
+  │                                    │
+  │                                    ┌──── worker B reads 02-*/task.md
+  │                                    │     executes precisely
+  │                                    ├──── writes 02-*/result.md
+  │                                    │
+  ├── Reads all subtask result.md ◄────┘
+  ├── Reviews against plan.md + task.md
+  ├── Writes parent review.md (APPROVED or ISSUES)
   │
-  ├── Writes plan.md
-  ├── Breaks into subtasks
-  ├── Creates 01-*/task.md, 02-*/task.md
+  │                                    ┌──── workers fix only listed issues
+  │                                    ├──── update result.md
   │
-  │                                    ┌── Worker đọc task.md
-  │                                    │   thực thi chính xác
-  │                                    ├── viết result.md
-  │
-  ├── Đọc result.md ◄─────────────────┘
-  ├── Viết review.md (APPROVED / CHANGES_REQUIRED)
-  │
-  │                                    ┌── Worker sửa issues
-  │                                    ├── update result.md
-  │
-  ├── Nếu OK → viết done.md
+  ├── If all issues resolved → write done.md
   └── Done!
 ```
 
-## Launch
-
-### Claude Code Desktop
+## Launch Commands
 
 ```bash
-# Leader: lập plan + tạo subtask files
-claude -p "@leader plan: <mô tả>" --allowedTools "Read,Write,Edit,Bash"
-
-# Worker: thực thi subtask
-claude -p "@worker execute tasks/<id>/01-*/task.md" --allowedTools "Read,Write,Edit,Bash"
-
-# Hoặc dùng Claude Code Desktop GUI: mở project, gõ @leader / @worker
-```
-
-### Hermes Desktop
-
-```bash
-# Launch as Lead
+# Launch as Lead (planner/reviewer)
 hermes --profile lead
 
-# Launch as Worker
+# Launch as Worker (executor)
 hermes --profile worker
 ```
 
-## Rules
+## Rules for Both Agents
 
-1. **Lead:** mỗi plan phải có `## Subtasks` table + `task.md` cho mỗi subtask (trừ khi user yêu cầu single-task plan)
-2. **Chỉ sửa files được task chỉ định**
-3. **Worker:** không bao giờ modify `done.md` — chỉ Lead viết
-4. **Worker:** nếu không chắc → viết `blocked.md`, không đoán
-5. **Lead:** review code theo plan.md + task.md, không chỉ "chạy được là OK"
-6. **Lead:** không tự spawn subagent — chỉ tạo task files; user assign worker riêng
-7. **Worker:** trong fix loop, chỉ sửa đúng issues trong review.md, không thêm gì khác
-
-## File Format
-
-Xem `tasks/.examples/` cho các file mẫu hoặc `CLAUDE.md` cho protocol đầy đủ.
+1. **Lead: every plan must include a `## Subtasks` table and one `task.md` per worker subtask**, unless the user explicitly requests a single-task plan
+2. **Never modify files outside the task directory** unless the task explicitly says so
+3. **Worker: never modify parent `done.md`** — only the Lead writes final approval
+4. **Always read the full task before starting**
+5. **Worker: if unsure, write blocked.md — never guess**
+6. **Lead: always review code against plan.md and each subtask task.md — not just "does it run" but "does it match the architecture"**
+7. **Commit messages: Lead decides when and what to commit**

@@ -120,6 +120,47 @@ export function computeConfidence(
   return (h + t + u) / 3;
 }
 
+/** Tính confidence riêng cho hàng đơn vị với trọng số 0.40. */
+export function computeUnitsConfidence(
+  stats: DigitPositionStats,
+  unitsDigit: string,
+): number {
+  const u = findRatio(stats.units, unitsDigit);
+  return u * 0.40;
+}
+
+/** Tính weighted confidence: h*0.25 + t*0.35 + u*0.40. */
+export function computeWeightedConfidence(
+  stats: DigitPositionStats,
+  hundredsDigit: string,
+  tensDigit: string,
+  unitsDigit: string,
+): number {
+  const h = findRatio(stats.hundreds, hundredsDigit);
+  const t = findRatio(stats.tens, tensDigit);
+  const u = findRatio(stats.units, unitsDigit);
+  return h * 0.25 + t * 0.35 + u * 0.40;
+}
+
+/** Tính trend score cho hàng đơn vị dựa trên 5 kỳ gần nhất. */
+export function computeUnitsTrendScore(
+  records: LotteryDrawRecord[],
+  targetUnits: string,
+): number {
+  const recentRecords = records.slice(-5);
+  if (recentRecords.length === 0) return 0;
+
+  let matches = 0;
+  for (const record of recentRecords) {
+    const nums = [...extractNums(record.prizes)];
+    if (nums.some((n) => n.length >= 3 && n[2] === targetUnits)) {
+      matches++;
+    }
+  }
+
+  return matches / recentRecords.length;
+}
+
 function formatStatsLine(
   label: string,
   stats: Array<{ digit: string; count: number; ratio: number }>,
@@ -220,8 +261,8 @@ function normalizePredictions(
     // Reconstruct number from digits — trust code, not AI's "number" field
     const reconstructedNumber = hundredsDigit + tensDigit + unitsDigit;
 
-    // Compute confidence from real stats — trust code, not AI's "confidence" field
-    const confidence = computeConfidence(stats, hundredsDigit, tensDigit, unitsDigit);
+    // Compute weighted confidence from real stats — trust code, not AI's "confidence" field
+    const confidence = computeWeightedConfidence(stats, hundredsDigit, tensDigit, unitsDigit);
 
     const reason = toText((item as { reason?: unknown }).reason);
     if (!reason) continue;

@@ -235,8 +235,9 @@ describe("lottery/lottery-ai-predict", () => {
     expect(result[0].hundredsDigit).toBe("1");
     expect(result[0].tensDigit).toBe("8");
     expect(result[0].unitsDigit).toBe("5");
-    // confidence computed from stats: h=1→0.5, t=8→0 (not in data), u=5→0 (not in data, units are 3,6) → avg = 0.166...
-    expect(result[0].confidence).toBeCloseTo(1 / 6, 4);
+    // confidence computed from stats: h=1→0.5, t=8→0 (not in data), u=5→0 (not in data, units are 3,6)
+    // weighted: h*0.25 + t*0.35 + u*0.40 = 0.5*0.25 + 0*0.35 + 0*0.40 = 0.125
+    expect(result[0].confidence).toBeCloseTo(0.125, 4);
   });
 
   test("predictTopNumbersAI filters out predictions with non-digit hundredsDigit/tensDigit/unitsDigit", async () => {
@@ -311,6 +312,62 @@ describe("lottery/lottery-ai-predict", () => {
 
     // Digit "9" not in any position → ratio=0, so (0 + 0 + 0) / 3 = 0
     const result = lotteryAiPredict.computeConfidence(stats, "9", "9", "9");
+    expect(result).toBe(0);
+  });
+
+  test("computeWeightedConfidence applies correct weights: 0.25/0.35/0.40", () => {
+    const stats = {
+      hundreds: [{ digit: "1", count: 5, ratio: 0.5 }],
+      tens: [{ digit: "8", count: 4, ratio: 0.4 }],
+      units: [{ digit: "5", count: 3, ratio: 0.3 }],
+    };
+    // 0.5*0.25 + 0.4*0.35 + 0.3*0.40 = 0.125 + 0.14 + 0.12 = 0.385
+    const result = lotteryAiPredict.computeWeightedConfidence(stats, "1", "8", "5");
+    expect(result).toBeCloseTo(0.385, 4);
+  });
+
+  test("computeUnitsConfidence returns units ratio * 0.40", () => {
+    const stats = {
+      hundreds: [],
+      tens: [],
+      units: [{ digit: "7", count: 2, ratio: 0.25 }],
+    };
+    const result = lotteryAiPredict.computeUnitsConfidence(stats, "7");
+    expect(result).toBeCloseTo(0.1, 4);
+  });
+
+  test("computeUnitsTrendScore returns correct trend score", () => {
+    const records = [
+      {
+        date: "2026-07-01",
+        weekday: 3,
+        region: "mien-bac" as const,
+        province: "Hà Nội",
+        prizes: { db: "00123", g1: "00456", g2: [], g3: [], g4: [], g5: [], g6: [], g7: [], g8: [] },
+      },
+      {
+        date: "2026-07-02",
+        weekday: 4,
+        region: "mien-bac" as const,
+        province: "Hà Nội",
+        prizes: { db: "00789", g1: "", g2: [], g3: [], g4: [], g5: [], g6: [], g7: [], g8: [] },
+      },
+      {
+        date: "2026-07-03",
+        weekday: 5,
+        region: "mien-bac" as const,
+        province: "Hà Nội",
+        prizes: { db: "00123", g1: "", g2: [], g3: [], g4: [], g5: [], g6: [], g7: [], g8: [] },
+      },
+    ];
+
+    // units 3 appears in 2 out of 3 recent records → 2/3 = 0.666...
+    const result = lotteryAiPredict.computeUnitsTrendScore(records, "3");
+    expect(result).toBeCloseTo(2 / 3, 4);
+  });
+
+  test("computeUnitsTrendScore returns 0 for empty records", () => {
+    const result = lotteryAiPredict.computeUnitsTrendScore([], "5");
     expect(result).toBe(0);
   });
 });
