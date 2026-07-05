@@ -1,6 +1,4 @@
 import { withConfiguredRateLimit } from "../shared/rate-limit.js";
-import { createLogger } from "../shared/logger.js";
-import type { MatchPrediction } from "./betting-types.js";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 const API_FOOTBALL_RATE_LIMIT = {
@@ -144,76 +142,4 @@ export async function fetchFixtureResult(fixtureId: string): Promise<FixtureResu
     goalsHome: entry.goals?.home ?? null,
     goalsAway: entry.goals?.away ?? null,
   };
-}
-
-const logger = createLogger("betting:betting-api");
-let lastPredictionErrorMessage = "";
-
-type ApiPredictionResponse = {
-  predictions?: {
-    winner?: { name: string; comment: string } | null;
-    percent?: { home: string; draw: string; away: string };
-  };
-  teams?: {
-    home?: {
-      last_5?: {
-        form?: string;
-        goals?: {
-          for?: { total?: number; average?: string };
-          against?: { total?: number; average?: string };
-        };
-      };
-    };
-    away?: {
-      last_5?: {
-        form?: string;
-        goals?: {
-          for?: { total?: number; average?: string };
-          against?: { total?: number; average?: string };
-        };
-      };
-    };
-  };
-  comparison?: Record<string, { home: string; away: string }>;
-};
-
-/**
- * Lấy prediction data (phong độ, so sánh, dự đoán kết quả) cho fixture.
- * Trả về null nếu free plan chặn hoặc lỗi. Logs new/different errors.
- */
-export async function fetchPredictions(fixtureId: string): Promise<MatchPrediction | null> {
-  try {
-    const json = await fetchJson(`/predictions?fixture=${fixtureId}`);
-    const entry = json.response?.[0] as ApiPredictionResponse | undefined;
-    if (!entry) return null;
-
-    const homeForm = entry.teams?.home?.last_5?.form ?? "";
-    const awayForm = entry.teams?.away?.last_5?.form ?? "";
-    // Extract average values from nested goals object
-    const homeGoalsFor = entry.teams?.home?.last_5?.goals?.for?.average ?? "";
-    const homeGoalsAgainst = entry.teams?.home?.last_5?.goals?.against?.average ?? "";
-    const awayGoalsFor = entry.teams?.away?.last_5?.goals?.for?.average ?? "";
-    const awayGoalsAgainst = entry.teams?.away?.last_5?.goals?.against?.average ?? "";
-    const comparison = entry.comparison ?? {};
-
-    return {
-      winner: entry.predictions?.winner ?? null,
-      percent: entry.predictions?.percent ?? { home: "", draw: "", away: "" },
-      homeForm,
-      awayForm,
-      homeGoalsFor,
-      homeGoalsAgainst,
-      awayGoalsFor,
-      awayGoalsAgainst,
-      comparison,
-    };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    // Log only if this is a new/different error (not just repeat of same error)
-    if (errorMsg !== lastPredictionErrorMessage) {
-      lastPredictionErrorMessage = errorMsg;
-      logger.warn(`  ⚠ Không lấy được predictions (free plan hoặc lỗi): ${errorMsg}`);
-    }
-    return null;
-  }
 }

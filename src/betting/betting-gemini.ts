@@ -30,7 +30,6 @@ const ANALYZE_TIMEOUT_MS = parsePositiveEnv(
   75_000,
 );
 const MIN_PICK_ODDS = parsePositiveEnv("BETTING_MIN_PICK_ODDS", 1.8);
-const ANALYZE_WEB_RESULTS = 3;
 const MAX_ANALYZE_TOKENS = 1_400;
 
 type RequestRunResult = {
@@ -244,8 +243,7 @@ const COMBINED_TOKENS = 5_000;
 export function buildCombinedSystemPrompt(): string {
   return [
     "Bạn là chuyên gia phân tích odds bóng đá.",
-    "Dưới đây là raw odds cho các trận đấu, kèm theo dữ liệu ngữ cảnh trận đấu (phong độ, so sánh đội, dự đoán).",
-    "Kết hợp dữ liệu odds VÀ ngữ cảnh trận đấu để phân tích. Nếu không có dữ liệu ngữ cảnh, chỉ dựa vào odds.",
+    "Dưới đây là raw odds cho các trận đấu. Phân tích hoàn toàn dựa trên dữ liệu odds (không có dữ liệu ngữ cảnh khác, không tự tra cứu hay search web).",
     "",
     "YÊU CẦU cho MỖI trận:",
     "1. Xem xét TẤT CẢ market có trong dữ liệu (asia_handicap, asia_totals, eu_totals, result_total_goals, btts, team_goals, corners, v.v., không giới hạn).",
@@ -474,13 +472,11 @@ export async function generateCombinedAnalysis(
     responseFormat: { type: "json_object" },
     timeoutMs: COMBINED_TIMEOUT_MS,
     reasoning: { effort: getConfiguredReasoningEffort("medium") },
-    plugins: [{ id: "web", max_results: 3 }],
   };
 
   const fallbackRequest: OpenRouterRequest = {
     ...primaryRequest,
     model: FALLBACK_MODEL,
-    plugins: undefined,
   };
 
   try {

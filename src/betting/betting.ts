@@ -1,6 +1,6 @@
-import { fetchFixtureOdds, fetchPredictions } from "./betting-api.js";
+import { fetchFixtureOdds } from "./betting-api.js";
 import { extractCorrectScore } from "./correct-score-api.js";
-import type { ApiFootballFixture, MatchInfo, MatchOddsPayload, MatchPrediction } from "./betting-types.js";
+import type { ApiFootballFixture, MatchInfo, MatchOddsPayload } from "./betting-types.js";
 import { compactOdds } from "./odds-compact.js";
 import { vnDateStr, vnTimeStr } from "../shared/vn-time.js";
 import { createLogger } from "../shared/logger.js";
@@ -54,11 +54,7 @@ export async function buildOddsPayload(
 ): Promise<{ payload: MatchOddsPayload[]; failures: OddsFailure[] }> {
   const results = await Promise.allSettled(
     matches.map(async (match) => {
-      // Run API calls in parallel: odds + predictions
-      const [fixtureOdds, prediction] = await Promise.all([
-        fetchFixtureOdds(match.gameId),
-        fetchPredictions(match.gameId),
-      ]);
+      const fixtureOdds = await fetchFixtureOdds(match.gameId);
 
       if (!fixtureOdds || fixtureOdds.bets.length === 0) {
         throw new Error("Không có bookmaker nào cung cấp odds cho trận này");
@@ -68,12 +64,11 @@ export async function buildOddsPayload(
       const correctScore = extractCorrectScore(fixtureOdds.bets);
 
       logger.info(
-        `  ✓ Lấy kèo (${odds.markets.length} market${correctScore.length > 0 ? " + Correct Score" : ""}${prediction ? " + Predictions" : ""}) ` +
+        `  ✓ Lấy kèo (${odds.markets.length} market${correctScore.length > 0 ? " + Correct Score" : ""}) ` +
           `từ ${fixtureOdds.bookmakerName}: ${match.home} vs ${match.away}`,
       );
       const payload: MatchOddsPayload = { ...match, odds };
       if (correctScore.length > 0) payload.correctScore = correctScore;
-      if (prediction) payload.prediction = prediction;
       return payload;
     }),
   );
