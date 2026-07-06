@@ -105,6 +105,11 @@ describe("lottery/lottery-ensemble-predict", () => {
         pred111!.breakdown.regression! * weights.regression) /
       (weights.ai + weights.stats + weights.regression);
     expect(pred111!.confidence).toBeCloseTo(expectedScore, 5);
+
+    // Reason should contain detailed stats and regression info (not generic labels)
+    expect(pred111!.reason).toContain("Thống kê:");
+    expect(pred111!.reason).toContain("Hồi quy:");
+    expect(pred111!.reason).toMatch(/%/); // Contains percentage values
   });
 
   test("predictTopNumbersEnsemble continues when AI fails", async () => {
@@ -498,7 +503,7 @@ describe("lottery/lottery-ensemble-predict", () => {
 
     // Should have AI reason + stats, but NOT regression
     expect(pred555!.reason).toContain("AI");
-    expect(pred555!.reason).toContain("tần suất thống kê");
+    expect(pred555!.reason).toContain("Thống kê:");
     // Regression should NOT contribute — this test verifies reason without trailing separator
     expect(pred555!.breakdown.regression).toBeUndefined();
     // Most importantly: reason should NOT end with "; " or other separator (no trailing punctuation)
@@ -578,5 +583,141 @@ describe("lottery/lottery-ensemble-predict", () => {
     const pred = result[0]!;
     expect(pred.reason).toBeDefined();
     expect(pred.reason.length).toBeGreaterThan(0);
+  });
+
+  test("predictTopNumbersEnsemble includes detailed stats reason with specific digit/percentage", async () => {
+    const records: LotteryDrawRecord[] = [
+      {
+        date: "2026-07-01",
+        weekday: 3,
+        region: "mien-bac",
+        province: "Hà Nội",
+        prizes: {
+          db: "00111",
+          g1: "00111",
+          g2: ["00111"],
+          g3: [],
+          g4: [],
+          g5: [],
+          g6: [],
+          g7: [],
+          g8: [],
+        },
+      },
+      {
+        date: "2026-07-02",
+        weekday: 4,
+        region: "mien-bac",
+        province: "Hà Nội",
+        prizes: {
+          db: "00111",
+          g1: "00111",
+          g2: ["00111"],
+          g3: [],
+          g4: [],
+          g5: [],
+          g6: [],
+          g7: [],
+          g8: [],
+        },
+      },
+      {
+        date: "2026-07-03",
+        weekday: 5,
+        region: "mien-bac",
+        province: "Hà Nội",
+        prizes: {
+          db: "00222",
+          g1: "00222",
+          g2: ["00222"],
+          g3: [],
+          g4: [],
+          g5: [],
+          g6: [],
+          g7: [],
+          g8: [],
+        },
+      },
+    ];
+
+    // Spy on regression to return empty so only stats contributes
+    vi.spyOn(regressionPredict, "predictTopNumbersRegression").mockReturnValueOnce([]);
+    state.predictAI.mockResolvedValueOnce([]);
+
+    const result = await ensemblePredict.predictTopNumbersEnsemble(records, "mien-bac", 3, 3);
+
+    expect(result.length).toBeGreaterThan(0);
+    for (const pred of result) {
+      expect(pred.reason).toContain("Thống kê:");
+      expect(pred.reason).toMatch(/\d+\.\d+%/); // Has percentage with decimal
+    }
+  });
+
+  test("predictTopNumbersEnsemble includes detailed regression reason with specific digit/percentage", async () => {
+    const records: LotteryDrawRecord[] = [
+      {
+        date: "2026-07-01",
+        weekday: 3,
+        region: "mien-bac",
+        province: "Hà Nội",
+        prizes: {
+          db: "00111",
+          g1: "00111",
+          g2: ["00111"],
+          g3: [],
+          g4: [],
+          g5: [],
+          g6: [],
+          g7: [],
+          g8: [],
+        },
+      },
+      {
+        date: "2026-07-02",
+        weekday: 4,
+        region: "mien-bac",
+        province: "Hà Nội",
+        prizes: {
+          db: "00111",
+          g1: "00111",
+          g2: ["00111"],
+          g3: [],
+          g4: [],
+          g5: [],
+          g6: [],
+          g7: [],
+          g8: [],
+        },
+      },
+      {
+        date: "2026-07-03",
+        weekday: 5,
+        region: "mien-bac",
+        province: "Hà Nội",
+        prizes: {
+          db: "00333",
+          g1: "00333",
+          g2: ["00333"],
+          g3: [],
+          g4: [],
+          g5: [],
+          g6: [],
+          g7: [],
+          g8: [],
+        },
+      },
+    ];
+
+    // Spy on stats to return empty so only regression contributes
+    vi.spyOn(statsPredict, "predictTopNumbersStats").mockReturnValueOnce([]);
+    state.predictAI.mockResolvedValueOnce([]);
+
+    const result = await ensemblePredict.predictTopNumbersEnsemble(records, "mien-bac", 3, 3);
+
+    expect(result.length).toBeGreaterThan(0);
+    for (const pred of result) {
+      expect(pred.reason).toContain("Hồi quy:");
+      expect(pred.reason).toMatch(/\d+\.\d+%/); // Has percentage with decimal
+    }
   });
 });

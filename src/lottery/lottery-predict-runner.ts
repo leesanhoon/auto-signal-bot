@@ -42,6 +42,15 @@ function vnDateOffset(offsetDays: number): {
   return { dateStr: vnNow.toISOString().slice(0, 10), weekday: vnNow.getDay() };
 }
 
+/** Giờ hiện tại theo giờ Việt Nam, định dạng HH:mm. */
+function vnTimeNow(): string {
+  return new Date().toLocaleTimeString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Đã có kết quả thật hôm nay của miền này chưa — dùng cache trước, scrape fallback.
  * Cache lưu dạng (date, region) → drawn=true. Nếu chưa có kết quả KHÔNG cache false
  * (vì giờ quay số dao động), để lần sau thử scrape lại. */
@@ -95,6 +104,7 @@ const RANK_MEDAL = ["🥇", "🥈", "🥉"];
 /** Dự đoán AI top 3 số dễ ra mỗi miền — mỗi miền tự tính đúng ngày/thứ mục tiêu (hôm nay hoặc ngày mai nếu đã quay xong). */
 export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Promise<void> {
   const today = vnDateOffset(0);
+  const runTime = vnTimeNow();
   logger.info(
     `🔮 Lottery Predictor — chạy ngày ${today.dateStr} (${WEEKDAY_LABELS[today.weekday]})\n`,
   );
@@ -203,7 +213,7 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
     anyPrediction = true;
 
     lines.push("━━━━━━━━━━━━━━━");
-    lines.push(`${REGION_LABELS[result.region]} — ${result.weekdayLabel}, ${result.target.dateStr}`);
+    lines.push(`${REGION_LABELS[result.region]} — ${result.weekdayLabel}, ${result.target.dateStr} (dự đoán lúc ${runTime})`);
     lines.push(
       `_(${result.periodCount} kỳ ${result.weekdayLabel.toLowerCase()} đã thống kê${result.usedCache ? ", dùng cache" : ""})_`,
     );
@@ -222,6 +232,17 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
       if (p.breakdown.regression !== undefined) {
         parts.push(`Hồi quy ${(p.breakdown.regression * 100).toFixed(0)}%`);
       }
+      // Consensus flag
+      const methodCount = [p.breakdown.ai, p.breakdown.stats, p.breakdown.regression].filter(
+        (v) => v !== undefined,
+      ).length;
+      if (methodCount === 3) {
+        parts.push("🔥 3/3 pp đồng thuận");
+      } else if (methodCount === 2) {
+        parts.push("2/3 pp đồng thuận");
+      } else if (methodCount === 1) {
+        parts.push("⚠️ chỉ 1/3 pp");
+      }
       if (parts.length > 0) {
         lines.push(`_   ↳ ${parts.join(" · ")}_`);
       }
@@ -238,6 +259,7 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
   }
 
   lines.push("━━━━━━━━━━━━━━━");
+  lines.push("_💡 % tin cậy = trung bình có trọng số giữa AI/Thống kê/Hồi quy; số có nhiều phương pháp đồng thuận hơn thường đáng tin hơn dù % hiển thị tương đương._");
   lines.push("⚠️ _Chỉ mang tính tham khảo thống kê, xổ số là ngẫu nhiên._");
   await sendMessage(lines.join("\n"));
   logger.info("\n✅ Hoàn tất.");

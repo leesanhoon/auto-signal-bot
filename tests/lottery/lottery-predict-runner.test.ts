@@ -120,9 +120,16 @@ describe("lottery/lottery-predict-runner", () => {
     expect(state.predictTopNumbersAI).toHaveBeenCalledTimes(3);
     expect(state.savePredictions).toHaveBeenCalledTimes(2);
     expect(state.sendMessage).toHaveBeenCalledTimes(1);
-    expect(String(state.sendMessage.mock.calls[0][0])).toContain("123");
-    expect(String(state.sendMessage.mock.calls[0][0])).toContain("91% tin cậy");
-    expect(String(state.sendMessage.mock.calls[0][0])).toContain("DỰ ĐOÁN XỔ SỐ");
+    const message = String(state.sendMessage.mock.calls[0][0]);
+    expect(message).toContain("123");
+    expect(message).toContain("91% tin cậy");
+    expect(message).toContain("DỰ ĐOÁN XỔ SỐ");
+    // Consensus flag: all 3 methods present → 3/3
+    expect(message).toContain("3/3 pp đồng thuận");
+    // Header contains time (HH:mm format, VN time)
+    expect(message).toMatch(/dự đoán lúc \d{2}:\d{2}/);
+    // Footer has legend about % meaning
+    expect(message).toContain("% tin cậy = trung bình có trọng số");
   });
 
   test("runs regions in parallel and preserves Telegram ordering", async () => {

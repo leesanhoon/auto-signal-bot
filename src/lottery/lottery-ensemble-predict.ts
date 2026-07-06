@@ -1,9 +1,9 @@
 import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
 import type { AiNumberPrediction } from "./lottery-ai-predict.js";
 import { predictTopNumbersAI } from "./lottery-ai-predict.js";
-import type { StatNumberPrediction } from "./lottery-stats-predict.js";
+import type { StatDigitDetail, StatNumberPrediction } from "./lottery-stats-predict.js";
 import { predictTopNumbersStats } from "./lottery-stats-predict.js";
-import type { RegressionNumberPrediction } from "./lottery-regression-predict.js";
+import type { RegressionDigitDetail, RegressionNumberPrediction } from "./lottery-regression-predict.js";
 import { predictTopNumbersRegression } from "./lottery-regression-predict.js";
 import { createLogger } from "../shared/logger.js";
 
@@ -82,12 +82,22 @@ export async function predictTopNumbersEnsemble(
     throw new Error("Ensemble: cả 3 phương pháp đều không tạo được dự đoán");
   }
 
-  // Build map of number -> breakdown + reason
+  // Build map of number -> breakdown + reason + details
   const candidateMap = new Map<
     string,
     {
       breakdown: MethodBreakdown;
       aiReason?: string;
+      statsDetail?: {
+        hundredsDetail: StatDigitDetail;
+        tensDetail: StatDigitDetail;
+        unitsDetail: StatDigitDetail;
+      };
+      regressionDetail?: {
+        hundredsDetail: RegressionDigitDetail;
+        tensDetail: RegressionDigitDetail;
+        unitsDetail: RegressionDigitDetail;
+      };
     }
   >();
 
@@ -111,6 +121,11 @@ export async function predictTopNumbersEnsemble(
     for (const pred of statsResults) {
       const existing = candidateMap.get(pred.number) || { breakdown: {} };
       existing.breakdown.stats = pred.confidence;
+      existing.statsDetail = {
+        hundredsDetail: pred.hundredsDetail,
+        tensDetail: pred.tensDetail,
+        unitsDetail: pred.unitsDetail,
+      };
       candidateMap.set(pred.number, existing);
     }
   }
@@ -120,6 +135,11 @@ export async function predictTopNumbersEnsemble(
     for (const pred of regressionResults) {
       const existing = candidateMap.get(pred.number) || { breakdown: {} };
       existing.breakdown.regression = pred.confidence;
+      existing.regressionDetail = {
+        hundredsDetail: pred.hundredsDetail,
+        tensDetail: pred.tensDetail,
+        unitsDetail: pred.unitsDetail,
+      };
       candidateMap.set(pred.number, existing);
     }
   }
@@ -133,7 +153,23 @@ export async function predictTopNumbersEnsemble(
   // Calculate final scores
   const predictions: EnsembleNumberPrediction[] = [];
 
-  for (const [number, { breakdown, aiReason }] of candidateMap) {
+  function formatStatsReason(statsDetail: {
+    hundredsDetail: StatDigitDetail;
+    tensDetail: StatDigitDetail;
+    unitsDetail: StatDigitDetail;
+  }): string {
+    return `Thống kê: hàng trăm=${statsDetail.hundredsDetail.digit} (tần suất ${(statsDetail.hundredsDetail.weightedFreq * 100).toFixed(1)}%), hàng chục=${statsDetail.tensDetail.digit} (${(statsDetail.tensDetail.weightedFreq * 100).toFixed(1)}%), hàng đơn vị=${statsDetail.unitsDetail.digit} (${(statsDetail.unitsDetail.weightedFreq * 100).toFixed(1)}%)`;
+  }
+
+  function formatRegressionReason(regressionDetail: {
+    hundredsDetail: RegressionDigitDetail;
+    tensDetail: RegressionDigitDetail;
+    unitsDetail: RegressionDigitDetail;
+  }): string {
+    return `Hồi quy: hàng trăm=${regressionDetail.hundredsDetail.digit} (dự báo ${(regressionDetail.hundredsDetail.predictedRatio * 100).toFixed(1)}%), hàng chục=${regressionDetail.tensDetail.digit} (${(regressionDetail.tensDetail.predictedRatio * 100).toFixed(1)}%), hàng đơn vị=${regressionDetail.unitsDetail.digit} (${(regressionDetail.unitsDetail.predictedRatio * 100).toFixed(1)}%)`;
+  }
+
+  for (const [number, { breakdown, aiReason, statsDetail, regressionDetail }] of candidateMap) {
     // Renormalize weights based on which methods contributed to this number
     const activeWeights = {
       ai: breakdown.ai !== undefined ? ENSEMBLE_WEIGHTS.ai : 0,
@@ -167,11 +203,11 @@ export async function predictTopNumbersEnsemble(
     if (aiReason) {
       reasonParts.push(`AI: ${aiReason}`);
     }
-    if (breakdown.stats !== undefined) {
-      reasonParts.push("tần suất thống kê");
+    if (breakdown.stats !== undefined && statsDetail) {
+      reasonParts.push(formatStatsReason(statsDetail));
     }
-    if (breakdown.regression !== undefined) {
-      reasonParts.push("xu hướng hồi quy tuyến tính");
+    if (breakdown.regression !== undefined && regressionDetail) {
+      reasonParts.push(formatRegressionReason(regressionDetail));
     }
     const reason =
       reasonParts.length > 0 ? reasonParts.join("; ") : "Dự đoán từ ensemble";
