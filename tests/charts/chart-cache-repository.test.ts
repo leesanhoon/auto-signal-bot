@@ -10,10 +10,18 @@ const repoState = vi.hoisted(() => ({
   from: vi.fn(),
 }));
 
+const loggerState = vi.hoisted(() => ({
+  warn: vi.fn<(msg: string, ctx?: Record<string, unknown>) => void>(),
+}));
+
 vi.mock("../../src/shared/db.js", () => ({
   getDb: () => ({
     from: repoState.from,
   }),
+}));
+
+vi.mock("../../src/shared/logger.js", () => ({
+  createLogger: () => loggerState,
 }));
 
 const chartCacheRepository = await import("../../src/charts/chart-cache-repository.js");
@@ -67,6 +75,7 @@ describe("charts/chart-cache-repository", () => {
     };
 
     repoState.from.mockReturnValue(chain);
+    loggerState.warn.mockReset();
   });
 
   describe("saveChartAnalysisCache", () => {
@@ -147,18 +156,38 @@ describe("charts/chart-cache-repository", () => {
       expect(result!.screenshots).toEqual([]);
     });
 
-    test("không có row — trả null", async () => {
+    test("không có row — trả null, logger.warn không được gọi", async () => {
       repoState.selectResult = { data: null, error: null };
 
       const result = await chartCacheRepository.loadChartAnalysisCache(CANDLE_KEY);
       expect(result).toBeNull();
+      expect(loggerState.warn).not.toHaveBeenCalled();
     });
 
-    test("data.result null — trả null", async () => {
+    test("data.result null — trả null, logger.warn không được gọi", async () => {
       repoState.selectResult = { data: { result: null }, error: null };
 
       const result = await chartCacheRepository.loadChartAnalysisCache(CANDLE_KEY);
       expect(result).toBeNull();
+      expect(loggerState.warn).not.toHaveBeenCalled();
+    });
+
+    test("data.result sai schema — trả null, logger.warn được gọi", async () => {
+      repoState.selectResult = {
+        data: {
+          result: {
+            summaries: [],
+            setups: [{ pair: "EUR/USD", direction: "LONG" }], // thiếu hầu hết field bắt buộc
+            noSetupReason: "",
+            screenshots: [],
+          },
+        },
+        error: null,
+      };
+
+      const result = await chartCacheRepository.loadChartAnalysisCache(CANDLE_KEY);
+      expect(result).toBeNull();
+      expect(loggerState.warn).toHaveBeenCalledTimes(1);
     });
 
     test("query trả error — trả null", async () => {
@@ -175,6 +204,101 @@ describe("charts/chart-cache-repository", () => {
 
       const result = await chartCacheRepository.loadChartAnalysisCache(CANDLE_KEY);
       expect(result).toBeNull();
+    });
+  });
+
+  describe("isValidAnalysisResult", () => {
+    const validSetup = {
+      pair: "EUR/USD",
+      direction: "LONG" as const,
+      setup: "RB",
+      entry: "1.1000",
+      stopLoss: "1.0960",
+      takeProfit1: "1.1080",
+      takeProfit2: "1.1120",
+      confidence: 75,
+      reasons: ["EMA20 dốc lên"],
+      risks: ["Khối lượng yếu"],
+      riskReward: "1:2",
+      summary: "Setup long",
+    };
+
+    const validResult = {
+      summaries: [{ pair: "EUR/USD", trend: "LONG", status: "tích lũy", confidence: 80 }],
+      setups: [validSetup],
+      noSetupReason: "",
+      screenshots: [],
+    };
+
+    // --- Top-level checks ---
+
+    test("null → false", () => {
+      expect(chartCacheRepository.isValidAnalysisResult(null)).toBe(false);
+    });
+
+    test("non-object → false", () => {
+      expect(chartCacheRepository.isValidAnalysisResult("string")).toBe(false);
+    });
+
+    test("thiếu summaries → false", () => {
+      const { summaries, ...rest } = validResult;
+      expect(chartCacheRepository.isValidAnalysisResult(rest)).toBe(false);
+    });
+
+    test("summaries không phải array → false", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, summaries: "not-array" })).toBe(false);
+    });
+
+    test("thiếu setups → false", () => {
+      const { setups, ...rest } = validResult;
+      expect(chartCacheRepository.isValidAnalysisResult(rest)).toBe(false);
+    });
+
+    test("setups không phải array → false", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, setups: "not-array" })).toBe(false);
+    });
+
+    test("thiếu screenshots → false", () => {
+      const { screenshots, ...rest } = validResult;
+      expect(chartCacheRepository.isValidAnalysisResult(rest)).toBe(false);
+    });
+
+    test("screenshots không phải array → false", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, screenshots: "not-array" })).toBe(false);
+    });
+
+    test("noSetupReason sai kiểu → false", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, noSetupReason: 123 })).toBe(false);
+    });
+
+    test("noSetupReason = undefined vẫn hợp lệ → true", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, noSetupReason: undefined })).toBe(true);
+    });
+
+    // --- Per-setup field checks (derived from production SETUP_FIELD_CHECKS) ---
+
+    // Overrides for fields where setting to 123 would incorrectly pass validation
+    const WRONG_VALUES: Partial<Record<string, unknown>> = {
+      confidence: "not-number", // 123 is a valid number → must use a non-number
+    };
+
+    const FIELD_CHECKS = chartCacheRepository.SETUP_FIELD_CHECKS.map(({ field }) => ({
+      label: `thiếu ${field}`,
+      mutate: (s: Record<string, unknown>) => {
+        s[field] = field in WRONG_VALUES ? WRONG_VALUES[field] : 123;
+      },
+    }));
+
+    for (const { label, mutate } of FIELD_CHECKS) {
+      test(`${label} → false`, () => {
+        const badSetup = { ...validSetup };
+        mutate(badSetup as unknown as Record<string, unknown>);
+        expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, setups: [badSetup] })).toBe(false);
+      });
+    }
+
+    test("valid full result → true", () => {
+      expect(chartCacheRepository.isValidAnalysisResult(validResult)).toBe(true);
     });
   });
 });

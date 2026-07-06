@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import type { Candle, DetectedSignal } from "../../src/charts/ohlc-provider.js";
-import type { DetectionContext } from "../../src/charts/setup-types.js";
+import type { Candle } from "../../src/charts/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext } from "../../src/charts/setup-types.js";
 import { runSbDetection } from "../../src/charts/setup-sb-runner.js";
 
 describe("setup-sb-runner: runSbDetection", () => {
@@ -8,7 +8,6 @@ describe("setup-sb-runner: runSbDetection", () => {
   let candles: Candle[];
 
   beforeEach(() => {
-    // Simple context for testing
     ctx = {
       ema20: Array(100).fill(100),
       atr14: Array(100).fill(2),
@@ -16,9 +15,8 @@ describe("setup-sb-runner: runSbDetection", () => {
       timeframe: "H4",
     };
 
-    // Create simple candles for testing
     candles = Array.from({ length: 100 }, (_, i) => ({
-      time: new Date(Date.now() + i * 3600000),
+      time: Date.now() + i * 3600000,
       open: 100 + i * 0.1,
       high: 100.5 + i * 0.1,
       low: 99.5 + i * 0.1,
@@ -26,136 +24,108 @@ describe("setup-sb-runner: runSbDetection", () => {
     }));
   });
 
-  it("should return empty arrays for empty signals", () => {
-    const result = runSbDetection(candles, [], 50, ctx);
-    expect(result.validSignals).toEqual([]);
-    expect(result.sbSignals).toEqual([]);
+  it("should return empty resolved for empty signals", () => {
+    const { resolved } = runSbDetection(candles, [], 50, ctx);
+    expect(resolved).toEqual([]);
   });
 
   it("should keep signal that is not false-break", () => {
     const signal: DetectedSignal = {
-      setup: "DD",
-      pair: "EUR/USD",
-      timeframe: "H4",
-      direction: "LONG",
-      entry: 100,
-      stopLoss: 99,
-      takeProfit1: 101,
-      takeProfit2: 102,
-      confidence: 75,
-      triggerIndex: 50,
-      ruleTrace: ["test"],
+      setup: "DD", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
+      entry: 100, stopLoss: 99, takeProfit1: 101, takeProfit2: 102,
+      confidence: 75, triggerIndex: 50, ruleTrace: ["test"],
     };
-
-    const result = runSbDetection(candles, [signal], 60, ctx);
-    expect(result.validSignals).toContainEqual(signal);
-    expect(result.sbSignals).toEqual([]);
+    const { resolved } = runSbDetection(candles, [signal], 60, ctx);
+    expect(resolved).toContainEqual(signal);
   });
 
   it("should filter out signal when false-break detected", () => {
-    // For this test, we just verify that the function processes signals correctly.
-    // The actual false-break detection depends on specific candle patterns which
-    // is tested in indicators.test.ts (isFalseBreak). Here we just verify the
-    // logic that removes signals when false-break is confirmed.
+    // Fixture: price breaks above level (entry=105, stop=104) then returns inside
+    const rangeCandles: Candle[] = [
+      { time: 0, open: 100, high: 101, low: 99, close: 100, volume: 100 },  // 0: pre
+      { time: 1, open: 100, high: 106, low: 100, close: 105, volume: 100 }, // 1: breakout above range
+      { time: 2, open: 105, high: 105, low: 100, close: 102, volume: 100 }, // 2: returns inside → FALSE BREAK
+    ];
     const signal: DetectedSignal = {
-      setup: "FB",
-      pair: "EUR/USD",
-      timeframe: "H4",
-      direction: "LONG",
-      entry: 100.5,
-      stopLoss: 99.5,
-      takeProfit1: 102,
-      takeProfit2: 104,
-      confidence: 70,
-      triggerIndex: 50,
-      ruleTrace: ["FB trigger"],
+      setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
+      entry: 105, stopLoss: 100, takeProfit1: 108, takeProfit2: 110,
+      confidence: 70, triggerIndex: 1, ruleTrace: ["FB trigger"],
     };
+    const { resolved } = runSbDetection(rangeCandles, [signal], 2, ctx);
+    // Signal should be removed (false-break), SB may or may not exist
+    expect(resolved.find((s) => s.setup === "FB")).toBeUndefined();
+  });
 
-    const result = runSbDetection(candles, [signal], 60, ctx);
-    // Whether signal is kept or removed depends on isFalseBreak detection.
-    // Main thing is: if false-break is detected, signal won't be in validSignals
-    // and only sbSignals (if any) will be returned.
-    const totalSignals = result.validSignals.length + result.sbSignals.length;
-    expect(totalSignals).toBeLessThanOrEqual(1); // At most 1 signal (original or SB)
+  it("should not remove signal when breakout continues (no false-break)", () => {
+    const rangeCandles: Candle[] = [
+      { time: 0, open: 100, high: 101, low: 99, close: 100, volume: 100 },  // 0: pre
+      { time: 1, open: 100, high: 106, low: 100, close: 105, volume: 100 }, // 1: breakout
+      { time: 2, open: 106, high: 108, low: 105, close: 107, volume: 100 }, // 2: continues up → no false break
+    ];
+    const signal: DetectedSignal = {
+      setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
+      entry: 105, stopLoss: 100, takeProfit1: 108, takeProfit2: 110,
+      confidence: 70, triggerIndex: 1, ruleTrace: ["FB trigger"],
+    };
+    const { resolved } = runSbDetection(rangeCandles, [signal], 2, ctx);
+    expect(resolved).toContainEqual(signal);
   });
 
   it("should handle multiple signals correctly", () => {
-    const signal1: DetectedSignal = {
-      setup: "DD",
-      pair: "EUR/USD",
-      timeframe: "H4",
-      direction: "LONG",
-      entry: 100,
-      stopLoss: 99,
-      takeProfit1: 101,
-      takeProfit2: 102,
-      confidence: 75,
-      triggerIndex: 40,
-      ruleTrace: ["DD trigger"],
+    const s1: DetectedSignal = {
+      setup: "DD", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
+      entry: 100, stopLoss: 99, takeProfit1: 101, takeProfit2: 102,
+      confidence: 75, triggerIndex: 40, ruleTrace: ["DD trigger"],
     };
-
-    const signal2: DetectedSignal = {
-      setup: "FB",
-      pair: "EUR/USD",
-      timeframe: "H4",
-      direction: "SHORT",
-      entry: 99.5,
-      stopLoss: 101,
-      takeProfit1: 98,
-      takeProfit2: 97,
-      confidence: 60,
-      triggerIndex: 50,
-      ruleTrace: ["FB trigger"],
+    const s2: DetectedSignal = {
+      setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "SHORT",
+      entry: 99.5, stopLoss: 101, takeProfit1: 98, takeProfit2: 97,
+      confidence: 60, triggerIndex: 50, ruleTrace: ["FB trigger"],
     };
-
-    const result = runSbDetection(candles, [signal1, signal2], 60, ctx);
-    // Should keep at least signal1 (not false-break)
-    expect(result.validSignals.length).toBeGreaterThanOrEqual(1);
-    // Total = validSignals + sbSignals should account for all signals
-    expect(result.validSignals.length + result.sbSignals.length).toBeLessThanOrEqual(2);
+    const { resolved } = runSbDetection(candles, [s1, s2], 60, ctx);
+    // Same pair → resolveSetupConflicts keeps higher-confidence signal (DD with 75 > 60)
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].setup).toBe("DD");
+    expect(resolved[0].confidence).toBe(75);
   });
 
   it("should not process signal if triggerIndex too close to end", () => {
     const signal: DetectedSignal = {
-      setup: "BB",
-      pair: "EUR/USD",
-      timeframe: "H4",
-      direction: "LONG",
-      entry: 100,
-      stopLoss: 99,
-      takeProfit1: 102,
-      takeProfit2: 104,
-      confidence: 80,
-      triggerIndex: 99, // Very close to end
-      ruleTrace: ["BB trigger"],
+      setup: "BB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
+      entry: 100, stopLoss: 99, takeProfit1: 102, takeProfit2: 104,
+      confidence: 80, triggerIndex: 99, ruleTrace: ["BB trigger"],
     };
-
-    // Should keep signal since we can't look far enough ahead for false-break
-    const result = runSbDetection(candles, [signal], 99, ctx);
-    expect(result.validSignals).toContainEqual(signal);
+    const { resolved } = runSbDetection(candles, [signal], 99, ctx);
+    expect(resolved).toContainEqual(signal);
   });
 
-  it("should preserve ruleTrace and add SB marker", () => {
+  it("should add SB marker on false-break + SB generated", () => {
+    // After false-break, price builds a tight compression then reverses.
+    // Fixture rationale (see `detectCompression` in indicators.ts and `detectSb` in sb.ts):
+    //   - ctx.atr14 = Array(100).fill(2) → ATR = 2
+    //   - detectCompression requires range ≤ kBlock × ATR, where kBlock=1.2
+    //     → compression threshold = 1.2 × 2 = 2.4
+    //   - Compression window candles[1..4]: high=101.2, low=99 → range=2.2 ≤ 2.4 ✓
+    //   - sbDirection=SHORT, candle[4].close=98.9 < compression low=99 → break below ✓
+    // Adjust these values if kBlock or ctx.atr14 default changes.
+    const rangeCandles: Candle[] = [
+      { time: 0, open: 100, high: 101, low: 99, close: 100, volume: 100 },          // 0: pre
+      { time: 1, open: 100, high: 101.2, low: 99.8, close: 101, volume: 100 },      // 1: breakout above
+      { time: 2, open: 101, high: 101.2, low: 99.5, close: 100, volume: 100 },      // 2: false break (returns inside)
+      { time: 3, open: 99.5, high: 100.5, low: 99, close: 99.5, volume: 100 },      // 3: compression below
+      { time: 4, open: 99, high: 99.5, low: 99, close: 98.9, volume: 100 },         // 4: break below → SB SHORT
+    ];
     const signal: DetectedSignal = {
-      setup: "FB",
-      pair: "EUR/USD",
-      timeframe: "H4",
-      direction: "LONG",
-      entry: 101,
-      stopLoss: 98,
-      takeProfit1: 103,
-      takeProfit2: 105,
-      confidence: 70,
-      triggerIndex: 50,
-      ruleTrace: ["Original trace"],
+      setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
+      entry: 101.2, stopLoss: 99.8, takeProfit1: 108, takeProfit2: 110,
+      confidence: 70, triggerIndex: 1, ruleTrace: ["FB trigger"],
     };
-
-    const result = runSbDetection(candles, [signal], 60, ctx);
-    // If SB signal is generated, should have trace marker
-    const sbSignals = result.sbSignals.filter((s) => s.ruleTrace.some((t) => t.includes("[SB]")));
-    // May or may not have SB based on detectSb success, but if present, should have marker
-    sbSignals.forEach((sb) => {
-      expect(sb.ruleTrace[0]).toMatch(/\[SB\]/);
-    });
+    const { resolved } = runSbDetection(rangeCandles, [signal], 4, ctx);
+    // Original FB should be gone (false-break)
+    expect(resolved.find((s) => s.setup === "FB")).toBeUndefined();
+    // SB signal should have been generated in opposite direction
+    const sbSignal = resolved.find((s) => s.setup === "SB");
+    expect(sbSignal).toBeDefined();
+    expect(sbSignal!.direction).toBe("SHORT");
   });
-});
+})

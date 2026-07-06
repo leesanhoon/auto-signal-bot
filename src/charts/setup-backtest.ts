@@ -8,7 +8,6 @@ import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
-import { resolveSetupConflicts } from "./setup-resolver.js";
 import { runSbDetection } from "./setup-sb-runner.js";
 
 // ---------------------------------------------------------------------------
@@ -91,14 +90,7 @@ export function runSetupBacktest(
     }
 
     // Check false-break → run SB detector + filter failed signals
-    const { validSignals, sbSignals } = runSbDetection(candles, signals, index, ctx);
-
-    // Combine signals
-    const allSignals = [...validSignals, ...sbSignals];
-    if (allSignals.length === 0) continue;
-
-    // Resolve conflicts
-    const resolved = resolveSetupConflicts(allSignals);
+    const { resolved } = runSbDetection(candles, signals, index, ctx);
     if (resolved.length === 0) continue;
 
     const signal = resolved[0];

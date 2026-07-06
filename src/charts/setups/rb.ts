@@ -1,7 +1,7 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
 import { detectCompression } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, applyStandardConfidenceAdjustments } from "./shared.js";
+import { baseConfidence, computeBodyRatio, applyStandardConfidenceAdjustments } from "./shared.js";
 
 /**
  * RB — Range Break

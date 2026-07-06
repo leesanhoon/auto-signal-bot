@@ -93,11 +93,7 @@ export async function analyzeAllChartsDeterministic(
       }
 
       // ---- Check false-break → run SB + filter failed signals ----
-      const { validSignals, sbSignals } = runSbDetection(primaryCandles, allSignals, lastIndex, ctx);
-
-      // ---- Combine + resolve conflicts ----
-      const combined = [...validSignals, ...sbSignals];
-      const resolved = resolveSetupConflicts(combined);
+      const { resolved } = runSbDetection(primaryCandles, allSignals, lastIndex, ctx);
 
       const lastPrice = primaryCandles[lastIndex]?.close ?? null;
 

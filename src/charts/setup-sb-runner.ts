@@ -2,6 +2,7 @@ import type { Candle } from "./ohlc-provider.js";
 import type { DetectedSignal, DetectionContext } from "./setup-types.js";
 import { isFalseBreak } from "./indicators.js";
 import { detectSb } from "./setups/sb.js";
+import { resolveSetupConflicts } from "./setup-resolver.js";
 import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:setup-sb-runner");
@@ -22,7 +23,7 @@ export function runSbDetection(
   signals: DetectedSignal[],
   currentIndex: number,
   ctx: DetectionContext,
-): { validSignals: DetectedSignal[]; sbSignals: DetectedSignal[] } {
+): { resolved: DetectedSignal[] } {
   const sbSignals: DetectedSignal[] = [];
   const validSignals: DetectedSignal[] = [];
 
@@ -65,5 +66,7 @@ export function runSbDetection(
     validSignals.push(signal);
   }
 
-  return { validSignals, sbSignals };
+  // Merge valid + SB signals and resolve conflicts
+  const combined = [...validSignals, ...sbSignals];
+  return { resolved: resolveSetupConflicts(combined) };
 }
