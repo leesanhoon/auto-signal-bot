@@ -1,6 +1,6 @@
 import { getDb } from "../shared/db.js";
-import { PREDICTION_METHOD_VERSION } from "./lottery-ai-predict.js";
-import type { AiNumberPrediction } from "./lottery-ai-predict.js";
+import { ENSEMBLE_METHOD_VERSION } from "./lottery-ensemble-predict.js";
+import type { EnsembleNumberPrediction, MethodBreakdown } from "./lottery-ensemble-predict.js";
 import type { LotteryRegion } from "./lottery-types.js";
 
 export type PredictionRow = {
@@ -16,6 +16,7 @@ export type CachedPrediction = {
   confidence: number;
   reason: string;
   rank: number;
+  breakdown: MethodBreakdown;
 };
 
 /**
@@ -27,7 +28,7 @@ export async function savePredictions(
   date: string,
   weekday: number,
   region: LotteryRegion,
-  predictions: AiNumberPrediction[],
+  predictions: EnsembleNumberPrediction[],
 ): Promise<void> {
   if (predictions.length === 0) return;
 
@@ -51,7 +52,8 @@ export async function savePredictions(
     gap: null,
     overdue_ratio: null,
     score: p.confidence,
-    method_version: PREDICTION_METHOD_VERSION,
+    method_scores: p.breakdown,
+    method_version: ENSEMBLE_METHOD_VERSION,
   }));
 
   const { error } = await (getDb().from("lottery_predictions") as any).upsert(rows, { onConflict: "date,region,number" });
@@ -77,10 +79,10 @@ export async function loadCachedPredictions(
 ): Promise<CachedPrediction[]> {
   try {
     const { data, error } = await (getDb().from("lottery_predictions") as any)
-      .select("number, score, reason, rank")
+      .select("number, score, reason, rank, method_scores")
       .eq("date", date)
       .eq("region", region)
-      .eq("method_version", PREDICTION_METHOD_VERSION)
+      .eq("method_version", ENSEMBLE_METHOD_VERSION)
       .order("rank", { ascending: true });
     if (error || !data || data.length === 0) return [];
 
@@ -89,14 +91,24 @@ export async function loadCachedPredictions(
       score: number | null;
       reason: string | null;
       rank: number | null;
+      method_scores: unknown;
     }>)
       .filter((row) => row.reason != null && row.score != null && row.rank != null)
-      .map((row) => ({
-        number: row.number,
-        confidence: Number(row.score),
-        reason: String(row.reason),
-        rank: Number(row.rank),
-      }));
+      .map((row) => {
+        // Parse method_scores from jsonb column; fallback to {} if missing/invalid
+        let breakdown: MethodBreakdown = {};
+        if (row.method_scores && typeof row.method_scores === "object") {
+          breakdown = row.method_scores as MethodBreakdown;
+        }
+
+        return {
+          number: row.number,
+          confidence: Number(row.score),
+          reason: String(row.reason),
+          rank: Number(row.rank),
+          breakdown,
+        };
+      });
   } catch {
     return [];
   }

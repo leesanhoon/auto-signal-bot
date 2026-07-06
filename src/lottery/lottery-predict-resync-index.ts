@@ -1,7 +1,7 @@
 import "../shared/env.js";
 import { getDb } from "../shared/db.js";
 import { loadWeekdayHistory } from "./lottery-repository.js";
-import { predictTopNumbersAI } from "./lottery-ai-predict.js";
+import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
 import { savePredictions } from "./lottery-predictions-repository.js";
 import { sendMessage, notifyError } from "../shared/telegram.js";
 import type { LotteryRegion } from "./lottery-types.js";
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
     }
 
     try {
-      const fresh = await predictTopNumbersAI(history, group.region, group.weekday, 3);
+      const fresh = await predictTopNumbersEnsemble(history, group.region, group.weekday, 3);
       const freshNumbers = new Set(fresh.map((prediction) => prediction.number));
       if (sameNumberSet(group.numbers, freshNumbers)) {
         logger.info(`OK   ${group.region} ${group.date}: no change`);

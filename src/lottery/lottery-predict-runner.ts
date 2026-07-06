@@ -1,6 +1,6 @@
 import { fetchActualRecords } from "./lottery-scraper.js";
 import { loadWeekdayHistory } from "./lottery-repository.js";
-import { predictTopNumbersAI } from "./lottery-ai-predict.js";
+import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
 import {
   loadCachedPredictions,
   savePredictions,
@@ -9,7 +9,7 @@ import { WEEKDAY_LABELS } from "./lottery-schedule.js";
 import { sendMessage } from "../shared/telegram.js";
 import type { LotteryRegion } from "./lottery-types.js";
 import { createLogger } from "../shared/logger.js";
-import type { AiNumberPrediction } from "./lottery-ai-predict.js";
+import type { EnsembleNumberPrediction } from "./lottery-ensemble-predict.js";
 import { loadDrawStatus, saveDrawStatus } from "./lottery-draw-status-repository.js";
 
 const logger = createLogger("lottery:lottery-predict-runner");
@@ -26,7 +26,7 @@ type RegionPredictionResult = {
   target: { dateStr: string; weekday: number };
   weekdayLabel: string;
   periodCount: number;
-  predictions: AiNumberPrediction[];
+  predictions: EnsembleNumberPrediction[];
   usedCache: boolean;
 };
 
@@ -140,9 +140,7 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
             number: item.number,
             confidence: item.confidence,
             reason: item.reason,
-            hundredsDigit: item.number[0],
-            tensDigit: item.number[1],
-            unitsDigit: item.number[2],
+            breakdown: item.breakdown,
           }));
         if (predictions.length === 0) {
           logger.info(
@@ -167,7 +165,7 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
       }
 
       try {
-        const predictions = await predictTopNumbersAI(recordsForRegion, region, target.weekday, 3);
+        const predictions = await predictTopNumbersEnsemble(recordsForRegion, region, target.weekday, 3);
         await savePredictions(target.dateStr, target.weekday, region, predictions);
         logger.info(
           `✓ [${region}] Top ${predictions.length} số dự đoán cho ${weekdayLabel} ${target.dateStr} từ ${periodCount} kỳ.`,
@@ -214,6 +212,19 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
       lines.push(
         `${RANK_MEDAL[i] ?? "▫️"} \`${p.number}\` — ${(p.confidence * 100).toFixed(0)}% tin cậy _(${formatReason(p.reason)})_`,
       );
+      const parts: string[] = [];
+      if (p.breakdown.ai !== undefined) {
+        parts.push(`AI ${(p.breakdown.ai * 100).toFixed(0)}%`);
+      }
+      if (p.breakdown.stats !== undefined) {
+        parts.push(`Thống kê ${(p.breakdown.stats * 100).toFixed(0)}%`);
+      }
+      if (p.breakdown.regression !== undefined) {
+        parts.push(`Hồi quy ${(p.breakdown.regression * 100).toFixed(0)}%`);
+      }
+      if (parts.length > 0) {
+        lines.push(`_   ↳ ${parts.join(" · ")}_`);
+      }
     });
     lines.push("");
   }

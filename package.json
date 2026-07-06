@@ -31,6 +31,7 @@
         "@types/ws": "^8.18.1",
         "pino": "^10.3.1",
         "playwright": "^1.49.0",
+        "simple-statistics": "^7.9.3",
         "ws": "^8.21.0"
     },
     "devDependencies": {

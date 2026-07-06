@@ -7,8 +7,6 @@ import {
 } from "../shared/openrouter.js";
 import { recordOpenRouterUsage } from "../shared/ai-usage.js";
 
-export const PREDICTION_METHOD_VERSION = "digit-position-v1";
-
 export type AiNumberPrediction = {
   number: string;
   confidence: number;

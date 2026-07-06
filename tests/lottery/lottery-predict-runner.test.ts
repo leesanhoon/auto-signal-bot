@@ -15,8 +15,8 @@ vi.mock("../../src/lottery/lottery-scraper.js", () => ({
 vi.mock("../../src/lottery/lottery-repository.js", () => ({
   loadWeekdayHistory: state.loadWeekdayHistory,
 }));
-vi.mock("../../src/lottery/lottery-ai-predict.js", () => ({
-  predictTopNumbersAI: state.predictTopNumbersAI,
+vi.mock("../../src/lottery/lottery-ensemble-predict.js", () => ({
+  predictTopNumbersEnsemble: state.predictTopNumbersAI,
 }));
 vi.mock("../../src/lottery/lottery-predictions-repository.js", () => ({
   loadCachedPredictions: state.loadCachedPredictions,
@@ -107,8 +107,8 @@ describe("lottery/lottery-predict-runner", () => {
         throw new Error("OpenRouter timeout");
       }
       return [
-        { number: "123", confidence: 0.91, reason: "Lặp tần suất" },
-        { number: "456", confidence: 0.74, reason: "Độ trễ tốt" },
+        { number: "123", confidence: 0.91, reason: "Lặp tần suất", breakdown: { ai: 0.9, stats: 0.92, regression: 0.91 } },
+        { number: "456", confidence: 0.74, reason: "Độ trễ tốt", breakdown: { ai: 0.75, stats: 0.73, regression: 0.74 } },
       ];
     });
     state.savePredictions.mockResolvedValue(undefined);
@@ -137,7 +137,7 @@ describe("lottery/lottery-predict-runner", () => {
     state.loadWeekdayHistory.mockReturnValue(historyDeferred.promise);
     state.predictTopNumbersAI.mockImplementation((_records: unknown[], region: string) => {
       const promise = new Promise<
-        Array<{ number: string; confidence: number; reason: string }>
+        Array<{ number: string; confidence: number; reason: string; breakdown: Record<string, number | undefined> }>
       >((resolve) => {
         predictionResolvers.set(region, resolve);
       });
@@ -208,19 +208,19 @@ describe("lottery/lottery-predict-runner", () => {
     expect(state.predictTopNumbersAI).toHaveBeenCalledTimes(3);
 
     predictionResolvers.get("mien-bac")?.([
-      { number: "345", confidence: 0.81, reason: "Bắc" },
-      { number: "678", confidence: 0.72, reason: "Bắc 2" },
-      { number: "901", confidence: 0.61, reason: "Bắc 3" },
+      { number: "345", confidence: 0.81, reason: "Bắc", breakdown: { ai: 0.81, stats: 0.8, regression: 0.81 } },
+      { number: "678", confidence: 0.72, reason: "Bắc 2", breakdown: { ai: 0.72, stats: 0.71, regression: 0.72 } },
+      { number: "901", confidence: 0.61, reason: "Bắc 3", breakdown: { ai: 0.61, stats: 0.6, regression: 0.61 } },
     ]);
     predictionResolvers.get("mien-trung")?.([
-      { number: "234", confidence: 0.93, reason: "Trung" },
-      { number: "567", confidence: 0.74, reason: "Trung 2" },
-      { number: "890", confidence: 0.62, reason: "Trung 3" },
+      { number: "234", confidence: 0.93, reason: "Trung", breakdown: { ai: 0.93, stats: 0.93, regression: 0.92 } },
+      { number: "567", confidence: 0.74, reason: "Trung 2", breakdown: { ai: 0.74, stats: 0.74, regression: 0.74 } },
+      { number: "890", confidence: 0.62, reason: "Trung 3", breakdown: { ai: 0.62, stats: 0.62, regression: 0.62 } },
     ]);
     predictionResolvers.get("mien-nam")?.([
-      { number: "123", confidence: 0.97, reason: "Nam" },
-      { number: "456", confidence: 0.76, reason: "Nam 2" },
-      { number: "789", confidence: 0.64, reason: "Nam 3" },
+      { number: "123", confidence: 0.97, reason: "Nam", breakdown: { ai: 0.97, stats: 0.97, regression: 0.97 } },
+      { number: "456", confidence: 0.76, reason: "Nam 2", breakdown: { ai: 0.76, stats: 0.76, regression: 0.76 } },
+      { number: "789", confidence: 0.64, reason: "Nam 3", breakdown: { ai: 0.64, stats: 0.64, regression: 0.64 } },
     ]);
 
     await expect(runPromise).resolves.toBeUndefined();
@@ -240,16 +240,16 @@ describe("lottery/lottery-predict-runner", () => {
     state.loadCachedPredictions.mockImplementation(async (_date: string, region: string) => {
       if (region === "mien-nam") {
         return [
-          { number: "111", confidence: 0.88, reason: "Cache Nam", rank: 1 },
-          { number: "222", confidence: 0.77, reason: "Cache Nam 2", rank: 2 },
-          { number: "333", confidence: 0.66, reason: "Cache Nam 3", rank: 3 },
+          { number: "111", confidence: 0.88, reason: "Cache Nam", rank: 1, breakdown: { ai: 0.88, stats: 0.87, regression: 0.88 } },
+          { number: "222", confidence: 0.77, reason: "Cache Nam 2", rank: 2, breakdown: { ai: 0.77, stats: 0.76, regression: 0.77 } },
+          { number: "333", confidence: 0.66, reason: "Cache Nam 3", rank: 3, breakdown: { ai: 0.66, stats: 0.65, regression: 0.66 } },
         ];
       }
       return [];
     });
     state.predictTopNumbersAI.mockResolvedValue([
-      { number: "123", confidence: 0.91, reason: "Lặp tần suất", hundredsDigit: "1", tensDigit: "2", unitsDigit: "3" },
-      { number: "456", confidence: 0.74, reason: "Độ trễ tốt", hundredsDigit: "4", tensDigit: "5", unitsDigit: "6" },
+      { number: "123", confidence: 0.91, reason: "Lặp tần suất", breakdown: { ai: 0.9, stats: 0.92, regression: 0.91 } },
+      { number: "456", confidence: 0.74, reason: "Độ trễ tốt", breakdown: { ai: 0.75, stats: 0.73, regression: 0.74 } },
     ]);
 
     await expect(runner.runLotteryPredict()).resolves.toBeUndefined();
@@ -269,8 +269,8 @@ describe("lottery/lottery-predict-runner", () => {
       return [];
     });
     state.predictTopNumbersAI.mockResolvedValue([
-      { number: "123", confidence: 0.91, reason: "Lặp tần suất", hundredsDigit: "1", tensDigit: "2", unitsDigit: "3" },
-      { number: "456", confidence: 0.74, reason: "Độ trễ tốt", hundredsDigit: "4", tensDigit: "5", unitsDigit: "6" },
+      { number: "123", confidence: 0.91, reason: "Lặp tần suất", breakdown: { ai: 0.9, stats: 0.92, regression: 0.91 } },
+      { number: "456", confidence: 0.74, reason: "Độ trễ tốt", breakdown: { ai: 0.75, stats: 0.73, regression: 0.74 } },
     ]);
 
     await expect(runner.runLotteryPredict()).resolves.toBeUndefined();
@@ -306,8 +306,8 @@ describe("lottery/lottery-predict-runner", () => {
   test("runLotteryPredict with two regions only processes those two", async () => {
     state.predictTopNumbersAI.mockImplementation(async (_records: unknown[], region: string) => {
       return [
-        { number: "111", confidence: 0.9, reason: `${region} prediction` },
-        { number: "222", confidence: 0.8, reason: `${region} second` },
+        { number: "111", confidence: 0.9, reason: `${region} prediction`, breakdown: { ai: 0.9, stats: 0.9, regression: 0.9 } },
+        { number: "222", confidence: 0.8, reason: `${region} second`, breakdown: { ai: 0.8, stats: 0.8, regression: 0.8 } },
       ];
     });
 

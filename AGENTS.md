@@ -1,80 +1,101 @@
 # Multi-Agent Task Queue Protocol
 
-This project uses a **file-based task queue** to coordinate between a Lead/Planner agent and Worker/Executor agents.
+Project này dùng **file-based task queue** để phối hợp giữa:
+- **Lead**: Claude Code Desktop (Sonnet 5 Medium) — lên plan, review code, quyết định final
+- **Worker**: Hermes Agent (Worker profile) — thực thi task chi tiết
 
 ## Directory Structure
 
 ```
 tasks/
-├── <task-id>/                    # kebab-case parent task, e.g. "add-auth-middleware"
-│   ├── plan.md                   # [Lead] Detailed architecture plan + subtask breakdown
-│   ├── context.md                # [Lead] Optional shared background / references
-│   ├── review.md                 # [Lead] Final review across all subtasks
-│   ├── done.md                   # [Lead] Final approval
-│   ├── 01-<subtask-id>/          # [Lead] Independently assignable subtask
-│   │   ├── task.md               # [Lead] Specific executable task for one worker profile session
-│   │   ├── result.md             # [Worker] Execution results
-│   │   └── blocked.md            # [Worker] Blocked — needs clarification
+├── <task-id>/                    # kebab-case, vd. "add-auth-middleware"
+│   ├── plan.md                   # [Lead] Kiến trúc + phân rã subtask
+│   ├── context.md                # [Lead] Shared background / references (optional)
+│   ├── review.md                 # [Lead] Final review sau khi tất cả subtask xong
+│   ├── done.md                   # [Lead] Final approval — viết khi OK hết
+│   ├── 01-<subtask-id>/          # Subtask giao cho worker
+│   │   ├── task.md               # [Lead] Task cụ thể, self-contained
+│   │   ├── result.md             # [Worker] Kết quả thực thi
+│   │   └── blocked.md            # [Worker] Bị chặn — cần clarification
 │   └── 02-<subtask-id>/
-│       ├── task.md
-│       ├── result.md
-│       └── blocked.md
+│       └── ...
+reviews/
+├── <task-id>/                    # Review output khi có ISSUES
+│   ├── review-01-<subtask>.md    # Review từng subtask
+│   └── review-summary.md         # Tổng hợp issues cần fix
 ```
 
-## Protocol
-
-### Roles
-
-| Role | Provider | Model | Effort | Behavior |
-|------|----------|-------|--------|----------|
-| **Lead** | OpenRouter (or `anthropic`/`openai-codex`) | `anthropic/claude-sonnet-5` (or `gpt-5.5`) | medium/high | Plans, breaks work into worker-ready subtasks, reviews, coordinates via files. Does not auto-spawn subagents unless explicitly requested. |
-| **Worker** | OpenRouter (or `openai-codex`) | `anthropic/claude-haiku-4.5` (or `gpt-5.4-mini`) | low | Executes assigned `tasks/<task-id>/<subtask-id>/task.md` exactly as specified. No deviations, no extras. Fast, cheap execution. |
-
-### Workflow Steps
+## Workflow
 
 ```
-Lead                                      Worker profile sessions
-  │                                         
-  ├── Writes parent plan.md                 
-  ├── Breaks plan into subtasks             
-  ├── Creates 01-*/task.md, 02-*/task.md    
-  ├── Marks parallelizable/dependencies     
-  │                                         
-  │                                    ┌──── worker A reads 01-*/task.md
-  │                                    │     executes precisely
-  │                                    ├──── writes 01-*/result.md
-  │                                    │
-  │                                    ┌──── worker B reads 02-*/task.md
-  │                                    │     executes precisely
-  │                                    ├──── writes 02-*/result.md
-  │                                    │
-  ├── Reads all subtask result.md ◄────┘
-  ├── Reviews against plan.md + task.md
-  ├── Writes parent review.md (APPROVED or ISSUES)
+Claude Code Desktop (Lead — Sonnet 5 Medium)       Hermes Worker profile
+  │                                                    
+  ├── Viết plan.md + task.md                          
+  ├── Gọi Worker: hermes --profile worker             
+  │                                                     
+  │                                           ┌──── Worker đọc task.md
+  │                                           │     thực thi chính xác
+  │                                           ├──── Viết result.md
+  │                                           │
+  ├── Đọc result.md ◄─────────────────────────┘
+  ├── Review against plan.md + task.md
   │
-  │                                    ┌──── workers fix only listed issues
-  │                                    ├──── update result.md
+  ├── Nếu ISSUES:
+  │     Viết review.md (trong tasks/<id>/review.md HOẶC reviews/<id>/review-summary.md)
+  │     → Gọi Worker fix → quay lại đọc result.md
   │
-  ├── If all issues resolved → write done.md
+  ├── Nếu OK:
+  │     Viết done.md
   └── Done!
 ```
+
+## Roles
+
+| Role | Tool | Model | Effort | Behavior |
+|------|------|-------|--------|----------|
+| **Lead** | Claude Code Desktop | Sonnet 5 (medium) | high | Lên plan architecture, viết task.md, review result.md, quyết định APPROVED/CHANGES_REQUIRED, ghi done.md |
+| **Worker** | Hermes Agent (--profile worker) | Sonnet 4.5 Haiku (thấp) | low | Đọc task.md → thực thi chính xác → ghi result.md. Không deviation, không extras |
 
 ## Launch Commands
 
 ```bash
-# Launch as Lead (planner/reviewer)
-hermes --profile lead
+# Terminal 1: Lead — Claude Code Desktop (mở từ GUI hoặc CLI)
+# Không cần chạy lệnh — dùng Claude Code Desktop UI
 
-# Launch as Worker (executor)
+# Khi cần gọi Worker từ Lead:
+# Trong Claude Code, gõ lệnh terminal:
+hermes --profile worker chat -q "Thực thi task tasks/<task-id>/01-<subtask>/task.md"
+
+# Hoặc chạy Worker interactive:
+# Terminal riêng:
 hermes --profile worker
 ```
 
-## Rules for Both Agents
+## Cách Gọi Worker từ Claude Code
 
-1. **Lead: every plan must include a `## Subtasks` table and one `task.md` per worker subtask**, unless the user explicitly requests a single-task plan
-2. **Never modify files outside the task directory** unless the task explicitly says so
-3. **Worker: never modify parent `done.md`** — only the Lead writes final approval
-4. **Always read the full task before starting**
-5. **Worker: if unsure, write blocked.md — never guess**
-6. **Lead: always review code against plan.md and each subtask task.md — not just "does it run" but "does it match the architecture"**
-7. **Commit messages: Lead decides when and what to commit**
+Trong Claude Code Desktop, khi cần worker làm việc:
+
+```bash
+# 1. Gọi worker chạy 1 task cụ thể
+hermes --profile worker chat -q "
+  Đọc file tasks/<task-id>/01-<subtask>/task.md
+  Thực thi chính xác theo task
+  Ghi kết quả vào tasks/<task-id>/01-<subtask>/result.md
+  Nếu bị chặn → ghi blocked.md
+"
+
+# 2. Gọi worker interactive (nếu task phức tạp, cần nhiều bước)
+# Mở terminal riêng:
+hermes --profile worker
+# Trong worker session: đọc task.md và làm theo
+```
+
+## Rules
+
+1. **Lead: mỗi plan phải có `## Subtasks` table + `task.md` cho mỗi subtask** (trừ single-task plan)
+2. **Không sửa files ngoài task directory** trừ khi task chỉ định
+3. **Worker: không bao giờ modify `done.md`** — chỉ Lead viết
+4. **Worker: nếu không chắc → viết `blocked.md`, không đoán**
+5. **Lead: review code theo plan.md + task.md — không chỉ "chạy được là OK"**
+6. **Commit messages: Lead quyết định khi nào và commit gì**
+7. **Nếu Lead phát hiện ISSUES sau review → ghi vào reviews/<task-id>/review-summary.md và quay lại gọi Worker fix**
