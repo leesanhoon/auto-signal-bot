@@ -1,3 +1,17 @@
+export type ChartEngineMode = "ai" | "deterministic" | "shadow";
+
+/**
+ * Đọc CHART_ENGINE_MODE từ env.
+ * Mặc định: "shadow" — chạy song song AI + deterministic, chỉ dùng AI gửi Telegram.
+ */
+export function getConfiguredChartEngineMode(): ChartEngineMode {
+  const raw = process.env.CHART_ENGINE_MODE?.trim().toLowerCase() as ChartEngineMode | undefined;
+  if (raw === "ai" || raw === "deterministic" || raw === "shadow") {
+    return raw;
+  }
+  return "shadow";
+}
+
 export function getConfiguredChartSignalConfidenceThreshold(): number {
   const raw = process.env.CHART_SIGNAL_CONFIDENCE_THRESHOLD?.trim();
   if (!raw) return 70;

@@ -11,3 +11,8 @@ if (existsSync(".env")) {
     if (!process.env[key]) process.env[key] = value;
   }
 }
+
+// OANDA API config
+if (!process.env.OANDA_API_BASE_URL) {
+  process.env.OANDA_API_BASE_URL = "https://api-fxpractice.oanda.com";
+}

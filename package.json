@@ -14,6 +14,7 @@
         "betting-backtest": "tsx src/betting/betting-backtest-runner.ts",
         "performance-report": "tsx src/charts/performance-report-runner.ts",
         "test-analyze": "tsx src/charts/test-analyze.ts",
+        "backtest:setups": "tsx src/charts/setup-backtest-runner.ts",
         "setup:telegram-menu": "tsx src/scripts/setup-telegram-menu-v2.ts",
         "match-odds": "tsx src/betting/betting-index.ts",
         "fetch-matches-list": "tsx src/betting/fetch-matches-list-index.ts",

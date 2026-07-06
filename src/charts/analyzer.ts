@@ -66,12 +66,12 @@ function parsePrice(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatPrice(value: number): string {
+export function formatPrice(value: number): string {
   const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
   return value.toFixed(precision);
 }
 
-function applyPriceSanityChecks(
+export function applyPriceSanityChecks(
   setup: TradeSetup,
   lastPrice: number | null,
 ): { setup: TradeSetup | null; note?: string } {

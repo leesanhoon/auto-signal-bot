@@ -43,6 +43,8 @@ export type PairSummary = {
   emaProximity?: "tại" | "gần" | "xa";
   status: string;
   confidence: number;
+  ruleTrace?: string[];
+  detectionSource?: "deterministic" | "ai";
 };
 
 export type TradeSetup = {
@@ -65,6 +67,8 @@ export type TradeSetup = {
   currentPriceContext?: string;
   autoTracked?: boolean;
   chartFallbackUsed?: boolean;
+  ruleTrace?: string[];
+  detectionSource?: "deterministic" | "ai";
   sourceCharts?: ChartAnalysisSource[];
   telegramChart?: ChartAnalysisSource;
   lastPrice?: number | null;

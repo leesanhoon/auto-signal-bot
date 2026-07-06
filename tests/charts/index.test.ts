@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   savePendingOrder: vi.fn(),
   validateTradeSetupForOpen: vi.fn(),
   getConfiguredChartSignalConfidenceThreshold: vi.fn(),
+  getConfiguredChartEngineMode: vi.fn(),
 }));
 
 // ============================================================
@@ -67,6 +68,7 @@ vi.mock("../../src/charts/position-engine.js", () => ({
 
 vi.mock("../../src/charts/chart-config-env.js", () => ({
   getConfiguredChartSignalConfidenceThreshold: mocks.getConfiguredChartSignalConfidenceThreshold,
+  getConfiguredChartEngineMode: mocks.getConfiguredChartEngineMode,
 }));
 
 // ============================================================
@@ -111,6 +113,7 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.loadChartAnalysisCache.mockResolvedValue(null);
     mocks.isWithinCandleCloseWindow.mockReturnValue(false);
     mocks.getConfiguredChartSignalConfidenceThreshold.mockReturnValue(50);
+    mocks.getConfiguredChartEngineMode.mockReturnValue("ai");
     mocks.validateTradeSetupForOpen.mockReturnValue({ accepted: true, reason: "" });
     mocks.saveOpenPosition.mockResolvedValue(true);
     mocks.savePendingOrder.mockResolvedValue(true);

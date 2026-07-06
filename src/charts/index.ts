@@ -7,10 +7,12 @@ import { runCheckPendingOrders } from "./check-pending-orders-runner.js";
 import { sendAllAnalyses, notifyError } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
 import { validateTradeSetupForOpen } from "./position-engine.js";
-import { getConfiguredChartSignalConfidenceThreshold } from "./chart-config-env.js";
-import type { TradeSetup } from "./chart-types.js";
+import { getConfiguredChartEngineMode, getConfiguredChartSignalConfidenceThreshold } from "./chart-config-env.js";
+import type { TradeSetup, AnalysisResult } from "./chart-types.js";
 import { getCurrentH4CandleCloseKey, isWithinCandleCloseWindow } from "./chart-cache.js";
 import { loadChartAnalysisCache, saveChartAnalysisCache } from "./chart-cache-repository.js";
+import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
+import { CHARTS } from "./charts.config.js";
 
 const logger = createLogger("charts:index");
 const AI_VISION_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
@@ -20,38 +22,120 @@ function shouldAutoTrackAsOpen(setup: TradeSetup, threshold: number): boolean {
   return setup.orderType === "MARKET_NOW" && (setup.confidence ?? 0) >= threshold;
 }
 
+/**
+ * Get unique pairs from CHARTS config.
+ */
+function getPairs(): Array<{ pair: string; symbol: string }> {
+  const seen = new Map<string, string>();
+  for (const chart of CHARTS) {
+    const pair = chart.name.replace(` ${chart.timeframe}`, "");
+    if (!seen.has(pair)) {
+      seen.set(pair, chart.symbol);
+    }
+  }
+  return Array.from(seen.entries()).map(([pair, symbol]) => ({ pair, symbol }));
+}
+
 export async function main(): Promise<void> {
   const startTime = Date.now();
-  logger.info("Bob Volman multi-timeframe scanner starting");
+  const engineMode = getConfiguredChartEngineMode();
+  logger.info("Bob Volman multi-timeframe scanner starting", { engineMode });
 
-  // Kiểm tra cache H4 trước khi capture/analyze
-  const candleKey = getCurrentH4CandleCloseKey();
+  // Include engine mode in cache key so different modes don't reuse each other's results
+  const candleKey = `${getCurrentH4CandleCloseKey()}:${engineMode}`;
   let result: Awaited<ReturnType<typeof analyzeAllCharts>> | null = null;
 
+  // ---- Check cache ----
   const cached = await loadChartAnalysisCache(candleKey);
   if (cached) {
-    logger.info(`↻ Dùng lại kết quả phân tích đã cache cho candle ${candleKey}, bỏ qua capture + AI`);
-    result = cached as any;
-  } else if (isWithinCandleCloseWindow(new Date(), CANDLE_CLOSE_WINDOW_MS)) {
-    logger.info("Capturing all forex charts", {
-      intervals: ["D1", "H4", "M15"],
-      indicators: ["EMA 20", "volume"],
-    });
-    const screenshots = await captureAllCharts();
-    if (screenshots.length === 0) throw new Error("No charts captured.");
-    logger.info("Captured charts", { count: screenshots.length });
+      logger.info(`↻ Dùng lại kết quả phân tích đã cache cho candle ${candleKey}, bỏ qua capture + AI`);
+      result = cached as AnalysisResult;
+    } else if (isWithinCandleCloseWindow(new Date(), CANDLE_CLOSE_WINDOW_MS)) {
+      // ---- AI mode (default/system behavior) ----
+    if (engineMode === "ai") {
+      logger.info("Capturing all forex charts", {
+        intervals: ["D1", "H4", "M15"],
+        indicators: ["EMA 20", "volume"],
+      });
+      const screenshots = await captureAllCharts();
+      if (screenshots.length === 0) throw new Error("No charts captured.");
+      logger.info("Captured charts", { count: screenshots.length });
 
-    logger.info("Analyzing charts", { model: AI_VISION_MODEL });
-    const analysisResult = await analyzeAllCharts(screenshots);
-    logger.info("Analysis complete");
+      logger.info("Analyzing charts", { model: AI_VISION_MODEL });
+      const analysisResult = await analyzeAllCharts(screenshots);
+      logger.info("Analysis complete");
 
-    // Lưu cache cho các lần chạy sau trong cùng candle
-    await saveChartAnalysisCache(candleKey, analysisResult);
-    result = analysisResult;
+      await saveChartAnalysisCache(candleKey, analysisResult);
+      result = analysisResult;
+
+    // ---- Deterministic mode (no AI, no screenshots) ----
+    } else if (engineMode === "deterministic") {
+      logger.info("Using deterministic engine (no AI vision)");
+      const pairs = getPairs();
+      const detResult = await analyzeAllChartsDeterministic(pairs);
+      logger.info("Deterministic analysis complete");
+
+      await saveChartAnalysisCache(candleKey, detResult);
+      result = detResult;
+
+    // ---- Shadow mode (run both, only use AI result) ----
+    } else {
+      // shadow: default = AI path with deterministic comparison
+      logger.info("SHADOW mode: AI is primary, deterministic runs alongside");
+      logger.info("Capturing all forex charts", {
+        intervals: ["D1", "H4", "M15"],
+        indicators: ["EMA 20", "volume"],
+      });
+      const screenshots = await captureAllCharts();
+      if (screenshots.length === 0) throw new Error("No charts captured.");
+      logger.info("Captured charts", { count: screenshots.length });
+
+      logger.info("Analyzing charts (AI)", { model: AI_VISION_MODEL });
+      const aiResult = await analyzeAllCharts(screenshots);
+      logger.info("AI analysis complete");
+
+      await saveChartAnalysisCache(candleKey, aiResult);
+      result = aiResult;
+
+      // Shadow: run deterministic, log comparison (don't fail on errors)
+      try {
+        logger.info("SHADOW: Running deterministic engine for comparison...");
+        const pairs = getPairs();
+        const detResult = await analyzeAllChartsDeterministic(pairs);
+        logger.info("SHADOW: Deterministic comparison results", {
+          aiSetups: aiResult.setups.length,
+          detSetups: detResult.setups.length,
+          aiPairs: aiResult.summaries.length,
+          detPairs: detResult.summaries.length,
+        });
+        // Log per-pair comparison
+        for (const aiSetup of aiResult.setups) {
+          const match = detResult.setups.find(
+            (s) => s.pair === aiSetup.pair && s.direction === aiSetup.direction,
+          );
+          if (match) {
+            logger.info(`SHADOW: ${aiSetup.pair} — AI=${aiSetup.setup} vs DET=${match.setup}, conf=${aiSetup.confidence}/${match.confidence}`);
+          } else {
+            logger.info(`SHADOW: ${aiSetup.pair} — AI=${aiSetup.setup} (det=khong co)`);
+          }
+        }
+        for (const detSetup of detResult.setups) {
+          if (!aiResult.setups.find((s) => s.pair === detSetup.pair)) {
+            logger.info(`SHADOW: ${detSetup.pair} — AI=khong co, DET=${detSetup.setup}`);
+          }
+        }
+      } catch (detErr) {
+        logger.warn("SHADOW: Deterministic engine comparison failed", { error: detErr });
+        // Notify Telegram to avoid silent failures in shadow mode
+        await notifyError("SHADOW: Deterministic engine", detErr).catch(() => {});
+      }
+    }
   } else {
     logger.warn(`⏭ Bỏ qua capture+analyze — ngoài cửa sổ đóng nến H4 (${candleKey}), vẫn kiểm tra trade/pending`);
   }
 
+  // ---- Downstream: save positions + send Telegram ----
+  // (unchanged — same for all modes, result is always AnalysisResult)
   if (result) {
     const threshold = getConfiguredChartSignalConfidenceThreshold();
 
@@ -106,6 +190,7 @@ export async function main(): Promise<void> {
   logger.info("Run complete", {
     scannedPairs: result?.setups.length ?? 0,
     elapsedSeconds: Number(elapsed),
+    engineMode,
   });
 }
 
