@@ -1,15 +1,15 @@
 import type { Candle } from "./ohlc-provider.js";
 import type { DetectedSignal, SetupKind } from "./setup-types.js";
 import type { ChartTimeframe } from "./chart-types.js";
-import { calculateEma, calculateAtr, isFalseBreak } from "./indicators.js";
+import { calculateEma, calculateAtr } from "./indicators.js";
 import { detectDd } from "./setups/dd.js";
 import { detectFb } from "./setups/fb.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
-import { detectSb } from "./setups/sb.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
+import { runSbDetection } from "./setup-sb-runner.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,32 +90,11 @@ export function runSetupBacktest(
       }
     }
 
-    // Check false-break → run SB detector
-    const sbSignals: DetectedSignal[] = [];
-    for (const signal of signals) {
-      const entry = signal.entry;
-      const stop = signal.stopLoss;
-      const levelHigh = Math.max(entry, stop);
-      const levelLow = Math.min(entry, stop);
-      if (signal.triggerIndex + 1 < candles.length) {
-        const maxLookahead = Math.min(2, candles.length - 1 - signal.triggerIndex);
-        const fbResult = isFalseBreak(candles, signal.triggerIndex, levelHigh, levelLow, signal.direction, maxLookahead);
-        if (fbResult) {
-          try {
-            const sbSignal = detectSb(candles, index, ctx, signal);
-            if (sbSignal) {
-              sbSignal.ruleTrace.unshift(`[SB] Phat hien tu false-break cua ${signal.setup}`);
-              sbSignals.push(sbSignal);
-            }
-          } catch {
-            // Skip SB errors
-          }
-        }
-      }
-    }
+    // Check false-break → run SB detector + filter failed signals
+    const { validSignals, sbSignals } = runSbDetection(candles, signals, index, ctx);
 
     // Combine signals
-    const allSignals = [...signals, ...sbSignals];
+    const allSignals = [...validSignals, ...sbSignals];
     if (allSignals.length === 0) continue;
 
     // Resolve conflicts
@@ -232,7 +211,7 @@ function computeReport(trades: SetupBacktestTrade[]): SetupBacktestReport {
 
   // By setup
   const bySetup: SetupBacktestReport["bySetup"] = {};
-  for (const kind of ["DD", "FB", "BB", "RB", "ARB", "IRB"] as SetupKind[]) {
+  for (const kind of ["DD", "FB", "BB", "RB", "ARB", "IRB", "SB"] as SetupKind[]) {
     const setupTrades = closedTrades.filter((t) => t.setup === kind);
     if (setupTrades.length === 0) continue;
     const wins = setupTrades.filter((t) => t.realizedRiskReward > 0);

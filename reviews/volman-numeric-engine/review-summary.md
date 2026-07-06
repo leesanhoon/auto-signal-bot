@@ -375,3 +375,304 @@ khó phát hiện qua test thông thường.
   bộ vị trí liên quan khi fix loại "thêm helper dùng chung" hoặc "thêm 1 detector mới".
 - Ưu tiên fix: #9, #10, #11 trước khi cân nhắc bật `CHART_ENGINE_MODE=deterministic` (ảnh hưởng
   trực tiếp đến độ tin cậy của gate backtest và an toàn vận hành); #12-#15 có thể làm sau.
+
+---
+
+# Round 3 (re-review sau khi commit Round 2 — `b592d61`)
+
+Toàn bộ Round 2 đã được commit. 6/7 fix xác nhận đúng và sạch (#9 fail-safe filter, #11 retry
+`.status`, #13 xoá D1/M15, #14 test shared.ts đều verify tốt — không phát sinh bug mới). Nhưng
+phát hiện **1 bug mới nghiêm trọng nhất từ trước đến giờ** (#16), cùng vài fix chưa trọn vẹn.
+
+---
+
+## 16. [x] Signal gốc đã biết false-break vẫn là ứng viên hợp lệ trong resolver — nghiêm trọng nhất
+**File**: `src/charts/deterministic-pipeline.ts:122` (và y hệt ở `src/charts/setup-backtest.ts:118`)
+**Verdict**: CONFIRMED
+
+```ts
+const combined = [...allSignals, ...sbSignals];
+// allSignals vẫn chứa signal GỐC đã bị isFalseBreak() xác nhận là sai,
+// không hề bị loại bỏ trước khi merge với sbSignals rồi đưa vào resolveSetupConflicts
+```
+
+Khi 1 signal (VD từ `detectFb`) bị phát hiện false-break, hệ thống gọi `detectSb` để tìm signal
+đảo chiều — nhưng **không loại signal gốc khỏi `allSignals`**. `resolveSetupConflicts`
+(`setup-resolver.ts`) chỉ group theo `pair` và sort theo `confidence`/`priority`, hoàn toàn
+không biết gì về lịch sử false-break (không có field `invalidated`/`isFalseBreak` nào được
+check). Nếu confidence của signal gốc > confidence của SB signal, resolver sẽ **giữ lại chính
+signal đã biết là sai**, bỏ signal SB đúng.
+
+Bug này ảnh hưởng **cả production** (`deterministic-pipeline.ts` → `buildTradeSetupFromSignal`
+→ `AnalysisResult.setups` → auto-track/Telegram) **lẫn backtest** (`setup-backtest.ts`, làm sai
+lệch win-rate của chính setup gốc vì tính cả trade đã biết invalid).
+
+**Cách fix**: Sau khi xác nhận false-break và tạo `sbSignal`, loại bỏ signal gốc khỏi mảng
+trước khi merge:
+```ts
+const combined = [...allSignals.filter(s => s !== signal), ...sbSignals];
+```
+Áp dụng đồng thời ở cả `deterministic-pipeline.ts` và `setup-backtest.ts`.
+
+**Failure scenario**: FB signal confidence 70 bị false-break, SB signal đảo chiều confidence
+60 — resolver chọn nhầm FB (đã biết sai) làm trade thật, gửi Telegram/auto-track sai hướng.
+
+---
+
+## 17. [x] Backtest `bySetup` vẫn thiếu `"SB"` dù đã wiring detectSb
+**File**: `src/charts/setup-backtest.ts:235`
+**Verdict**: CONFIRMED
+
+```ts
+// computeReport() hardcode danh sách setup, thiếu "SB":
+["DD", "FB", "BB", "RB", "ARB", "IRB"]
+```
+
+Round 2 #10 đã cắm `detectSb` vào backtest và trade SB được tính vào `trades[]`/`overall`/
+`byPair`, nhưng `bySetup` vẫn dùng mảng hardcode cũ thiếu `"SB"` — nên `bySetup["SB"]` luôn
+`undefined`, tổng `sum(bySetup[*].trades)` sẽ nhỏ hơn `overall.trades`, gây khó hiểu khi audit
+báo cáo.
+
+**Cách fix**: Thêm `"SB"` vào mảng hardcode trong `computeReport`.
+
+**Failure scenario**: Người xem báo cáo win-rate theo setup không thấy SB đâu, tưởng SB chưa
+từng chạy, trong khi nó đã được tính vào tổng — dễ đưa ra quyết định sai khi đánh giá có nên bật
+`CHART_ENGINE_MODE=deterministic` hay không.
+
+---
+
+## 18. [x] Refactor dedup Round 2 #12 chưa áp dụng cho `rb.ts`/`arb.ts`/`bb.ts`
+**File**: `src/charts/setups/rb.ts:4`
+**Verdict**: CONFIRMED
+
+`rb.ts` và `arb.ts` import `computeSlope`/`applyStandardConfidenceAdjustments` từ `shared.ts`
+nhưng **không hề gọi** — vẫn giữ nguyên logic slope/confidence tự viết inline (`rb.ts` còn có
+rule riêng "FLAT→trend +15" không có trong `shared.ts`). `bb.ts` cũng import `computeSlope`
+nhưng không gọi, tự tính slope inline. Chỉ `fb.ts`, `bb.ts` (phần confidence), `irb.ts`,
+`dd.ts`, `sb.ts` thực sự dùng `applyStandardConfidenceAdjustments`.
+
+**Cách fix**: Với `rb.ts`/`arb.ts`, hoặc chuyển hẳn sang gọi `computeSlope` (giữ rule riêng như
+tham số bổ sung), hoặc xóa import không dùng và ghi chú rõ đây là setup có logic đặc thù không
+dùng chung — tránh gây hiểu lầm là "đã refactor" trong khi chưa.
+
+**Failure scenario**: Backtest tinh chỉnh ngưỡng trong `shared.ts` không ảnh hưởng gì đến
+`rb.ts`/`arb.ts`/`bb.ts` — dễ tưởng đã áp dụng đồng bộ nhưng thực ra 3/7 setup vẫn dùng số cũ.
+
+---
+
+## 19. [x] Logic false-break→SB copy y hệt giữa 2 file — nguyên nhân gốc của #16
+**File**: `src/charts/setup-backtest.ts:93` (trùng với `deterministic-pipeline.ts:95-119`)
+**Verdict**: CONFIRMED
+
+Toàn bộ block tính `levelHigh`/`levelLow`, gọi `isFalseBreak`, gọi `detectSb`, `ruleTrace.unshift(...)`
+bị copy gần như nguyên văn giữa 2 file thay vì rút thành 1 helper dùng chung.
+
+**Cách fix**: Rút thành `runSbDetectionForSignals(candles, signals, index, ctx)` dùng chung cho
+cả `deterministic-pipeline.ts` và `setup-backtest.ts` — fix #16 chỉ cần sửa 1 chỗ thay vì 2.
+
+**Failure scenario**: Đây chính là lý do bug #16 xuất hiện ở cả production lẫn backtest — sửa
+1 chỗ mà quên chỗ kia là kịch bản rất dễ xảy ra với code bị duplicate kiểu này.
+
+---
+
+## 20. [x] Fix #15 (cache type-safety) chỉ đổi tên cast, không thêm validation thật
+**File**: `src/charts/index.ts:52`
+**Verdict**: CONFIRMED
+
+```ts
+result = cached as AnalysisResult; // trước đó là `as any`
+```
+
+`loadChartAnalysisCache` đã khai báo return type `Promise<AnalysisResult | null>` sẵn — nên
+`cached as AnalysisResult` chỉ là ép kiểu no-op (bỏ `null`), không thêm bất kỳ validate runtime
+nào. Về bản chất an toàn y hệt `as any` cũ, chỉ khác là trông "có vẻ" đã fix.
+
+**Cách fix**: Thêm validate runtime tối thiểu (check các field bắt buộc tồn tại) trước khi gán
+vào `result`, thay vì chỉ đổi cú pháp cast.
+
+**Failure scenario**: Schema `chart_analysis_cache` đổi trong tương lai (thêm field bắt buộc),
+nhánh cache-hit vẫn đọc được payload cũ thiếu field mà không hề báo lỗi, crash muộn hơn ở
+`sendAllAnalyses`.
+
+---
+
+## 21. [x] `fb.ts` còn sót 1 chỗ tính bodyRatio inline
+**File**: `src/charts/setups/fb.ts:109`
+**Verdict**: CONFIRMED
+
+Dù đã import `computeBodyRatio` từ `shared.ts` (dùng trong `applyStandardConfidenceAdjustments`),
+`fb.ts` vẫn có 1 chỗ khác tự tính `bodyRatio` inline thay vì gọi lại hàm chung.
+
+**Cách fix**: Thay chỗ tính inline còn sót bằng lệnh gọi `computeBodyRatio(...)`.
+
+**Failure scenario**: Hiện tại trùng kết quả do trùng hợp (cùng công thức fallback), nhưng nếu
+`computeBodyRatio` đổi cách xử lý range=0 sau này, chỗ inline này sẽ lặng lẽ lệch mà không test
+nào bắt được.
+
+---
+
+## 22. [x] `detectSb` luôn chạy ở nến cuối cùng, không phải đúng vị trí signal gốc trigger
+**File**: `src/charts/deterministic-pipeline.ts:109`
+**Verdict**: PLAUSIBLE
+
+```ts
+const sbSignal = detectSb(primaryCandles, lastIndex, ctx, signal);
+// luôn dùng lastIndex, dù signal.triggerIndex có thể ở vài nến trước đó
+```
+
+Khác với `setup-backtest.ts` (dùng đúng `index` của vòng lặp walk-forward hiện tại),
+`deterministic-pipeline.ts` luôn phân tích SB tại `lastIndex` (nến mới nhất) bất kể
+`signal.triggerIndex` nằm ở đâu trong cửa sổ lookback.
+
+**Cách fix**: Cần xác nhận lại chủ đích — nếu SB nên phân tích buildup ngay sau điểm false-break
+gốc, nên dùng index gần `signal.triggerIndex` hơn là luôn dùng `lastIndex`.
+
+**Failure scenario**: False-break xảy ra ở vài nến trước, nhưng SB phân tích buildup tại nến mới
+nhất — có thể cho ra tín hiệu SB hợp lý về mặt hình học nhưng sai ngữ cảnh thực tế.
+
+---
+
+## Ghi chú (Round 3)
+- **#16 là bug nghiêm trọng nhất phát hiện từ trước đến giờ** — ảnh hưởng trực tiếp cả production
+  lẫn backtest, cần fix ngay trước khi cân nhắc bật `CHART_ENGINE_MODE=deterministic`.
+- #16 và #19 nên fix cùng lúc (rút helper dùng chung sẽ tự động fix cả 2 nơi).
+- Ưu tiên fix: #16 → #19 → #17 → #18, còn lại (#20-#22) có thể làm sau.
+
+---
+
+# Round 4 (re-review sau khi rút `setup-sb-runner.ts` dùng chung)
+
+Fix cho #16/#17/#18/#19/#21/#22 được gộp thành 1 refactor: rút `runSbDetection` vào file mới
+`src/charts/setup-sb-runner.ts`, dùng chung cho cả `deterministic-pipeline.ts` và
+`setup-backtest.ts`. Verify: **6/6 finding trên đã fix đúng, sạch, không phát sinh bug
+correctness mới** — đây là lần review đầu tiên trong chuỗi không tìm thấy lỗi ảnh hưởng trực
+tiếp đến kết quả trading. 6 finding còn lại đều ở mức thấp (observability/cleanup/docs).
+
+---
+
+## 23. [ ] Mất signal âm thầm khi false-break xác nhận nhưng `detectSb` fail
+**File**: `src/charts/setup-sb-runner.ts:39`
+**Verdict**: PLAUSIBLE
+
+```ts
+if (fbResult) {
+  const sbIndex = Math.min(signal.triggerIndex + 3, currentIndex);
+  try {
+    const sbSignal = detectSb(candles, sbIndex, ctx, signal);
+    if (sbSignal) { sbSignals.push(sbSignal); }
+  } catch { /* skip SB errors */ }
+  continue; // luôn bỏ signal gốc, kể cả khi detectSb trả null/throw
+}
+```
+
+Khi xác nhận false-break nhưng `detectSb` không tạo được signal đảo chiều (VD không hình thành
+block mới trong old range), signal gốc **và** SB signal đều biến mất — không có log/trace nào
+ghi lại lý do. Khó phân biệt "không có false-break" với "có false-break nhưng SB cũng fail" khi
+debug thiếu tín hiệu.
+
+**Cách fix**: Thêm log/trace khi rơi vào nhánh này mà `sbSignal` là `null` (VD
+`logger.debug` hoặc append vào 1 mảng `droppedSignals` để dễ audit).
+
+**Failure scenario**: Pair có false-break thật nhưng không có compression mới hình thành —
+signal biến mất hoàn toàn, không ai biết lý do khi review log.
+
+---
+
+## 24. [ ] `setup-sb-runner.ts` chưa có test
+**File**: `src/charts/setup-sb-runner.ts:1`
+**Verdict**: CONFIRMED
+
+File mới này chính là nơi fix bug nghiêm trọng nhất (#16) nhưng chưa có
+`tests/charts/setup-sb-runner.test.ts` — vi phạm quy ước "Tests: Vitest, trong `tests/` mirror
+`src/` structure" trong CLAUDE.md.
+
+**Cách fix**: Thêm test cho `runSbDetection`, tối thiểu cover:
+- Signal false-break → bị loại khỏi `validSignals`, có mặt trong `sbSignals` (hoặc không, nếu
+  `detectSb` trả null).
+- Signal không false-break → giữ nguyên trong `validSignals`.
+- Signal quá gần cuối mảng (không đủ lookahead) → giữ nguyên trong `validSignals`.
+
+**Failure scenario**: Fix quan trọng nhất trong toàn bộ chuỗi review này hiện không có regression
+test — 1 lần sửa `isFalseBreak`/`detectSb` trong tương lai có thể vô tình làm bug #16 quay lại
+mà không ai biết.
+
+---
+
+## 25. [ ] Magic number `+3` không có tài liệu giải thích
+**File**: `src/charts/setup-sb-runner.ts:32`
+**Verdict**: CONFIRMED
+
+```ts
+const sbIndex = Math.min(signal.triggerIndex + 3, currentIndex);
+```
+
+Không có chỗ nào trong `context.md` hay code giải thích tại sao là `+3` (không phải `+2`/`+4`).
+
+**Cách fix**: Thêm comment giải thích rationale (VD "chờ 3 nến để buildup mới hình thành sau
+false-break, theo context.md §2.7"), hoặc đặt thành hằng số có tên
+(`const SB_BUILDUP_LOOKAHEAD = 3;`) kèm giải thích.
+
+**Failure scenario**: Setup tương lai cần logic "nhìn N nến sau 1 signal trước đó" sẽ không có
+pattern/hằng số nào để tái sử dụng, dễ hardcode số tùy tiện khác không nhất quán.
+
+---
+
+## 26. [ ] `rb.ts` tính lại slope trùng với biến đã có sẵn
+**File**: `src/charts/setups/rb.ts:120`
+**Verdict**: CONFIRMED
+
+`computeSlope(ctx.ema20, ctx.atr14, index)` tính lại đúng công thức đã có sẵn ở biến
+`slopeNow` (dùng cho rule "FLAT→trend" riêng của RB) vài dòng trước đó. Không sai kết quả,
+nhưng dư thừa.
+
+**Cách fix**: Dùng lại `slopeNow` thay vì gọi `computeSlope` lần nữa trong cùng hàm.
+
+**Failure scenario**: Không ảnh hưởng correctness hiện tại, chỉ tốn thêm 1 lần tính toán mỗi
+lần detector chạy — tích lũy nhỏ qua nhiều nến trong backtest.
+
+---
+
+## 27. [ ] Biến `risk` không dùng trong `arb.ts`/`rb.ts` (có từ trước, chưa dọn)
+**File**: `src/charts/setups/arb.ts:107`
+**Verdict**: CONFIRMED
+
+`const risk = Math.abs(entry - stopLoss);` được tính nhưng không dùng ở đâu (TP1/TP2 dùng
+`rangeHeight` thay vì `risk`). Cùng pattern tồn tại ở `rb.ts:97`. Đây là dead code có từ trước,
+không phải do Round 4 gây ra, nhưng chưa được dọn khi 2 file này vừa được sửa.
+
+**Cách fix**: Xóa biến `risk` không dùng ở cả 2 file (hoặc dùng nó nếu thực ra dự định
+đưa vào TP calculation).
+
+**Failure scenario**: Người đọc code tưởng `risk` được dùng trong tính TP, mất thời gian trace
+biến không có tác dụng gì.
+
+---
+
+## 28. [ ] Đoạn merge + resolveSetupConflicts lặp lại giữa 2 file
+**File**: `src/charts/deterministic-pipeline.ts:96`
+**Verdict**: CONFIRMED
+
+```ts
+const { validSignals, sbSignals } = runSbDetection(primaryCandles, allSignals, lastIndex, ctx);
+const combined = [...validSignals, ...sbSignals];
+const resolved = resolveSetupConflicts(combined);
+```
+
+3 dòng này lặp lại y hệt ở `setup-backtest.ts` thay vì gộp vào `runSbDetection` (hoặc 1 helper
+`runSbDetectionAndResolve`).
+
+**Cách fix**: Gộp bước merge + resolve vào trong `runSbDetection`, trả thẳng `resolved` cho cả
+2 nơi gọi.
+
+**Failure scenario**: Đây chính là kiểu duplicate đã gây ra bug #16/#19 trước đó (sửa 1 chỗ quên
+chỗ kia) — nếu logic resolve/merge cần đổi trong tương lai, rủi ro lặp lại y hệt.
+
+---
+
+## Ghi chú (Round 4)
+- **Không còn bug correctness nghiêm trọng** — lần đầu tiên trong chuỗi review này. Refactor
+  `runSbDetection` đã giải quyết gọn 6 finding cùng lúc.
+- #24 (thiếu test cho file vừa fix bug nghiêm trọng nhất) nên ưu tiên làm trước, vì đây là điểm
+  dễ tái phát bug #16 nhất nếu không có test chặn lại.
+- #23, #25-#28 đều là cleanup/observability, không khẩn cấp — có thể làm bất kỳ lúc nào trước
+  khi merge, không cần chặn việc bật `CHART_ENGINE_MODE=deterministic`.

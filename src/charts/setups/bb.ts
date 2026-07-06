@@ -30,9 +30,9 @@ export function detectBb(
   if (ema === null || atr === null || atr === 0) return null;
 
   // Stricter slope requirement for BB: |slope| > 0.2
-  const slope = ((ctx.ema20[index] ?? 0) - (ctx.ema20[Math.max(0, index - 5)] ?? 0)) / (atr || 1);
-  if (Math.abs(slope) <= 0.2) {
-    trace.push(`|slope|=${Math.abs(slope).toFixed(2)} <= 0.2 -> khong du doc cho BB`);
+  const slope = computeSlope(ctx.ema20, ctx.atr14, index);
+  if (slope === null || Math.abs(slope) <= 0.2) {
+    trace.push(`|slope|=${slope !== null ? Math.abs(slope).toFixed(2) : 'null'} <= 0.2 -> khong du doc cho BB`);
     return null;
   }
   trace.push(`EMA20 slope=${slope.toFixed(2)}`);

@@ -1,15 +1,15 @@
 import type { AnalysisResult, ChartTimeframe } from "./chart-types.js";
 import type { Candle } from "./ohlc-provider.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
-import { calculateEma, calculateAtr, classifyTrend, averageAtr, isTradableWindow, isFalseBreak } from "./indicators.js";
+import { calculateEma, calculateAtr, classifyTrend, averageAtr, isTradableWindow } from "./indicators.js";
 import { detectDd } from "./setups/dd.js";
 import { detectFb } from "./setups/fb.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
-import { detectSb } from "./setups/sb.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
+import { runSbDetection } from "./setup-sb-runner.js";
 import { buildTradeSetupFromSignal, buildPairSummaryFromContext } from "./signal-assembly.js";
 import type { DetectedSignal } from "./setup-types.js";
 import { createLogger } from "../shared/logger.js";
@@ -92,34 +92,11 @@ export async function analyzeAllChartsDeterministic(
         };
       }
 
-      // ---- Check false-break → run SB ----
-      const sbSignals: DetectedSignal[] = [];
-      for (const signal of allSignals) {
-        const entry = signal.entry;
-        const stop = signal.stopLoss;
-        const levelHigh = Math.max(entry, stop);
-        const levelLow = Math.min(entry, stop);
-        // Check if the breakout was false (within 2 candles after trigger)
-        if (signal.triggerIndex + 1 < primaryCandles.length) {
-          const maxLookahead = Math.min(2, primaryCandles.length - 1 - signal.triggerIndex);
-          const fbResult = isFalseBreak(primaryCandles, signal.triggerIndex, levelHigh, levelLow, signal.direction, maxLookahead);
-          if (fbResult) {
-            // Price returned inside → run SB detector
-            try {
-              const sbSignal = detectSb(primaryCandles, lastIndex, ctx, signal);
-              if (sbSignal) {
-                sbSignal.ruleTrace.unshift(`[SB] Phat hien tu false-break cua ${signal.setup}`);
-                sbSignals.push(sbSignal);
-              }
-            } catch {
-              // skip SB errors
-            }
-          }
-        }
-      }
+      // ---- Check false-break → run SB + filter failed signals ----
+      const { validSignals, sbSignals } = runSbDetection(primaryCandles, allSignals, lastIndex, ctx);
 
       // ---- Combine + resolve conflicts ----
-      const combined = [...allSignals, ...sbSignals];
+      const combined = [...validSignals, ...sbSignals];
       const resolved = resolveSetupConflicts(combined);
 
       const lastPrice = primaryCandles[lastIndex]?.close ?? null;

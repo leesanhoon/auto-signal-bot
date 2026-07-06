@@ -94,7 +94,6 @@ export function detectRb(
       // Entry/Stop/Target
       const entry = direction === "LONG" ? range.high : range.low;
       const stopLoss = direction === "LONG" ? range.low : range.high;
-      const risk = Math.abs(entry - stopLoss);
 
       // TP based on range height (Volman standard)
       const rangeHeight = range.high - range.low;
@@ -110,19 +109,15 @@ export function detectRb(
       // Confidence
       let confidence = baseConfidence;
 
-      // Bonus for clear FLAT→trend transition
+      // Bonus for clear FLAT→trend transition (RB-specific rule)
       if (absSlopeBefore <= 0.15 && absSlopeNow > 0.3) {
         confidence += 15;
         trace.push(`Bonus confidence: FLAT->trend ro ret`);
       }
 
       const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
-      if (bodyRatio < 0.3) {
-        confidence -= 15;
-        trace.push(`Penalty: nen pha vo yeu (bodyRatio=${bodyRatio.toFixed(2)} < 0.3)`);
-      }
-
-      confidence = Math.max(0, Math.min(100, confidence));
+      // Reuse slopeNow (already calculated above) instead of recalculating
+      confidence = applyStandardConfidenceAdjustments(confidence, slopeNow, bodyRatio, trace);
 
       return {
         setup: kind,

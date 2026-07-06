@@ -18,6 +18,22 @@ const logger = createLogger("charts:index");
 const AI_VISION_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
 const CANDLE_CLOSE_WINDOW_MS = 20 * 60 * 1000; // 20 phút
 
+/**
+ * Validate that cached result has required AnalysisResult schema.
+ * Prevents type mismatches if cache format changes.
+ */
+function isValidAnalysisResult(obj: unknown): obj is AnalysisResult {
+  if (typeof obj !== "object" || obj === null) return false;
+  const result = obj as Record<string, unknown>;
+  // Check required fields exist
+  return (
+    Array.isArray(result.summaries) &&
+    Array.isArray(result.setups) &&
+    (typeof result.noSetupReason === "string" || result.noSetupReason === undefined) &&
+    Array.isArray(result.screenshots)
+  );
+}
+
 function shouldAutoTrackAsOpen(setup: TradeSetup, threshold: number): boolean {
   return setup.orderType === "MARKET_NOW" && (setup.confidence ?? 0) >= threshold;
 }
@@ -48,8 +64,13 @@ export async function main(): Promise<void> {
   // ---- Check cache ----
   const cached = await loadChartAnalysisCache(candleKey);
   if (cached) {
-      logger.info(`↻ Dùng lại kết quả phân tích đã cache cho candle ${candleKey}, bỏ qua capture + AI`);
-      result = cached as AnalysisResult;
+      // Validate cache schema before using it
+      if (!isValidAnalysisResult(cached)) {
+        logger.warn(`Cache schema invalid for ${candleKey}, treating as miss`);
+      } else {
+        logger.info(`↻ Dùng lại kết quả phân tích đã cache cho candle ${candleKey}, bỏ qua capture + AI`);
+        result = cached as AnalysisResult;
+      }
     } else if (isWithinCandleCloseWindow(new Date(), CANDLE_CLOSE_WINDOW_MS)) {
       // ---- AI mode (default/system behavior) ----
     if (engineMode === "ai") {

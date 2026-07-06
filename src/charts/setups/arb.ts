@@ -104,7 +104,6 @@ export function detectArb(
   // Entry/Stop/Target (same as RB)
   const entry = direction === "LONG" ? range.high : range.low;
   const stopLoss = direction === "LONG" ? range.low : range.high;
-  const risk = Math.abs(entry - stopLoss);
   const rangeHeight = range.high - range.low;
 
   const takeProfit1 = direction === "LONG"
@@ -124,19 +123,10 @@ export function detectArb(
   confidence += edgeBonus;
   trace.push(`Edge test bonus: +${edgeBonus} (${edgeTestCount} tests x 10)`);
 
-  // Trend clarity bonus + bodyRatio penalty
+  // Standard confidence adjustments
   const slope = computeSlope(ctx.ema20, ctx.atr14, index);
   const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
-  if (slope !== null && Math.abs(slope) > 0.3) {
-    confidence += 15;
-    trace.push(`Bonus confidence: trend ro (|slope|=${slope.toFixed(2)} > 0.3)`);
-  }
-  if (bodyRatio < 0.3) {
-    confidence -= 15;
-    trace.push(`Penalty: nen pha vo yeu (bodyRatio=${bodyRatio.toFixed(2)} < 0.3)`);
-  }
-
-  confidence = Math.max(0, Math.min(100, confidence));
+  confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
   return {
     setup: kind,

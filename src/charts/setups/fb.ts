@@ -106,8 +106,7 @@ export function detectFb(
   }
 
   // 4. Signal bar must close in trend direction with strong body
-  const bodyRatio = Math.abs(candles[index].close - candles[index].open) /
-    (candles[index].high - candles[index].low || 1);
+  const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
 
   const closesInTrend = trend === "UPTREND"
     ? candles[index].close > candles[index].open
