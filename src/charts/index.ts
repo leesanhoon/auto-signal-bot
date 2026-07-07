@@ -23,7 +23,7 @@ import {
   shouldUseLatestCacheForManualRun,
 } from "./chart-config-env.js";
 import type { AnalysisResult, TradeSetup } from "./chart-types.js";
-import { getCurrentH4CandleCloseKey, isWithinCandleCloseWindow } from "./chart-cache.js";
+import { getCurrentCandleCloseKey, isWithinCandleCloseWindow } from "./chart-cache.js";
 import {
   loadChartAnalysisCache,
   loadLatestChartAnalysisCache,
@@ -54,6 +54,13 @@ function getPairs(): Array<{ pair: string; symbol: string }> {
     }
   }
   return Array.from(seen.entries()).map(([pair, symbol]) => ({ pair, symbol }));
+}
+
+function getTriggerTimeframe(
+  timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
+  primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
+): ReturnType<typeof getConfiguredChartPrimaryTimeframe> {
+  return timeframeMode === "single" ? primaryTimeframe : "H4";
 }
 
 async function analyzeCurrentWindow(
@@ -158,6 +165,7 @@ async function loadAnalysisForRun(
   engineMode: ReturnType<typeof getConfiguredChartEngineMode>,
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
+  triggerTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   runContext: ReturnType<typeof getConfiguredChartRunContext>,
 ): Promise<{ result: AnalysisResult | null; origin: AnalysisOrigin | null; heartbeatReason: "no-cache" | "no-event" | null }> {
   const cacheKey = buildChartAnalysisCacheKey(candleBaseKey, engineMode, timeframeMode, primaryTimeframe);
@@ -166,7 +174,7 @@ async function loadAnalysisForRun(
     return { result: cached, origin: { source: "cached", candleKey: cacheKey }, heartbeatReason: null };
   }
 
-  const withinCloseWindow = isWithinCandleCloseWindow(new Date(), CANDLE_CLOSE_WINDOW_MS);
+  const withinCloseWindow = isWithinCandleCloseWindow(new Date(), triggerTimeframe, CANDLE_CLOSE_WINDOW_MS);
   if (withinCloseWindow) {
     const liveResult = await analyzeCurrentWindow(cacheKey, engineMode, timeframeMode, primaryTimeframe);
     return { result: liveResult, origin: { source: "live", candleKey: cacheKey }, heartbeatReason: null };
@@ -276,9 +284,10 @@ export async function main(): Promise<void> {
   const runContext = getConfiguredChartRunContext();
   const timeframeMode = getConfiguredChartTimeframeMode();
   const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
+  const triggerTimeframe = getTriggerTimeframe(timeframeMode, primaryTimeframe);
   logger.info("Bob Volman scanner starting", { engineMode, runContext, timeframeMode, primaryTimeframe });
 
-  const candleBaseKey = getCurrentH4CandleCloseKey();
+  const candleBaseKey = getCurrentCandleCloseKey(triggerTimeframe);
   const candleKey = buildChartAnalysisCacheKey(
     candleBaseKey,
     engineMode,
@@ -290,7 +299,14 @@ export async function main(): Promise<void> {
   let origin: AnalysisOrigin | null = null;
   let heartbeatReason: "no-cache" | "no-event" | null = null;
 
-  const analysisState = await loadAnalysisForRun(candleBaseKey, engineMode, timeframeMode, primaryTimeframe, runContext);
+  const analysisState = await loadAnalysisForRun(
+    candleBaseKey,
+    engineMode,
+    timeframeMode,
+    primaryTimeframe,
+    triggerTimeframe,
+    runContext,
+  );
   result = analysisState.result;
   origin = analysisState.origin;
   heartbeatReason = analysisState.heartbeatReason;
@@ -301,7 +317,7 @@ export async function main(): Promise<void> {
   if (result && origin) {
     await handleAnalysisResult(result, origin);
   } else {
-    logger.warn(`⏭ Bỏ qua capture+analyze — ngoài cửa sổ đóng nến H4 (${candleKey}), vẫn kiểm tra trade/pending`);
+    logger.warn(`⏭ Bỏ qua capture+analyze — ngoài cửa sổ đóng nến ${triggerTimeframe} (${candleKey}), vẫn kiểm tra trade/pending`);
   }
 
   logger.info("Checking open positions");
