@@ -37,7 +37,6 @@ type CandleRowMap = {
 };
 
 type TimeframeConfig = {
-  cacheTtlMs: number;
   intervalMs: number;
   metaApiCode: string;
   twelveDataCode: string;
@@ -64,19 +63,16 @@ type FetchJsonOptions = FetchWithRetryOptions;
 
 const TIMEFRAME_CONFIG: Record<ChartTimeframe, TimeframeConfig> = {
   M15: {
-    cacheTtlMs: 5 * 60 * 1000,
     intervalMs: 15 * 60 * 1000,
     metaApiCode: "15m",
     twelveDataCode: "15min",
   },
   H4: {
-    cacheTtlMs: 30 * 60 * 1000,
     intervalMs: 4 * 60 * 60 * 1000,
     metaApiCode: "4h",
     twelveDataCode: "4h",
   },
   D1: {
-    cacheTtlMs: 6 * 60 * 60 * 1000,
     intervalMs: 24 * 60 * 60 * 1000,
     metaApiCode: "1d",
     twelveDataCode: "1day",
@@ -84,13 +80,10 @@ const TIMEFRAME_CONFIG: Record<ChartTimeframe, TimeframeConfig> = {
 };
 
 const cache = new Map<string, CacheEntry>();
+const CANDLE_CLOSE_BUFFER_MS = 60 * 1000;
 
 function getTimeframeConfig(timeframe: ChartTimeframe): TimeframeConfig {
   return TIMEFRAME_CONFIG[timeframe];
-}
-
-function getCacheTtl(timeframe: ChartTimeframe): number {
-  return getTimeframeConfig(timeframe).cacheTtlMs;
 }
 
 function cacheKey(symbol: string, timeframe: ChartTimeframe, provider: OhlcProvider): string {
@@ -150,6 +143,11 @@ function getIntervalMs(timeframe: ChartTimeframe): number {
   return getTimeframeConfig(timeframe).intervalMs;
 }
 
+function getNextCandleCloseMs(timeframe: ChartTimeframe, fromMs: number): number {
+  const intervalMs = getIntervalMs(timeframe);
+  return Math.floor(fromMs / intervalMs) * intervalMs + intervalMs;
+}
+
 function isForexWeekendClosed(nowMs: number): boolean {
   const now = new Date(nowMs);
   const day = now.getUTCDay();
@@ -165,6 +163,38 @@ function shouldSkipLatestCandle(latestTime: number, timeframe: ChartTimeframe): 
   if (!Number.isFinite(latestTime)) return false;
   if (isForexWeekendClosed(Date.now())) return false;
   return Date.now() - latestTime < getIntervalMs(timeframe);
+}
+
+function getNextWeekendReopenMs(fromMs: number): number {
+  const date = new Date(fromMs);
+  const day = date.getUTCDay();
+  const daysUntilSunday = (7 - day) % 7;
+  const reopen = new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate() + daysUntilSunday,
+    21,
+    0,
+    0,
+    0,
+  ));
+
+  if (reopen.getTime() <= fromMs) {
+    reopen.setUTCDate(reopen.getUTCDate() + 7);
+  }
+
+  return reopen.getTime();
+}
+
+function getCacheExpiryMs(timeframe: ChartTimeframe, nowMs: number, latestCandleTime: number | null): number {
+  if (isForexWeekendClosed(nowMs)) {
+    return getNextWeekendReopenMs(nowMs);
+  }
+
+  const anchor = typeof latestCandleTime === "number" && Number.isFinite(latestCandleTime)
+    ? latestCandleTime + getIntervalMs(timeframe)
+    : nowMs;
+  return getNextCandleCloseMs(timeframe, anchor) + CANDLE_CLOSE_BUFFER_MS;
 }
 
 async function fetchWithRetry(url: string, options: FetchWithRetryOptions): Promise<Response | Error> {
@@ -396,7 +426,8 @@ export async function fetchOhlcHistory(
   if (twelveDataApiKey) {
     const result = await fetchFromTwelveData(symbol, timeframe, bars, twelveDataApiKey);
     if (result instanceof Error) return result;
-    cache.set(key, { candles: result.slice(), expiresAt: Date.now() + getCacheTtl(timeframe) });
+    const latestCandleTime = result.length > 0 ? result[result.length - 1].time : null;
+    cache.set(key, { candles: result.slice(), expiresAt: getCacheExpiryMs(timeframe, Date.now(), latestCandleTime) });
     return result;
   }
 
@@ -464,7 +495,7 @@ export async function fetchOhlcHistory(
 
   cache.set(key, {
     candles: candles.slice(),
-    expiresAt: Date.now() + getCacheTtl(timeframe),
+    expiresAt: getCacheExpiryMs(timeframe, Date.now(), candles.length > 0 ? candles[candles.length - 1].time : null),
   });
 
   return candles;

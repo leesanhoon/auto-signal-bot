@@ -71,6 +71,8 @@ describe("fetchOhlcHistory", () => {
     delete process.env.METAAPI_REGION;
     delete process.env.METAAPI_MARKET_DATA_BASE_URL;
     delete process.env.METAAPI_SYMBOL_SUFFIX;
+    delete process.env.TWELVEDATA_API_KEY;
+    vi.useRealTimers();
     ohlc.clearOhlcCache();
     ohlc.clearRegionCache();
     resetRateLimitStateForTests();
@@ -258,10 +260,54 @@ describe("fetchOhlcHistory", () => {
     mockFetch.mockRestore();
   });
 
-  test("returns cached data within TTL and re-fetches after TTL expires", async () => {
+  test("uses the next M15 boundary when fetch happens exactly at candle close", async () => {
     process.env.METAAPI_TOKEN = "dummy";
     process.env.METAAPI_ACCOUNT_ID = "dummy";
     process.env.METAAPI_REGION = "new-york";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T10:15:00Z"));
+
+    let callCount = 0;
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
+      callCount++;
+      return new Response(
+        JSON.stringify([
+          {
+            time: "2024-01-01T10:15:00.000Z",
+            open: `${1.1 + callCount}`,
+            high: 2.11,
+            low: 2.09,
+            close: 2.105,
+            volume: 100,
+          },
+        ]),
+        { status: 200 },
+      );
+    });
+
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-01T10:30:59Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-01T10:31:00Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(2);
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
+  });
+
+  test("keeps M15 cache until the next candle close boundary plus buffer", async () => {
+    process.env.METAAPI_TOKEN = "dummy";
+    process.env.METAAPI_ACCOUNT_ID = "dummy";
+    process.env.METAAPI_REGION = "new-york";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T10:07:00Z"));
 
     let callCount = 0;
 
@@ -272,7 +318,7 @@ describe("fetchOhlcHistory", () => {
       const o = 1.1 + callCount * 0.001;
       const body = [
         {
-          time: "2024-01-01T00:00:00.000Z",
+          time: "2024-01-01T09:45:00.000Z",
           open: o,
           high: o + 0.01,
           low: o - 0.01,
@@ -287,7 +333,7 @@ describe("fetchOhlcHistory", () => {
     const r1 = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
     expect(callCount).toBe(1);
 
-    // Second call → should be cached (cache TTL for M15 is 5 minutes)
+    // Second call → should still be cached until the next candle-close boundary
     const r2 = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
     expect(callCount).toBe(1); // still 1, cache hit
 
@@ -296,12 +342,93 @@ describe("fetchOhlcHistory", () => {
     expect(candles1[0].open).toBe(candles2[0].open);
     expect(candles1[0].time).toBe(candles2[0].time);
 
-    // Simulate TTL expiry by clearing cache
-    ohlc.invalidateOhlcCache("OANDA:EURUSD", "M15");
+    vi.setSystemTime(new Date("2024-01-01T10:16:00Z"));
     const r3 = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(2); // fetched again
+    expect(callCount).toBe(2); // fetched again after 10:15 close + 1m buffer
+    expect((r3 as Candle[])[0].open).not.toBe(candles1[0].open);
 
     mockFetch.mockRestore();
+    vi.useRealTimers();
+  });
+
+  test("extends cache during forex weekend to avoid refetch spam", async () => {
+    process.env.METAAPI_TOKEN = "dummy";
+    process.env.METAAPI_ACCOUNT_ID = "dummy";
+    process.env.METAAPI_REGION = "new-york";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-05T22:00:00Z"));
+
+    let callCount = 0;
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
+      callCount++;
+      return new Response(
+        JSON.stringify([
+          {
+            time: "2024-01-05T20:45:00.000Z",
+            open: 1.1,
+            high: 1.11,
+            low: 1.09,
+            close: 1.105,
+            volume: 100,
+          },
+        ]),
+        { status: 200 },
+      );
+    });
+
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-06T03:00:00Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(1);
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
+  });
+
+  test("expires weekend cache at the real Sunday reopen instead of six hours after fetch", async () => {
+    process.env.METAAPI_TOKEN = "dummy";
+    process.env.METAAPI_ACCOUNT_ID = "dummy";
+    process.env.METAAPI_REGION = "new-york";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-07T18:00:00Z"));
+
+    let callCount = 0;
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
+      callCount++;
+      return new Response(
+        JSON.stringify([
+          {
+            time: "2024-01-05T20:45:00.000Z",
+            open: `${1.1 + callCount}`,
+            high: 2.11,
+            low: 2.09,
+            close: 2.105,
+            volume: 100,
+          },
+        ]),
+        { status: 200 },
+      );
+    });
+
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-07T20:59:59Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-07T21:05:00Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(2);
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
   });
 
   test("passes correct URL and auth-token header (METAAPI_MARKET_DATA_BASE_URL override)", async () => {
@@ -410,6 +537,7 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     delete process.env.METAAPI_TOKEN;
     delete process.env.METAAPI_ACCOUNT_ID;
     delete process.env.TWELVEDATA_API_KEY;
+    vi.useRealTimers();
     ohlc.clearOhlcCache();
     ohlc.clearRegionCache();
     resetRateLimitStateForTests();
@@ -476,6 +604,105 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
 
     mockFetch.mockRestore();
     nowSpy.mockRestore();
+  });
+
+  test("keeps H4 cache until the next 4h close boundary plus buffer", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T05:30:00Z"));
+
+    let callCount = 0;
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      callCount++;
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          values: [
+            { datetime: "2024-01-01 04:00:00", open: `${1.2 + callCount}`, high: "2.300", low: "2.100", close: "2.250", volume: "500" },
+            { datetime: "2024-01-01 00:00:00", open: `${1.1 + callCount}`, high: "1.200", low: "1.000", close: "1.150", volume: "400" },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-01T08:00:59Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-01T08:01:00Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+    expect(callCount).toBe(2);
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
+  });
+
+  test("keeps D1 cache until the next daily close boundary plus buffer (Twelve Data)", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
+
+    let callCount = 0;
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      callCount++;
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          values: [
+            { datetime: "2023-12-31", open: `${1.1 + callCount}`, high: "2.110", low: "2.090", close: "2.105", volume: "100" },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-01T23:59:59Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
+    expect(callCount).toBe(1);
+
+    vi.setSystemTime(new Date("2024-01-02T00:01:00Z"));
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
+    expect(callCount).toBe(2);
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
+  });
+
+  test("uses latest candle time as the cache anchor when provider lags wall clock", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T10:20:00Z"));
+
+    let callCount = 0;
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      callCount++;
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          values: [
+            { datetime: "2024-01-01 09:45:00", open: "1.200", high: "1.210", low: "1.190", close: "1.205", volume: "500" },
+            { datetime: "2024-01-01 09:30:00", open: "1.100", high: "1.110", low: "1.090", close: "1.105", volume: "400" },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(1);
+
+    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
+    expect(callCount).toBe(2);
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
   });
 
   test("switches cache entries when provider changes", async () => {
