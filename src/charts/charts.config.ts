@@ -1,19 +1,33 @@
 import type { ChartConfig, ChartTimeframe } from "./chart-types.js";
 
-const TIMEFRAME_CONFIGS: Array<{ timeframe: ChartTimeframe; interval: string }> = [
+const TIMEFRAME_CONFIGS: Array<{
+  timeframe: ChartTimeframe;
+  interval: string;
+}> = [
   { timeframe: "D1", interval: "D" },
   { timeframe: "H4", interval: "240" },
   { timeframe: "M15", interval: "15" },
 ];
 
-function chart(name: string, symbol: string, timeframe: ChartTimeframe, interval: string): ChartConfig {
-  return { name: `${name} ${timeframe}`, symbol, interval, description: `${name} — ${timeframe}`, timeframe };
+function chart(
+  name: string,
+  symbol: string,
+  timeframe: ChartTimeframe,
+  interval: string,
+): ChartConfig {
+  return {
+    name: `${name} ${timeframe}`,
+    symbol,
+    interval,
+    description: `${name} — ${timeframe}`,
+    timeframe,
+  };
 }
 
 const BASE_CHARTS: Array<{ name: string; symbol: string }> = [
   // Commodities
   { name: "XAU/USD", symbol: "OANDA:XAUUSD" },
-  { name: "XAG/USD", symbol: "OANDA:XAGUSD" },
+  // { name: "XAG/USD", symbol: "OANDA:XAGUSD" },
 
   // Major pairs — highest liquidity, tight spreads
   { name: "EUR/USD", symbol: "OANDA:EURUSD" },
@@ -45,7 +59,9 @@ const BASE_CHARTS: Array<{ name: string; symbol: string }> = [
 ];
 
 export const CHARTS: ChartConfig[] = BASE_CHARTS.flatMap((base) =>
-  TIMEFRAME_CONFIGS.map((timeframe) => chart(base.name, base.symbol, timeframe.timeframe, timeframe.interval)),
+  TIMEFRAME_CONFIGS.map((timeframe) =>
+    chart(base.name, base.symbol, timeframe.timeframe, timeframe.interval),
+  ),
 );
 
 export function buildChartHtml(c: ChartConfig): string {

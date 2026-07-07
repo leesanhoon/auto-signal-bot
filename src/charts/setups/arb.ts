@@ -59,18 +59,19 @@ export function detectArb(
   const levelHigh = range.high;
   const levelLow = range.low;
 
-  for (let i = range.startIndex; i < index; i++) {
+  // Include failed edge tests that happened shortly before the detected range.
+  for (let i = testLookback; i < index; i++) {
     // Check if candle i tried to break but failed (false break)
     const candle = candles[i];
     if (direction === "LONG") {
-      // For LONG: a failed test means high broke above levelLow but close fell back
-      if (candle.high > levelLow && candle.close <= levelLow) {
+      // For LONG: a failed test means price probed above the upper boundary, then closed back inside.
+      if (candle.high > levelHigh && candle.close >= levelLow && candle.close <= levelHigh) {
         edgeTestCount++;
         trace.push(`Edge test #${edgeTestCount} at index ${i}: high=${candle.high.toFixed(5)}, close=${candle.close.toFixed(5)}`);
       }
     } else {
-      // For SHORT: a failed test means low broke below levelHigh but close bounced back
-      if (candle.low < levelHigh && candle.close >= levelHigh) {
+      // For SHORT: a failed test means price probed below the lower boundary, then closed back inside.
+      if (candle.low < levelLow && candle.close >= levelLow && candle.close <= levelHigh) {
         edgeTestCount++;
         trace.push(`Edge test #${edgeTestCount} at index ${i}: low=${candle.low.toFixed(5)}, close=${candle.close.toFixed(5)}`);
       }

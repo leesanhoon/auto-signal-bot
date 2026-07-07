@@ -228,35 +228,31 @@ describe("RB — Range Break", () => {
 // ---------------------------------------------------------------------------
 
 describe("ARB — Advanced Range Break", () => {
-  test("detects ARB after repeated edge tests and a clean breakout", () => {
+  test("detects ARB when upper-edge failures happen before the detected range", () => {
     const candles: Candle[] = [];
 
-    for (let i = 0; i < 14; i++) {
-      const base = 100 + i * 0.08;
+    candles.push(
+      { time: 1700000000000 + 0 * 3600000, open: 100.0, high: 100.7, low: 99.95, close: 100.05, volume: 100 },
+      { time: 1700000000000 + 1 * 3600000, open: 100.05, high: 100.75, low: 99.97, close: 100.02, volume: 100 },
+    );
+
+    for (let i = 2; i < 20; i++) {
       candles.push({
         time: 1700000000000 + i * 3600000,
-        open: base,
-        high: base + 1.1,
-        low: base - 1.1,
-        close: base + 0.03,
+        open: 100,
+        high: 100.12,
+        low: 99.88,
+        close: 100.01,
         volume: 100,
       });
     }
 
-    candles.push(
-      { time: 1700000000000 + 14 * 3600000, open: 101.2, high: 102.2, low: 99.0, close: 99.0, volume: 90 },
-      { time: 1700000000000 + 15 * 3600000, open: 99.0, high: 102.1, low: 99.0, close: 99.0, volume: 90 },
-      { time: 1700000000000 + 16 * 3600000, open: 99.1, high: 101.9, low: 99.1, close: 100.2, volume: 90 },
-      { time: 1700000000000 + 17 * 3600000, open: 100.2, high: 102.3, low: 99.2, close: 101.0, volume: 90 },
-      { time: 1700000000000 + 18 * 3600000, open: 101.0, high: 102.4, low: 99.1, close: 100.1, volume: 90 },
-      { time: 1700000000000 + 19 * 3600000, open: 100.1, high: 102.5, low: 99.0, close: 100.3, volume: 90 },
-    );
     candles.push({
       time: 1700000000000 + 20 * 3600000,
-      open: 100.4,
-      high: 103.2,
-      low: 100.2,
-      close: 102.9,
+      open: 100.1,
+      high: 101.2,
+      low: 100.0,
+      close: 101.0,
       volume: 120,
     });
 
@@ -267,7 +263,82 @@ describe("ARB — Advanced Range Break", () => {
     expect(signal!.setup).toBe("ARB");
     expect(signal!.direction).toBe("LONG");
     expect(signal!.triggerIndex).toBe(last);
-    expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
+    expect(signal!.ruleTrace.join("\n")).toContain("Breakout LONG phat hien");
+    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #1");
+    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #2");
+  });
+
+  test("does not count an upper-edge probe that closes beyond the lower boundary", () => {
+    const candles: Candle[] = [];
+
+    candles.push(
+      { time: 1700000000000 + 0 * 3600000, open: 100.0, high: 100.7, low: 99.95, close: 100.05, volume: 100 },
+      { time: 1700000000000 + 1 * 3600000, open: 100.05, high: 100.76, low: 99.94, close: 99.6, volume: 100 },
+    );
+
+    for (let i = 2; i < 20; i++) {
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: 100,
+        high: 100.12,
+        low: 99.88,
+        close: 100.01,
+        volume: 100,
+      });
+    }
+
+    candles.push({
+      time: 1700000000000 + 20 * 3600000,
+      open: 100.1,
+      high: 101.2,
+      low: 100.0,
+      close: 101.0,
+      volume: 120,
+    });
+
+    const ctx = buildContext(candles);
+    const signal = detectArb(candles, candles.length - 1, ctx);
+    expect(signal).toBeNull();
+  });
+
+  test("detects ARB when lower-edge failures happen before the detected range", () => {
+    const candles: Candle[] = [];
+
+    candles.push(
+      { time: 1700000000000 + 0 * 3600000, open: 100.0, high: 100.05, low: 99.3, close: 99.95, volume: 100 },
+      { time: 1700000000000 + 1 * 3600000, open: 99.95, high: 100.03, low: 99.25, close: 99.98, volume: 100 },
+    );
+
+    for (let i = 2; i < 20; i++) {
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: 100,
+        high: 100.12,
+        low: 99.88,
+        close: 99.99,
+        volume: 100,
+      });
+    }
+
+    candles.push({
+      time: 1700000000000 + 20 * 3600000,
+      open: 99.9,
+      high: 99.95,
+      low: 98.9,
+      close: 98.95,
+      volume: 120,
+    });
+
+    const ctx = buildContext(candles);
+    const last = candles.length - 1;
+    const signal = detectArb(candles, last, ctx);
+    expect(signal).not.toBeNull();
+    expect(signal!.setup).toBe("ARB");
+    expect(signal!.direction).toBe("SHORT");
+    expect(signal!.triggerIndex).toBe(last);
+    expect(signal!.ruleTrace.join("\n")).toContain("Breakout SHORT phat hien");
+    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #1");
+    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #2");
   });
 });
 
