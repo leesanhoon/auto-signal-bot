@@ -641,7 +641,7 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     vi.useRealTimers();
   });
 
-  test("keeps D1 cache until the next daily close boundary plus buffer (Twelve Data)", async () => {
+  test("does not cache D1 results yet while daily close timing is still unverified", async () => {
     process.env.TWELVEDATA_API_KEY = "td-key";
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
@@ -663,11 +663,7 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
     expect(callCount).toBe(1);
 
-    vi.setSystemTime(new Date("2024-01-01T23:59:59Z"));
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
-    expect(callCount).toBe(1);
-
-    vi.setSystemTime(new Date("2024-01-02T00:01:00Z"));
+    vi.setSystemTime(new Date("2024-01-01T12:00:00Z"));
     await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
     expect(callCount).toBe(2);
 

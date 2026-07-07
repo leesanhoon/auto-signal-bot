@@ -86,6 +86,10 @@ function getTimeframeConfig(timeframe: ChartTimeframe): TimeframeConfig {
   return TIMEFRAME_CONFIG[timeframe];
 }
 
+function isCacheEnabled(timeframe: ChartTimeframe): boolean {
+  return timeframe !== "D1";
+}
+
 function cacheKey(symbol: string, timeframe: ChartTimeframe, provider: OhlcProvider): string {
   return `${provider}:${symbol}:${timeframe}`;
 }
@@ -418,7 +422,7 @@ export async function fetchOhlcHistory(
   const twelveDataApiKey = process.env.TWELVEDATA_API_KEY?.trim();
   const provider: OhlcProvider = twelveDataApiKey ? "twelvedata" : "metaapi";
   const key = cacheKey(symbol, timeframe, provider);
-  const cached = cache.get(key);
+  const cached = isCacheEnabled(timeframe) ? cache.get(key) : undefined;
   if (cached && cached.expiresAt > Date.now()) {
     return cached.candles.slice();
   }
@@ -426,8 +430,10 @@ export async function fetchOhlcHistory(
   if (twelveDataApiKey) {
     const result = await fetchFromTwelveData(symbol, timeframe, bars, twelveDataApiKey);
     if (result instanceof Error) return result;
-    const latestCandleTime = result.length > 0 ? result[result.length - 1].time : null;
-    cache.set(key, { candles: result.slice(), expiresAt: getCacheExpiryMs(timeframe, Date.now(), latestCandleTime) });
+    if (isCacheEnabled(timeframe)) {
+      const latestCandleTime = result.length > 0 ? result[result.length - 1].time : null;
+      cache.set(key, { candles: result.slice(), expiresAt: getCacheExpiryMs(timeframe, Date.now(), latestCandleTime) });
+    }
     return result;
   }
 
@@ -493,10 +499,12 @@ export async function fetchOhlcHistory(
     candles.pop();
   }
 
-  cache.set(key, {
-    candles: candles.slice(),
-    expiresAt: getCacheExpiryMs(timeframe, Date.now(), candles.length > 0 ? candles[candles.length - 1].time : null),
-  });
+  if (isCacheEnabled(timeframe)) {
+    cache.set(key, {
+      candles: candles.slice(),
+      expiresAt: getCacheExpiryMs(timeframe, Date.now(), candles.length > 0 ? candles[candles.length - 1].time : null),
+    });
+  }
 
   return candles;
 }

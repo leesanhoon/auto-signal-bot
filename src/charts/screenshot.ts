@@ -1,7 +1,8 @@
 import { chromium, type BrowserContext, type Frame } from "playwright";
 import { mkdir } from "fs/promises";
 import { join } from "path";
-import { CHARTS, buildChartHtml } from "./charts.config.js";
+import { CHARTS, buildChartHtml, getChartsForTimeframeMode } from "./charts.config.js";
+import type { ChartTimeframeMode } from "./chart-config-env.js";
 import type { CandleRangeStats, ChartTimeframe, ScreenshotResult } from "./chart-types.js";
 import { createLogger } from "../shared/logger.js";
 
@@ -274,7 +275,10 @@ async function capturePageScreenshot(
   return { chart, buffer: Buffer.from(buffer), filepath, lastPrice };
 }
 
-export async function captureAllCharts(): Promise<ScreenshotResult[]> {
+export async function captureAllCharts(
+  chartTimeframeMode: ChartTimeframeMode = "multi",
+  primaryTimeframe: ChartTimeframe = "M15",
+): Promise<ScreenshotResult[]> {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
 
   const browser = await chromium.launch({
@@ -286,8 +290,9 @@ export async function captureAllCharts(): Promise<ScreenshotResult[]> {
   try {
     const context = await browser.newContext({ viewport: VIEWPORT });
 
-    for (let i = 0; i < CHARTS.length; i += PARALLEL_TABS) {
-      const batch = CHARTS.slice(i, i + PARALLEL_TABS);
+    const runtimeCharts = getChartsForTimeframeMode(chartTimeframeMode, primaryTimeframe);
+    for (let i = 0; i < runtimeCharts.length; i += PARALLEL_TABS) {
+      const batch = runtimeCharts.slice(i, i + PARALLEL_TABS);
       const batchResults = await Promise.allSettled(batch.map((chart) => captureChart(context, chart)));
 
       for (const r of batchResults) {

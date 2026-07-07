@@ -55,7 +55,10 @@ async function main(): Promise<void> {
   logger.info(`Pairs to backtest: ${pairs.length}`);
 
   // For each pair, fetch H4 data and run backtest
-  const allReports: Array<{ pair: string; report: Awaited<ReturnType<typeof runSetupBacktest>> }> = [];
+  const allReports: Array<{
+    pair: string;
+    report: Awaited<ReturnType<typeof runSetupBacktest>>;
+  }> = [];
 
   for (const { pair, symbol } of pairs) {
     logger.info(`Fetching ${timeframe} data for ${pair}...`);
@@ -82,7 +85,10 @@ async function main(): Promise<void> {
 }
 
 function printReport(
-  reports: Array<{ pair: string; report: Awaited<ReturnType<typeof runSetupBacktest>> }>,
+  reports: Array<{
+    pair: string;
+    report: Awaited<ReturnType<typeof runSetupBacktest>>;
+  }>,
   timeframe: ChartTimeframe,
 ): void {
   console.log("\n" + "=".repeat(70));
@@ -90,8 +96,14 @@ function printReport(
   console.log("=".repeat(70));
 
   // Aggregate by setup
-  const setupAgg: Record<string, { trades: number; wins: number; totalRr: number }> = {};
-  const pairAgg: Record<string, { trades: number; wins: number; totalRr: number }> = {};
+  const setupAgg: Record<
+    string,
+    { trades: number; wins: number; totalRr: number }
+  > = {};
+  const pairAgg: Record<
+    string,
+    { trades: number; wins: number; totalRr: number }
+  > = {};
   let totalTrades = 0;
   let totalWins = 0;
   let totalRr = 0;
@@ -122,27 +134,39 @@ function printReport(
   // Overall
   console.log(`\n📊 OVERALL`);
   console.log(`   Trades: ${totalTrades}`);
-  console.log(`   Win Rate: ${totalTrades > 0 ? ((totalWins / totalTrades) * 100).toFixed(1) : "N/A"}%`);
-  console.log(`   Avg R: ${totalTrades > 0 ? (totalRr / totalTrades).toFixed(2) : "N/A"}R`);
+  console.log(
+    `   Win Rate: ${totalTrades > 0 ? ((totalWins / totalTrades) * 100).toFixed(1) : "N/A"}%`,
+  );
+  console.log(
+    `   Avg R: ${totalTrades > 0 ? (totalRr / totalTrades).toFixed(2) : "N/A"}R`,
+  );
 
   // By setup
   console.log(`\n📈 BY SETUP`);
-  console.log(`   ${"Setup".padEnd(8)} ${"Trades".padEnd(8)} ${"Win Rate".padEnd(10)} ${"Avg R".padEnd(10)}`);
+  console.log(
+    `   ${"Setup".padEnd(8)} ${"Trades".padEnd(8)} ${"Win Rate".padEnd(10)} ${"Avg R".padEnd(10)}`,
+  );
   console.log(`   ${"-".repeat(36)}`);
   for (const [setup, agg] of Object.entries(setupAgg).sort()) {
     const wr = ((agg.wins / agg.trades) * 100).toFixed(1);
     const avgR = (agg.totalRr / agg.trades).toFixed(2);
-    console.log(`   ${setup.padEnd(8)} ${String(agg.trades).padEnd(8)} ${(wr + "%").padEnd(10)} ${(avgR + "R").padEnd(10)}`);
+    console.log(
+      `   ${setup.padEnd(8)} ${String(agg.trades).padEnd(8)} ${(wr + "%").padEnd(10)} ${(avgR + "R").padEnd(10)}`,
+    );
   }
 
   // By pair
   console.log(`\n📊 BY PAIR`);
-  console.log(`   ${"Pair".padEnd(10)} ${"Trades".padEnd(8)} ${"Win Rate".padEnd(10)} ${"Avg R".padEnd(10)}`);
+  console.log(
+    `   ${"Pair".padEnd(10)} ${"Trades".padEnd(8)} ${"Win Rate".padEnd(10)} ${"Avg R".padEnd(10)}`,
+  );
   console.log(`   ${"-".repeat(38)}`);
   for (const [pair, agg] of Object.entries(pairAgg).sort()) {
     const wr = ((agg.wins / agg.trades) * 100).toFixed(1);
     const avgR = (agg.totalRr / agg.trades).toFixed(2);
-    console.log(`   ${pair.padEnd(10)} ${String(agg.trades).padEnd(8)} ${(wr + "%").padEnd(10)} ${(avgR + "R").padEnd(10)}`);
+    console.log(
+      `   ${pair.padEnd(10)} ${String(agg.trades).padEnd(8)} ${(wr + "%").padEnd(10)} ${(avgR + "R").padEnd(10)}`,
+    );
   }
 
   console.log("\n" + "=".repeat(70));

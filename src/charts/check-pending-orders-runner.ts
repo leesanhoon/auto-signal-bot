@@ -176,7 +176,7 @@ async function triggerPendingOrder(order: PendingOrder): Promise<number | null> 
   return findOpenPositionIdByPair(order.pair);
 }
 
-async function processPendingOrder(order: PendingOrder): Promise<void> {
+async function processPendingOrder(order: PendingOrder): Promise<boolean> {
   const nextRunCount = order.runCount + 1;
   const ai = await reviewPendingOrder(order);
 
@@ -198,7 +198,7 @@ async function processPendingOrder(order: PendingOrder): Promise<void> {
         id: order.id,
         pair: order.pair,
       });
-      return;
+      return true;
     }
 
     await updatePendingOrder(order.id, {
@@ -212,7 +212,7 @@ async function processPendingOrder(order: PendingOrder): Promise<void> {
       `✅ Lệnh chờ #${order.id} (${order.pair}) đã khớp, bot bắt đầu theo dõi.\n*Cập nhật lúc:* ${formatCheckedAt()}`,
     );
     logger.info("Triggered pending order", { id: order.id, pair: order.pair, triggeredPositionId });
-    return;
+    return true;
   }
 
   if (ai.status === "CANCELLED") {
@@ -226,7 +226,7 @@ async function processPendingOrder(order: PendingOrder): Promise<void> {
       `❌ Setup #${order.id} (${order.pair}) không còn hợp lệ, nên hủy lệnh chờ trên sàn nếu đã đặt.\n*Cập nhật lúc:* ${formatCheckedAt()}`,
     );
     logger.info("Cancelled pending order", { id: order.id, pair: order.pair });
-    return;
+    return true;
   }
 
   if (nextRunCount >= order.expiryRuns) {
@@ -240,7 +240,7 @@ async function processPendingOrder(order: PendingOrder): Promise<void> {
       `⌛ Lệnh chờ #${order.id} (${order.pair}) đã quá hạn ${order.expiryRuns} lần kiểm tra mà chưa khớp, nên hủy lệnh chờ.\n*Cập nhật lúc:* ${formatCheckedAt()}`,
     );
     logger.info("Expired pending order", { id: order.id, pair: order.pair });
-    return;
+    return true;
   }
 
   await updatePendingOrder(order.id, {
@@ -252,30 +252,36 @@ async function processPendingOrder(order: PendingOrder): Promise<void> {
     runCount: nextRunCount,
     expiryRuns: order.expiryRuns,
   });
+  return false;
 }
 
-export async function runCheckPendingOrders(): Promise<void> {
+export async function runCheckPendingOrders(): Promise<number> {
   logger.info("Check pending orders starting");
   const orders = await loadPendingOrders();
   if (orders.length === 0) {
     logger.info("No pending orders");
-    return;
+    return 0;
   }
 
   logger.info("Loaded pending orders", { count: orders.length });
 
+  let notificationsSent = 0;
   for (const order of orders) {
     try {
       logger.info("Checking pending order", { id: order.id, pair: order.pair, timeframe: order.primaryTimeframe });
-      await processPendingOrder(order);
+      if (await processPendingOrder(order)) {
+        notificationsSent += 1;
+      }
       logger.info("Finished pending order", { id: order.id, pair: order.pair });
     } catch (error) {
       logger.error("Failed to check pending order", { id: order.id, pair: order.pair, error });
       await sendMessage(
         `⚠️ *Check Pending Orders*\n\nKhông thể kiểm tra lệnh chờ #${order.id} ${order.pair}:\n${error instanceof Error ? error.message : String(error)}`,
       );
+      notificationsSent += 1;
     }
   }
 
   logger.info("Check pending orders complete");
+  return notificationsSent;
 }

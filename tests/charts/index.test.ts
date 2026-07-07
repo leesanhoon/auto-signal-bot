@@ -6,18 +6,33 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   captureAllCharts: vi.fn(),
   analyzeAllCharts: vi.fn(),
+  buildChartAnalysisCacheKey: vi.fn((candleKey: string, engineMode: string, timeframeMode: string, primaryTimeframe?: string) =>
+    timeframeMode === "single"
+      ? `${candleKey}:${engineMode}:${timeframeMode}:${primaryTimeframe ?? "M15"}`
+      : `${candleKey}:${engineMode}:${timeframeMode}`,
+  ),
   loadChartAnalysisCache: vi.fn(),
+  loadLatestChartAnalysisCache: vi.fn(),
   saveChartAnalysisCache: vi.fn(),
   isWithinCandleCloseWindow: vi.fn(),
   runCheckOpenTrades: vi.fn(),
   runCheckPendingOrders: vi.fn(),
   sendAllAnalyses: vi.fn(),
+  sendMessage: vi.fn(),
+  buildHeartbeatMessage: vi.fn(),
   notifyError: vi.fn(),
   saveOpenPosition: vi.fn(),
   savePendingOrder: vi.fn(),
   validateTradeSetupForOpen: vi.fn(),
+  analyzeAllChartsDeterministic: vi.fn(),
   getConfiguredChartSignalConfidenceThreshold: vi.fn(),
   getConfiguredChartEngineMode: vi.fn(),
+  getConfiguredChartRunContext: vi.fn(),
+  getConfiguredChartTimeframeMode: vi.fn(),
+  getConfiguredChartPrimaryTimeframe: vi.fn(),
+  shouldUseLatestCacheForManualRun: vi.fn(),
+  shouldSendHeartbeatOutsideCloseWindow: vi.fn(),
+  shouldSendHeartbeatOnManualRun: vi.fn(),
 }));
 
 // ============================================================
@@ -29,10 +44,12 @@ vi.mock("../../src/charts/screenshot.js", () => ({
 
 vi.mock("../../src/charts/analyzer.js", () => ({
   analyzeAllCharts: mocks.analyzeAllCharts,
+  buildChartAnalysisCacheKey: mocks.buildChartAnalysisCacheKey,
 }));
 
 vi.mock("../../src/charts/chart-cache-repository.js", () => ({
   loadChartAnalysisCache: mocks.loadChartAnalysisCache,
+  loadLatestChartAnalysisCache: mocks.loadLatestChartAnalysisCache,
   saveChartAnalysisCache: mocks.saveChartAnalysisCache,
 }));
 
@@ -54,6 +71,8 @@ vi.mock("../../src/charts/check-pending-orders-runner.js", () => ({
 
 vi.mock("../../src/shared/telegram.js", () => ({
   sendAllAnalyses: mocks.sendAllAnalyses,
+  sendMessage: mocks.sendMessage,
+  buildHeartbeatMessage: mocks.buildHeartbeatMessage,
   notifyError: mocks.notifyError,
 }));
 
@@ -66,9 +85,19 @@ vi.mock("../../src/charts/position-engine.js", () => ({
   validateTradeSetupForOpen: mocks.validateTradeSetupForOpen,
 }));
 
+vi.mock("../../src/charts/deterministic-pipeline.js", () => ({
+  analyzeAllChartsDeterministic: mocks.analyzeAllChartsDeterministic,
+}));
+
 vi.mock("../../src/charts/chart-config-env.js", () => ({
   getConfiguredChartSignalConfidenceThreshold: mocks.getConfiguredChartSignalConfidenceThreshold,
   getConfiguredChartEngineMode: mocks.getConfiguredChartEngineMode,
+  getConfiguredChartRunContext: mocks.getConfiguredChartRunContext,
+  getConfiguredChartTimeframeMode: mocks.getConfiguredChartTimeframeMode,
+  getConfiguredChartPrimaryTimeframe: mocks.getConfiguredChartPrimaryTimeframe,
+  shouldUseLatestCacheForManualRun: mocks.shouldUseLatestCacheForManualRun,
+  shouldSendHeartbeatOutsideCloseWindow: mocks.shouldSendHeartbeatOutsideCloseWindow,
+  shouldSendHeartbeatOnManualRun: mocks.shouldSendHeartbeatOnManualRun,
 }));
 
 // ============================================================
@@ -105,22 +134,34 @@ const MOCK_RESULT = {
 // ============================================================
 describe("charts/index main() — H4 close guard", () => {
   let main: () => Promise<void>;
+  const getExpectedCacheKey = () =>
+    String(mocks.buildChartAnalysisCacheKey.mock.results[0]?.value ?? "");
 
   beforeEach(async () => {
     vi.clearAllMocks();
 
     // Default mocks
     mocks.loadChartAnalysisCache.mockResolvedValue(null);
+    mocks.loadLatestChartAnalysisCache.mockResolvedValue(null);
     mocks.isWithinCandleCloseWindow.mockReturnValue(false);
     mocks.getConfiguredChartSignalConfidenceThreshold.mockReturnValue(50);
     mocks.getConfiguredChartEngineMode.mockReturnValue("ai");
+    mocks.getConfiguredChartRunContext.mockReturnValue("manual");
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("multi");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("M15");
+    mocks.shouldUseLatestCacheForManualRun.mockReturnValue(true);
+    mocks.shouldSendHeartbeatOutsideCloseWindow.mockReturnValue(true);
+    mocks.shouldSendHeartbeatOnManualRun.mockReturnValue(true);
     mocks.validateTradeSetupForOpen.mockReturnValue({ accepted: true, reason: "" });
     mocks.saveOpenPosition.mockResolvedValue(true);
     mocks.savePendingOrder.mockResolvedValue(true);
     mocks.captureAllCharts.mockResolvedValue([{ filepath: "/tmp/chart.png" }]);
     mocks.analyzeAllCharts.mockResolvedValue(MOCK_RESULT);
-    mocks.runCheckOpenTrades.mockResolvedValue(undefined);
-    mocks.runCheckPendingOrders.mockResolvedValue(undefined);
+    mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
+    mocks.runCheckOpenTrades.mockResolvedValue(0);
+    mocks.runCheckPendingOrders.mockResolvedValue(0);
+    mocks.sendMessage.mockResolvedValue(undefined);
+    mocks.buildHeartbeatMessage.mockReturnValue("HEARTBEAT");
 
     // Dynamic import to get fresh module instance each test
     const mod = await import("../../src/charts/index.js");
@@ -147,11 +188,18 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.loadChartAnalysisCache.mockResolvedValue(MOCK_RESULT as any);
 
     await main();
+    const expectedCacheKey = getExpectedCacheKey();
 
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
     expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
-    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(MOCK_RESULT);
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
+      MOCK_RESULT,
+      undefined,
+      expect.objectContaining({ source: "cached", candleKey: expect.any(String) }),
+    );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
     expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
@@ -160,7 +208,9 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.isWithinCandleCloseWindow.mockReturnValue(true);
 
     await main();
+    const expectedCacheKey = getExpectedCacheKey();
 
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
     expect(mocks.captureAllCharts).toHaveBeenCalledTimes(1);
     expect(mocks.analyzeAllCharts).toHaveBeenCalledTimes(1);
     expect(mocks.saveChartAnalysisCache).toHaveBeenCalledWith(
@@ -168,6 +218,11 @@ describe("charts/index main() — H4 close guard", () => {
       MOCK_RESULT,
     );
     expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
+      MOCK_RESULT,
+      undefined,
+      expect.objectContaining({ source: "live", candleKey: expect.any(String) }),
+    );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
     expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
@@ -177,12 +232,111 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.isWithinCandleCloseWindow.mockReturnValue(true);
 
     await main();
+    const expectedCacheKey = getExpectedCacheKey();
 
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
     // Cache hit → bỏ qua capture+analyze dù đang trong window
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
     expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
+      MOCK_RESULT,
+      undefined,
+      expect.objectContaining({ source: "cached", candleKey: expect.any(String) }),
+    );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
     expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+  });
+
+  test("ngoài window + manual run + không có cache hiện tại nhưng có latest cache → dùng latest cache", async () => {
+    mocks.getConfiguredChartRunContext.mockReturnValue("manual");
+    mocks.loadLatestChartAnalysisCache.mockResolvedValue({
+      candleKey: "2026-07-03T08:ai",
+      result: MOCK_RESULT as any,
+    });
+
+    await main();
+    const expectedCacheKey = getExpectedCacheKey();
+
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
+    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith("ai", "multi", "M15");
+    expect(mocks.captureAllCharts).not.toHaveBeenCalled();
+    expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
+      MOCK_RESULT,
+      undefined,
+      { source: "cached", candleKey: "2026-07-03T08:ai" },
+    );
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  test("ngoài window + manual run + không có cache → gửi heartbeat", async () => {
+    mocks.getConfiguredChartRunContext.mockReturnValue("manual");
+    mocks.loadLatestChartAnalysisCache.mockResolvedValue(null);
+
+    await main();
+
+    expect(mocks.captureAllCharts).not.toHaveBeenCalled();
+    expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
+    expect(mocks.sendAllAnalyses).not.toHaveBeenCalled();
+    expect(mocks.buildHeartbeatMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runContext: "manual",
+        reason: "no-cache",
+        candleKey: expect.any(String),
+      }),
+    );
+    expect(mocks.sendMessage).toHaveBeenCalledWith("HEARTBEAT");
+  });
+
+  test("ngoài window + auto run + không có event khác → gửi heartbeat no-event", async () => {
+    mocks.getConfiguredChartRunContext.mockReturnValue("auto");
+    mocks.runCheckOpenTrades.mockResolvedValue(0);
+    mocks.runCheckPendingOrders.mockResolvedValue(0);
+
+    await main();
+
+    expect(mocks.loadLatestChartAnalysisCache).not.toHaveBeenCalled();
+    expect(mocks.buildHeartbeatMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runContext: "auto",
+        reason: "no-event",
+        candleKey: expect.any(String),
+      }),
+    );
+    expect(mocks.sendMessage).toHaveBeenCalledWith("HEARTBEAT");
+  });
+
+  test("ngoài window + auto run + có event trade/pending → không gửi heartbeat", async () => {
+    mocks.getConfiguredChartRunContext.mockReturnValue("auto");
+    mocks.runCheckOpenTrades.mockResolvedValue(1);
+    mocks.runCheckPendingOrders.mockResolvedValue(0);
+
+    await main();
+
+    expect(mocks.buildHeartbeatMessage).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  test("deterministic single mode truyền timeframe thực xuống pipeline", async () => {
+    mocks.getConfiguredChartEngineMode.mockReturnValue("deterministic");
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("single");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("D1");
+    mocks.isWithinCandleCloseWindow.mockReturnValue(true);
+
+    await main();
+    const expectedCacheKey = getExpectedCacheKey();
+
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledTimes(1);
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledWith(
+      expect.any(Array),
+      { timeframeMode: "single", primaryTimeframe: "D1" },
+    );
+    expect(mocks.saveChartAnalysisCache).toHaveBeenCalledWith(
+      expectedCacheKey,
+      MOCK_RESULT,
+    );
   });
 });

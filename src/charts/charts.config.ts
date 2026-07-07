@@ -1,4 +1,7 @@
 import type { ChartConfig, ChartTimeframe } from "./chart-types.js";
+import type {
+  ChartTimeframeMode,
+} from "./chart-config-env.js";
 
 const TIMEFRAME_CONFIGS: Array<{
   timeframe: ChartTimeframe;
@@ -63,6 +66,16 @@ export const CHARTS: ChartConfig[] = BASE_CHARTS.flatMap((base) =>
     chart(base.name, base.symbol, timeframe.timeframe, timeframe.interval),
   ),
 );
+
+export function getChartsForTimeframeMode(
+  timeframeMode: ChartTimeframeMode,
+  primaryTimeframe: ChartTimeframe,
+): ChartConfig[] {
+  if (timeframeMode === "single") {
+    return CHARTS.filter((chart) => chart.timeframe === primaryTimeframe);
+  }
+  return CHARTS;
+}
 
 export function buildChartHtml(c: ChartConfig): string {
   return `<!DOCTYPE html>

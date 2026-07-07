@@ -16,6 +16,7 @@ import {
   type OpenRouterRequest,
 } from "../shared/openrouter.js";
 import { callOpenRouterWithFallback, parseModelFallbacks } from "../shared/ai-model-fallback.js";
+import type { ChartTimeframeMode } from "./chart-config-env.js";
 
 const logger = createLogger("charts:analyzer");
 const ANALYSIS_MODEL =
@@ -229,6 +230,17 @@ export function buildPendingOrderCheckPrompt(
     "PENDING: entry has not been reached yet and the structure remains valid.",
     "Use Vietnamese with accents in comment.",
   ].join("\n");
+}
+
+export function buildChartAnalysisCacheKey(
+  candleKey: string,
+  engineMode: string,
+  timeframeMode: ChartTimeframeMode,
+  primaryTimeframe?: string,
+): string {
+  return timeframeMode === "single"
+    ? `${candleKey}:${engineMode}:${timeframeMode}:${primaryTimeframe ?? "M15"}`
+    : `${candleKey}:${engineMode}:${timeframeMode}`;
 }
 
 export function cleanResponse(text: string): string {
@@ -469,9 +481,9 @@ export async function analyzeAllCharts(
   screenshots: ScreenshotResult[],
 ): Promise<AnalysisResult> {
   const groups = groupScreenshotsByPair(screenshots);
-  logger.info(`  -> Trying ${ANALYSIS_MODEL} per pair...`, {
-    pairs: groups.length,
-  });
+    logger.info(`  -> Trying ${ANALYSIS_MODEL} per pair...`, {
+      pairs: groups.length,
+    });
   const summaries: PairSummary[] = [];
   const setups: TradeSetup[] = [];
   const noSetupReasons: string[] = [];

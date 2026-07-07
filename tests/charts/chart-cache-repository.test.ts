@@ -5,6 +5,9 @@ const repoState = vi.hoisted(() => ({
   upsertResult: { error: null },
   select: vi.fn(),
   eq: vi.fn(),
+  ilike: vi.fn(),
+  order: vi.fn(),
+  limit: vi.fn(),
   maybeSingle: vi.fn(),
   upsert: vi.fn(),
   from: vi.fn(),
@@ -64,12 +67,18 @@ describe("charts/chart-cache-repository", () => {
     repoState.from.mockReset();
     repoState.select.mockReset();
     repoState.eq.mockReset();
+    repoState.ilike.mockReset();
+    repoState.order.mockReset();
+    repoState.limit.mockReset();
     repoState.maybeSingle.mockReset();
     repoState.upsert.mockReset();
 
     const chain = {
       select: vi.fn(() => chain),
       eq: vi.fn(() => chain),
+      ilike: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
       maybeSingle: vi.fn(async () => repoState.selectResult),
       upsert: vi.fn(async () => repoState.upsertResult),
     };
@@ -204,6 +213,52 @@ describe("charts/chart-cache-repository", () => {
 
       const result = await chartCacheRepository.loadChartAnalysisCache(CANDLE_KEY);
       expect(result).toBeNull();
+    });
+  });
+
+  describe("loadLatestChartAnalysisCache", () => {
+    test("trả candle_key mới nhất theo engine mode", async () => {
+      repoState.selectResult = {
+        data: {
+          candle_key: "2026-07-03T08:ai",
+          result: {
+            summaries: MOCK_RESULT.summaries,
+            setups: MOCK_RESULT.setups,
+            noSetupReason: MOCK_RESULT.noSetupReason,
+            screenshots: [],
+          },
+          created_at: "2026-07-03T08:05:00.000Z",
+        },
+        error: null,
+      };
+
+      const result = await chartCacheRepository.loadLatestChartAnalysisCache("ai");
+
+      expect(result).not.toBeNull();
+      expect(result?.candleKey).toBe("2026-07-03T08:ai");
+      expect(result?.result.screenshots).toEqual([]);
+      expect(repoState.from().ilike).toHaveBeenCalledWith("candle_key", "%:ai:multi");
+      expect(repoState.from().order).toHaveBeenCalledWith("created_at", { ascending: false });
+      expect(repoState.from().limit).toHaveBeenCalledWith(1);
+    });
+
+    test("schema sai vẫn trả null", async () => {
+      repoState.selectResult = {
+        data: {
+          candle_key: "2026-07-03T08:ai",
+          result: {
+            summaries: [],
+            setups: [{ pair: "EUR/USD", direction: "LONG" }],
+            noSetupReason: "",
+            screenshots: [],
+          },
+        },
+        error: null,
+      };
+
+      const result = await chartCacheRepository.loadLatestChartAnalysisCache("ai");
+      expect(result).toBeNull();
+      expect(loggerState.warn).toHaveBeenCalledTimes(1);
     });
   });
 

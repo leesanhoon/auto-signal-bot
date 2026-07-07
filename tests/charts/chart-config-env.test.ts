@@ -2,12 +2,16 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   getConfiguredChartSignalConfidenceThreshold,
   getConfiguredPendingOrderExpiryRuns,
+  getConfiguredChartPrimaryTimeframe,
+  getConfiguredChartTimeframeMode,
 } from "../../src/charts/chart-config-env.js";
 
 describe("charts/chart-config-env", () => {
   afterEach(() => {
     delete process.env.CHART_SIGNAL_CONFIDENCE_THRESHOLD;
     delete process.env.PENDING_ORDER_EXPIRY_RUNS;
+    delete process.env.CHART_TIMEFRAME_MODE;
+    delete process.env.CHART_PRIMARY_TIMEFRAME;
   });
 
   test("keeps chart confidence threshold parsing unchanged", () => {
@@ -56,6 +60,34 @@ describe("charts/chart-config-env", () => {
 
       process.env.PENDING_ORDER_EXPIRY_RUNS = "-1";
       expect(getConfiguredPendingOrderExpiryRuns()).toBe(2);
+    });
+  });
+
+  describe("chart timeframe config", () => {
+    test("defaults timeframe mode to multi", () => {
+      delete process.env.CHART_TIMEFRAME_MODE;
+      expect(getConfiguredChartTimeframeMode()).toBe("multi");
+    });
+
+    test("defaults primary timeframe to M15", () => {
+      delete process.env.CHART_PRIMARY_TIMEFRAME;
+      expect(getConfiguredChartPrimaryTimeframe()).toBe("M15");
+    });
+
+    test("parses valid timeframe mode and primary timeframe", () => {
+      process.env.CHART_TIMEFRAME_MODE = "single";
+      process.env.CHART_PRIMARY_TIMEFRAME = "H4";
+
+      expect(getConfiguredChartTimeframeMode()).toBe("single");
+      expect(getConfiguredChartPrimaryTimeframe()).toBe("H4");
+    });
+
+    test("invalid timeframe config falls back safely", () => {
+      process.env.CHART_TIMEFRAME_MODE = "invalid";
+      process.env.CHART_PRIMARY_TIMEFRAME = "H1";
+
+      expect(getConfiguredChartTimeframeMode()).toBe("multi");
+      expect(getConfiguredChartPrimaryTimeframe()).toBe("M15");
     });
   });
 });

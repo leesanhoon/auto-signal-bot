@@ -1,8 +1,21 @@
 import { describe, expect, test, vi } from "vitest";
-import { buildPositionDecisionMessage, sendAllAnalyses, findScreenshotForSetup } from "../../src/shared/telegram.js";
+import { buildHeartbeatMessage, buildPositionDecisionMessage, sendAllAnalyses, findScreenshotForSetup } from "../../src/shared/telegram.js";
 import type { AnalysisResult, TradeSetup, ScreenshotResult } from "../../src/charts/chart-types.js";
 
 describe("shared/telegram", () => {
+  test("buildHeartbeatMessage distinguishes manual no-cache heartbeat", () => {
+    const message = buildHeartbeatMessage({
+      runContext: "manual",
+      engineMode: "shadow",
+      reason: "no-cache",
+      candleKey: "2026-07-03T12:shadow",
+    });
+
+    expect(message).toContain("Manual run");
+    expect(message).toContain("no-cache");
+    expect(message).toContain("Scanner vẫn đang hoạt động bình thường.");
+  });
+
   test("buildPositionDecisionMessage labels original reasons compactly", () => {
     const message = buildPositionDecisionMessage(
       {
@@ -137,6 +150,45 @@ describe("shared/telegram", () => {
     expect(fullText).toContain("GBP/USD");
     expect(fullText).not.toContain("EUR/USD — LONG");
     expect(photos).toHaveLength(1);
+  });
+
+  test("sendAllAnalyses can render cached analysis without screenshots buffer", async () => {
+    const sends: string[] = [];
+    const notifier = {
+      sendMessage: vi.fn(async (message: string) => {
+        sends.push(message);
+      }),
+      sendPhoto: vi.fn(async () => undefined),
+    };
+
+    const setup: TradeSetup = {
+      pair: "EUR/USD",
+      direction: "LONG",
+      setup: "Breakout",
+      reasons: ["EMA 20 hỗ trợ"],
+      risks: ["Nến giả phá"],
+      confidence: 78,
+      entry: "1.1000",
+      stopLoss: "1.0980",
+      takeProfit1: "1.1040",
+      takeProfit2: "1.1080",
+      riskReward: "1:2",
+      summary: "Cache summary",
+      orderType: "BUY_STOP",
+    };
+
+    const result: AnalysisResult = {
+      summaries: [{ pair: "EUR/USD", trend: "Tăng", status: "OK", confidence: 80 }],
+      setups: [setup],
+      noSetupReason: "",
+      screenshots: [],
+    };
+
+    await sendAllAnalyses(result, notifier, { source: "cached", candleKey: "2026-07-03T08:ai" });
+
+    expect(sends.join("\n")).toContain("từ cache");
+    expect(sends.join("\n")).toContain("Cache summary");
+    expect(notifier.sendPhoto).not.toHaveBeenCalled();
   });
 
   test("sendAllAnalyses prefers exact provenance over fuzzy screenshot matching", async () => {

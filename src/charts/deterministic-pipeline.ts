@@ -16,6 +16,19 @@ import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:deterministic-pipeline");
 
+export function passesDeterministicWindowFilter(
+  timeframe: ChartTimeframe,
+  lastCandleTime: number,
+  atrLast: number | null,
+  atrAvg20d: number | null,
+): boolean {
+  if (atrLast === null || atrAvg20d === null) return false;
+  if (timeframe === "D1") {
+    return atrLast >= 0.3 * atrAvg20d;
+  }
+  return isTradableWindow(lastCandleTime, atrLast, atrAvg20d);
+}
+
 /**
  * Analyze all pairs using the deterministic numeric engine instead of AI vision.
  *
@@ -31,19 +44,28 @@ const logger = createLogger("charts:deterministic-pipeline");
  */
 export async function analyzeAllChartsDeterministic(
   pairs: Array<{ pair: string; symbol: string }>,
+  options: {
+    timeframeMode?: "multi" | "single";
+    primaryTimeframe?: ChartTimeframe;
+  } = {},
 ): Promise<AnalysisResult> {
+  const timeframeMode = options.timeframeMode ?? "multi";
+  const primaryTimeframe = options.primaryTimeframe ?? "H4";
+  const analysisTimeframe: ChartTimeframe =
+    timeframeMode === "single" ? primaryTimeframe : "H4";
+
   // Process all pairs in parallel
   const pairResults = await Promise.all(pairs.map(async ({ pair, symbol }) => {
     try {
-      // ---- Fetch OHLC data for H4 (primary timeframe) ----
-      const h4Result = await fetchOhlcHistory(symbol, "H4", 200);
+      // ---- Fetch OHLC data for the runtime primary timeframe ----
+      const ohlcResult = await fetchOhlcHistory(symbol, analysisTimeframe, 200);
 
-      if (h4Result instanceof Error) {
-        logger.warn(`  ! Skip ${pair}: OHLC error — ${h4Result.message}`);
-        return { kind: "skip" as const, pair, error: h4Result.message };
+      if (ohlcResult instanceof Error) {
+        logger.warn(`  ! Skip ${pair}: OHLC error — ${ohlcResult.message}`);
+        return { kind: "skip" as const, pair, error: ohlcResult.message };
       }
 
-      const primaryCandles = h4Result as Candle[];
+      const primaryCandles = ohlcResult as Candle[];
       const ema20 = calculateEma(primaryCandles, 20);
       const atr14 = calculateAtr(primaryCandles, 14);
       const lastIndex = primaryCandles.length - 1;
@@ -52,14 +74,18 @@ export async function analyzeAllChartsDeterministic(
       const lastCandle = primaryCandles[lastIndex];
       const atrLast = atr14[lastIndex];
       const atrAvg20d = averageAtr(atr14, lastIndex, 20);
-      if (atrLast === null || atrAvg20d === null || !isTradableWindow(lastCandle.time, atrLast, atrAvg20d)) {
-        return { kind: "skip" as const, pair, error: "ATR data chua du hoac ngoai khung giao dich London/NY" };
+      if (!passesDeterministicWindowFilter(analysisTimeframe, lastCandle.time, atrLast, atrAvg20d)) {
+        return {
+          kind: "skip" as const,
+          pair,
+          error: "ATR data chua du hoac ngoai khung giao dich hop le",
+        };
       }
 
       // ---- Detect context ----
       const ctx = {
         ema20, atr14, pair,
-        timeframe: "H4" as ChartTimeframe,
+        timeframe: analysisTimeframe,
       };
 
       // ---- Run 6 standard detectors on last 5 candles ----
