@@ -163,6 +163,11 @@ export function isDoji(
 /**
  * Phát hiện compression (block/range) trên cửa sổ trượt.
  *
+ * QUAN TRỌNG: `endIndex` phải là nến CUỐI CÙNG của block/range đã đóng, KHÔNG
+ * bao gồm nến breakout đang được kiểm tra. Nếu bạn đang kiểm tra breakout tại
+ * `index`, hãy truyền `endIndex = index - 1`; nếu không, `close > block.high`
+ * sẽ gần như luôn sai vì `block.high` đã bao gồm chính nến breakout.
+ *
  * range = Max(High) - Min(Low) trong cửa sổ
  * Trả CompressionWindow nếu range ≤ kBlock * ATR14[endIndex],
  * ngược lại trả null.
@@ -175,6 +180,7 @@ export function detectCompression(
   windowSize: number,
   kBlock = 1.2,
 ): CompressionWindow | null {
+  // endIndex must be the last closed candle; the breakout candle itself stays outside the window.
   const startIndex = endIndex - windowSize + 1;
 
   if (

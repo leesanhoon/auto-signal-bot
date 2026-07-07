@@ -43,7 +43,7 @@ export function detectBb(
   let block: ReturnType<typeof detectCompression> = null;
 
   for (const w of windowSizes) {
-    block = detectCompression(candles, ctx.ema20, ctx.atr14, index, w, 1.2);
+    block = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, 1.2);
     if (block !== null) {
       trace.push(`Block detected w=${w}, range=${block.range.toFixed(5)}, distanceToEma=${block.distanceToEma.toFixed(2)}`);
       break;

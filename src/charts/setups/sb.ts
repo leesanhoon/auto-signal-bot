@@ -47,7 +47,7 @@ export function detectSb(
   let newBlock: ReturnType<typeof detectCompression> = null;
 
   for (const w of windowSizes) {
-    newBlock = detectCompression(candles, ctx.ema20, ctx.atr14, index, w, 1.2);
+    newBlock = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, 1.2);
     if (newBlock !== null) {
       // New block must be within or near the old range
       if (newBlock.high <= oldHigh + 0.5 * atr && newBlock.low >= oldLow - 0.5 * atr) {

@@ -23,7 +23,7 @@ xem [chart-config-env.ts](../src/charts/chart-config-env.ts)):
 ## Kiến trúc
 
 ```
-OHLC Provider (OANDA v20, H4)          src/charts/ohlc-provider.ts
+OHLC Provider (MetaApi, H4)            src/charts/ohlc-provider.ts
         │
         ▼
 Indicator Primitives                   src/charts/indicators.ts

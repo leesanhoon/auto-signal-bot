@@ -3,6 +3,76 @@ import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types
 import { detectCompression } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, applyStandardConfidenceAdjustments } from "./shared.js";
 
+function checkShiftedFallback(
+  candles: Candle[],
+  ctx: DetectionContext,
+  index: number,
+  matchedInnerWindow: number,
+  kBlockInner: number,
+  direction: "LONG" | "SHORT",
+  rangeOuter: NonNullable<ReturnType<typeof detectCompression>>,
+): boolean {
+  if (index < 2) return false;
+
+  // Recompute the inner compression on `index - 2` so the fallback window excludes
+  // the breakout candle at `index - 1` and only inspects data that was actually closed.
+  const fallbackInner = detectCompression(
+    candles,
+    ctx.ema20,
+    ctx.atr14,
+    index - 2,
+    matchedInnerWindow,
+    kBlockInner,
+  );
+  if (fallbackInner === null) return false;
+
+  const prevCandle = candles[index - 1];
+  return direction === "LONG"
+    ? prevCandle.high > fallbackInner.high && candles[index].high > rangeOuter.high
+    : prevCandle.low < fallbackInner.low && candles[index].low < rangeOuter.low;
+}
+
+function resolveIrbBreakout(
+  candles: Candle[],
+  ctx: DetectionContext,
+  index: number,
+  direction: "LONG" | "SHORT",
+  rangeInner: NonNullable<ReturnType<typeof detectCompression>>,
+  rangeOuter: NonNullable<ReturnType<typeof detectCompression>>,
+  matchedInnerWindow: number,
+  kBlockInner: number,
+  trace: string[],
+): boolean {
+  const breaksInner = direction === "LONG"
+    ? candles[index].close > rangeInner.high
+    : candles[index].close < rangeInner.low;
+  if (!breaksInner) {
+    trace.push(
+      direction === "LONG"
+        ? `Chua pha RangeInner high (close=${candles[index].close.toFixed(5)} <= innerHigh=${rangeInner.high.toFixed(5)})`
+        : `Chua pha RangeInner low (close=${candles[index].close.toFixed(5)} >= innerLow=${rangeInner.low.toFixed(5)})`,
+    );
+    return false;
+  }
+
+  const breaksOuter = direction === "LONG"
+    ? candles[index].close > rangeOuter.high
+    : candles[index].close < rangeOuter.low;
+  if (!breaksOuter) {
+    trace.push(
+      direction === "LONG"
+        ? `Pha RangeInner nhung chua pha RangeOuter high (close=${candles[index].close.toFixed(5)} <= outerHigh=${rangeOuter.high.toFixed(5)})`
+        : `Pha RangeInner nhung chua pha RangeOuter low`,
+    );
+    if (!checkShiftedFallback(candles, ctx, index, matchedInnerWindow, kBlockInner, direction, rangeOuter)) {
+      return false;
+    }
+    trace.push(`RangeInner pha index ${index - 1}, RangeOuter pha index ${index} -> chap nhan`);
+  }
+
+  return true;
+}
+
 /**
  * IRB — Inside Range Break
  * RangeOuter (W=10-15) with RangeInner (W=4-6) near RangeOuter boundary.
@@ -28,7 +98,7 @@ export function detectIrb(
   let rangeOuter: ReturnType<typeof detectCompression> = null;
 
   for (const w of outerWindows) {
-    rangeOuter = detectCompression(candles, ctx.ema20, ctx.atr14, index, w, kBlockOuter);
+    rangeOuter = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, kBlockOuter);
     if (rangeOuter !== null) {
       trace.push(`RangeOuter detected w=${w}, range=${rangeOuter.range.toFixed(5)}, high=${rangeOuter.high.toFixed(5)}, low=${rangeOuter.low.toFixed(5)}`);
       break;
@@ -44,12 +114,14 @@ export function detectIrb(
   const innerWindows = [4, 5, 6];
   const kBlockInner = 1.5;
   let rangeInner: ReturnType<typeof detectCompression> = null;
+  let matchedInnerWindow = innerWindows[0];
 
   for (const w of innerWindows) {
-    rangeInner = detectCompression(candles, ctx.ema20, ctx.atr14, index, w, kBlockInner);
+    rangeInner = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, kBlockInner);
     if (rangeInner !== null) {
       // RangeInner must be inside RangeOuter
       if (rangeInner.high <= rangeOuter.high && rangeInner.low >= rangeOuter.low) {
+        matchedInnerWindow = w;
         trace.push(`RangeInner detected w=${w}, range=${rangeInner.range.toFixed(5)}`);
         break;
       }
@@ -80,49 +152,8 @@ export function detectIrb(
   trace.push(`RangeInner sat bien ${direction === "LONG" ? "tren" : "duoi"} cua RangeOuter`);
 
   // 4. Breakout: RangeInner boundary breaks AND simultaneously pushes through RangeOuter
-  const breaksInnerUp = candles[index].close > rangeInner.high;
-  const breaksInnerDown = candles[index].close < rangeInner.low;
-  const breaksOuterUp = candles[index].close > rangeOuter.high;
-  const breaksOuterDown = candles[index].close < rangeOuter.low;
-
-  if (direction === "LONG") {
-    if (!breaksInnerUp) {
-      trace.push(`Chua pha RangeInner high (close=${candles[index].close.toFixed(5)} <= innerHigh=${rangeInner.high.toFixed(5)})`);
-      return null;
-    }
-    if (!breaksOuterUp) {
-      trace.push(`Pha RangeInner nhung chua pha RangeOuter high (close=${candles[index].close.toFixed(5)} <= outerHigh=${rangeOuter.high.toFixed(5)})`);
-      // Check if in <=2 candles it pushes through (we can only check index-1)
-      if (index >= 1) {
-        // Check previous candle too — maybe it broke inner, this one breaks outer
-        const prevCandle = candles[index - 1];
-        if (prevCandle.high > rangeInner.high && candles[index].high > rangeOuter.high) {
-          trace.push(`RangeInner pha index ${index - 1}, RangeOuter pha index ${index} -> chap nhan`);
-        } else {
-          return null;
-        }
-      } else {
-        return null;
-      }
-    }
-  } else {
-    if (!breaksInnerDown) {
-      trace.push(`Chua pha RangeInner low (close=${candles[index].close.toFixed(5)} >= innerLow=${rangeInner.low.toFixed(5)})`);
-      return null;
-    }
-    if (!breaksOuterDown) {
-      trace.push(`Pha RangeInner nhung chua pha RangeOuter low`);
-      if (index >= 1) {
-        const prevCandle = candles[index - 1];
-        if (prevCandle.low < rangeInner.low && candles[index].low < rangeOuter.low) {
-          trace.push(`RangeInner pha index ${index - 1}, RangeOuter pha index ${index} -> chap nhan`);
-        } else {
-          return null;
-        }
-      } else {
-        return null;
-      }
-    }
+  if (!resolveIrbBreakout(candles, ctx, index, direction, rangeInner, rangeOuter, matchedInnerWindow, kBlockInner, trace)) {
+    return null;
   }
 
   trace.push(`Breakout pha ca RangeInner va RangeOuter`);

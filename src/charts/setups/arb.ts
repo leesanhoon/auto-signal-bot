@@ -29,7 +29,7 @@ export function detectArb(
   let range: ReturnType<typeof detectCompression> = null;
 
   for (const w of windowSizes) {
-    range = detectCompression(candles, ctx.ema20, ctx.atr14, index, w, kBlockArb);
+    range = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, kBlockArb);
     if (range !== null) {
       trace.push(`Range detected w=${w}, range=${range.range.toFixed(5)}`);
       break;

@@ -19,6 +19,23 @@ function makeCandles(
   }));
 }
 
+function buildImmediateRbCandles(): Candle[] {
+  return makeCandles([
+    ...Array.from({ length: 23 }, (_, i) => {
+      const base = 100;
+      return { o: base, h: base + 1.1, l: base - 1.1, c: base };
+    }),
+    { o: 100, h: 101.0, l: 99.0, c: 100.0 },
+    { o: 100.0, h: 101.1, l: 99.1, c: 100.05 },
+    { o: 100.05, h: 101.05, l: 99.05, c: 100.02 },
+    { o: 100.02, h: 101.0, l: 99.0, c: 100.03 },
+    { o: 100.03, h: 101.08, l: 99.08, c: 100.04 },
+    { o: 100.04, h: 101.1, l: 99.1, c: 100.01 },
+    { o: 100.01, h: 101.05, l: 99.05, c: 100.02 },
+    { o: 100.3, h: 101.45, l: 99.9, c: 101.2 },
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // runSetupBacktest
 // ---------------------------------------------------------------------------
@@ -33,6 +50,33 @@ describe("runSetupBacktest", () => {
     const report = runSetupBacktest(candles, "EUR/USD", "H4");
     expect(report.trades).toHaveLength(0);
     expect(report.overall.trades).toBe(0);
+  });
+
+  test("returns a report shape for the breakout fixture", () => {
+    const candles = [
+      ...buildImmediateRbCandles(),
+      ...Array.from({ length: 3 }, (_, i) => ({
+        time: 1700000000000 + (31 + i) * 3600000,
+        open: 100.02,
+        high: 100.2,
+        low: 99.8,
+        close: 100.01,
+        volume: 100,
+      })),
+    ];
+    const report = runSetupBacktest(candles, "EUR/USD", "H4");
+
+    expect(report).toHaveProperty("bySetup");
+    expect(report).toHaveProperty("byPair");
+    expect(report).toHaveProperty("overall");
+    expect(report).toHaveProperty("trades");
+  });
+
+  test("does not create the non-SB trade before its breakout candle exists", () => {
+    const candles = buildImmediateRbCandles().slice(0, 30);
+    const report = runSetupBacktest(candles, "EUR/USD", "H4");
+
+    expect(report.trades).toHaveLength(0);
   });
 
   test("returns report shape even with no trades", () => {

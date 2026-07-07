@@ -7,9 +7,40 @@ import type { Candle } from "./ohlc-provider.js";
 import type { ChartTimeframe } from "./chart-types.js";
 
 const logger = createLogger("charts:setup-backtest");
+const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H4", "D1"];
+
+function parseBacktestTimeframe(value: string | undefined): ChartTimeframe {
+  const normalized = value?.trim().toUpperCase();
+
+  if (normalized && VALID_TIMEFRAMES.includes(normalized as ChartTimeframe)) {
+    return normalized as ChartTimeframe;
+  }
+
+  if (normalized) {
+    logger.warn(`Invalid BACKTEST_TIMEFRAME=${value}; falling back to H4`);
+  }
+
+  return "H4";
+}
+
+function parseBacktestBars(value: string | undefined): number {
+  if (value === undefined || value.trim() === "") {
+    return 500;
+  }
+
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  logger.warn(`Invalid BACKTEST_BARS=${value}; falling back to 500`);
+  return 500;
+}
 
 async function main(): Promise<void> {
   logger.info("Setup backtest starting");
+  const timeframe = parseBacktestTimeframe(process.env.BACKTEST_TIMEFRAME);
+  const bars = parseBacktestBars(process.env.BACKTEST_BARS);
 
   // Collect unique pairs
   const pairMap = new Map<string, { pair: string; symbol: string }>();
@@ -27,8 +58,8 @@ async function main(): Promise<void> {
   const allReports: Array<{ pair: string; report: Awaited<ReturnType<typeof runSetupBacktest>> }> = [];
 
   for (const { pair, symbol } of pairs) {
-    logger.info(`Fetching H4 data for ${pair}...`);
-    const candlesOrError = await fetchOhlcHistory(symbol, "H4", 500);
+    logger.info(`Fetching ${timeframe} data for ${pair}...`);
+    const candlesOrError = await fetchOhlcHistory(symbol, timeframe, bars);
 
     if (candlesOrError instanceof Error) {
       logger.warn(`  ! Skipping ${pair}: ${candlesOrError.message}`);
@@ -42,19 +73,20 @@ async function main(): Promise<void> {
     }
 
     logger.info(`  Running backtest on ${candles.length} candles...`);
-    const report = runSetupBacktest(candles, pair, "H4");
+    const report = runSetupBacktest(candles, pair, timeframe);
     allReports.push({ pair, report });
   }
 
   // Print summary
-  printReport(allReports);
+  printReport(allReports, timeframe);
 }
 
 function printReport(
   reports: Array<{ pair: string; report: Awaited<ReturnType<typeof runSetupBacktest>> }>,
+  timeframe: ChartTimeframe,
 ): void {
   console.log("\n" + "=".repeat(70));
-  console.log("SETUP BACKTEST REPORT");
+  console.log(`SETUP BACKTEST REPORT (${timeframe})`);
   console.log("=".repeat(70));
 
   // Aggregate by setup

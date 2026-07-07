@@ -1,14 +1,19 @@
 import type { Candle } from "./ohlc-provider.js";
-import type { DetectedSignal, SetupKind } from "./setup-types.js";
+import type { DetectedSignal, DetectionContext, SetupKind } from "./setup-types.js";
 import type { ChartTimeframe } from "./chart-types.js";
-import { calculateEma, calculateAtr } from "./indicators.js";
+import { calculateEma, calculateAtr, isFalseBreak } from "./indicators.js";
 import { detectDd } from "./setups/dd.js";
 import { detectFb } from "./setups/fb.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
-import { runSbDetection } from "./setup-sb-runner.js";
+import { detectSb } from "./setups/sb.js";
+import { resolveSetupConflicts } from "./setup-resolver.js";
+import { SB_BUILDUP_LOOKAHEAD } from "./setup-sb-runner.js";
+import { createLogger } from "../shared/logger.js";
+
+const logger = createLogger("charts:setup-backtest");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,13 +40,31 @@ export type SetupBacktestReport = {
   trades: SetupBacktestTrade[];
 };
 
+type OpenTradeState = {
+  signal: DetectedSignal;
+  trade: SetupBacktestTrade;
+  triggerIndex: number;
+  committed: boolean;
+};
+
+type PendingFalseBreak = {
+  signal: DetectedSignal;
+  triggerIndex: number;
+};
+
+type PendingSb = {
+  signal: DetectedSignal;
+  sbIndex: number;
+};
+
 // ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
 
 /**
- * Walk-forward backtest: duyệt qua toàn bộ mảng `candles`, chạy 7 detector
- * tại mỗi index, forward-scan để tìm outcome (TP1/TP2/SL), tổng hợp báo cáo.
+ * Walk-forward backtest that mirrors live SB behavior:
+ * one open trade at a time, one false-break watch per open trade, and a single
+ * SB lookup at the fixed buildup index.
  */
 export function runSetupBacktest(
   candles: Candle[],
@@ -52,10 +75,12 @@ export function runSetupBacktest(
   const atr14 = calculateAtr(candles, 14);
 
   const trades: SetupBacktestTrade[] = [];
-  let activeUntilIndex = -1; // không chồng lệnh
+  let openTrade: OpenTradeState | null = null;
+  let watchingFalseBreak: PendingFalseBreak | null = null;
+  let pendingSb: PendingSb | null = null;
+  const deferredFreshSignals: DetectedSignal[] = [];
 
-  // 7 detectors
-  const detectors: Array<(c: Candle[], i: number, ctx: any) => DetectedSignal | null> = [
+  const detectors: Array<(c: Candle[], i: number, ctx: DetectionContext) => DetectedSignal | null> = [
     detectDd,
     detectFb,
     detectBb,
@@ -64,64 +89,183 @@ export function runSetupBacktest(
     detectIrb,
   ];
 
-  // Start from index >= 30 to have enough data for indicators
   const startIndex = Math.min(30, candles.length);
 
   for (let index = startIndex; index < candles.length; index++) {
-    // Skip while a trade is active
-    if (index <= activeUntilIndex) continue;
-
-    const ctx = {
+    const ctx: DetectionContext = {
       ema20,
       atr14,
       pair,
       timeframe,
     };
 
-    // Run all 6 standard detectors
-    const signals: DetectedSignal[] = [];
-    for (const detector of detectors) {
+    if (
+      openTrade !== null &&
+      openTrade.committed &&
+      (openTrade.trade.exitIndex === null || index > openTrade.trade.exitIndex)
+    ) {
+      openTrade = null;
+    }
+
+    let sbSignalThisIndex: DetectedSignal | null = null;
+    const freshSignals: DetectedSignal[] = [];
+
+    if (watchingFalseBreak !== null && index >= watchingFalseBreak.triggerIndex + 2) {
+      const entry = watchingFalseBreak.signal.entry;
+      const stop = watchingFalseBreak.signal.stopLoss;
+      const levelHigh = Math.max(entry, stop);
+      const levelLow = Math.min(entry, stop);
+
+      const falseBreak = isFalseBreak(
+        candles,
+        watchingFalseBreak.triggerIndex,
+        levelHigh,
+        levelLow,
+        watchingFalseBreak.signal.direction,
+        2,
+      );
+
+      if (falseBreak) {
+        if (openTrade !== null && openTrade.triggerIndex === watchingFalseBreak.triggerIndex) {
+          openTrade = null;
+        }
+
+        const sbIndex = Math.min(watchingFalseBreak.triggerIndex + SB_BUILDUP_LOOKAHEAD, candles.length - 1);
+        if (sbIndex <= index) {
+          try {
+            const sbSignal = detectSb(candles, sbIndex, ctx, watchingFalseBreak.signal);
+            if (sbSignal) {
+              sbSignalThisIndex = sbSignal;
+            }
+          } catch (error) {
+            logger.debug(
+              `Dropped ${watchingFalseBreak.signal.setup} pending false-break (SB detection failed)`,
+              {
+                pair: watchingFalseBreak.signal.pair,
+                triggerIndex: watchingFalseBreak.triggerIndex,
+                currentIndex: index,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            );
+          }
+        } else {
+          pendingSb = {
+            signal: watchingFalseBreak.signal,
+            sbIndex,
+          };
+        }
+      } else if (openTrade !== null && !openTrade.committed) {
+        trades.push(openTrade.trade);
+        openTrade.committed = true;
+        if (openTrade.trade.exitIndex === null || index >= openTrade.trade.exitIndex) {
+          openTrade = null;
+        }
+      }
+
+      watchingFalseBreak = null;
+    }
+
+    if (pendingSb !== null && index >= pendingSb.sbIndex) {
       try {
-        const signal = detector(candles, index, ctx);
-        if (signal) signals.push(signal);
-      } catch {
-        // Skip detector on error
+        const sbSignal = detectSb(candles, pendingSb.sbIndex, ctx, pendingSb.signal);
+        if (sbSignal) {
+          sbSignalThisIndex = sbSignal;
+        }
+      } catch (error) {
+        logger.debug(
+          `Dropped ${pendingSb.signal.setup} pending false-break (SB detection failed)`,
+          {
+            pair: pendingSb.signal.pair,
+            triggerIndex: pendingSb.signal.triggerIndex,
+            currentIndex: index,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
+      pendingSb = null;
+    }
+
+    const canRunFreshDetectors = openTrade === null && (pendingSb === null || sbSignalThisIndex !== null);
+    if (canRunFreshDetectors) {
+      if (deferredFreshSignals.length > 0) {
+        freshSignals.push(...deferredFreshSignals);
+        deferredFreshSignals.length = 0;
+      }
+      for (const detector of detectors) {
+        try {
+          const signal = detector(candles, index, ctx);
+          if (signal) {
+            freshSignals.push(signal);
+          }
+        } catch {
+          // Skip detector on error.
+        }
       }
     }
 
-    // Check false-break → run SB detector + filter failed signals
-    const { resolved } = runSbDetection(candles, signals, index, ctx);
-    if (resolved.length === 0) continue;
-
-    const signal = resolved[0];
-
-    // Forward-scan for outcome
-    const outcome = scanOutcome(candles, signal, index);
-    const trade: SetupBacktestTrade = {
-      setup: signal.setup,
-      pair: signal.pair,
-      timeframe: signal.timeframe,
-      direction: signal.direction,
-      entryIndex: index,
-      entryPrice: signal.entry,
-      exitIndex: outcome.exitIndex,
-      exitPrice: outcome.exitPrice,
-      outcome: outcome.outcome,
-      realizedRiskReward: outcome.realizedRiskReward,
-      confidence: signal.confidence,
-    };
-
-    trades.push(trade);
-
-    // No overlapping trades: skip signals until this one resolves
-    if (outcome.exitIndex !== null) {
-      activeUntilIndex = outcome.exitIndex;
+    const readySignals: DetectedSignal[] = [];
+    if (sbSignalThisIndex !== null) {
+      if (freshSignals.length > 0) {
+        deferredFreshSignals.push(...freshSignals);
+      }
+      readySignals.push(sbSignalThisIndex);
     } else {
-      activeUntilIndex = candles.length; // open at end, done
+      readySignals.push(...freshSignals);
     }
+
+    const resolvedSignals = resolveSetupConflicts(readySignals);
+    if (resolvedSignals.length === 0) {
+      continue;
+    }
+
+    const signal = resolvedSignals[0];
+    const trade = buildTrade(candles, signal);
+
+    if (signal.setup === "SB") {
+      trades.push(trade);
+      openTrade = {
+        signal,
+        trade,
+        triggerIndex: signal.triggerIndex,
+        committed: true,
+      };
+      if (trade.exitIndex === null || index >= trade.exitIndex) {
+        openTrade = null;
+      }
+      continue;
+    }
+
+    openTrade = {
+      signal,
+      trade,
+      triggerIndex: signal.triggerIndex,
+      committed: false,
+    };
+    watchingFalseBreak = {
+      signal,
+      triggerIndex: signal.triggerIndex,
+    };
   }
 
   return computeReport(trades);
+}
+
+function buildTrade(candles: Candle[], signal: DetectedSignal): SetupBacktestTrade {
+  const entryIndex = signal.triggerIndex;
+  const outcome = scanOutcome(candles, signal, entryIndex);
+  return {
+    setup: signal.setup,
+    pair: signal.pair,
+    timeframe: signal.timeframe,
+    direction: signal.direction,
+    entryIndex,
+    entryPrice: signal.entry,
+    exitIndex: outcome.exitIndex,
+    exitPrice: outcome.exitPrice,
+    outcome: outcome.outcome,
+    realizedRiskReward: outcome.realizedRiskReward,
+    confidence: signal.confidence,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -144,28 +288,22 @@ function scanOutcome(
     const { high, low } = candles[i];
 
     if (direction === "LONG") {
-      // Check for stop hit first (conservative)
       if (low <= stopLoss) {
         const exitPrice = stopLoss;
         const rr = (exitPrice - entry) / (entry - stopLoss);
         return { exitIndex: i, exitPrice, outcome: "stop", realizedRiskReward: rr };
       }
-      // Check TP2 hit
       if (high >= takeProfit2) {
         const exitPrice = takeProfit2;
         const rr = (exitPrice - entry) / (entry - stopLoss);
         return { exitIndex: i, exitPrice, outcome: "tp2", realizedRiskReward: rr };
       }
-      // Check TP1 hit (only if stop and TP2 not hit)
       if (high >= takeProfit1) {
-        // If TP1 is hit but we haven't confirmed stop/TP2, mark as tp1
-        // Continue scanning for TP2 in same candle
         const exitPrice = takeProfit1;
         const rr = (exitPrice - entry) / (entry - stopLoss);
         return { exitIndex: i, exitPrice, outcome: "tp1", realizedRiskReward: rr };
       }
     } else {
-      // SHORT
       if (high >= stopLoss) {
         const exitPrice = stopLoss;
         const rr = (entry - exitPrice) / (stopLoss - entry);
@@ -184,7 +322,6 @@ function scanOutcome(
     }
   }
 
-  // Reached end of data without hitting any level
   return {
     exitIndex: null,
     exitPrice: null,
@@ -201,7 +338,6 @@ function computeReport(trades: SetupBacktestTrade[]): SetupBacktestReport {
   const closedTrades = trades.filter((t) => t.outcome !== "open_at_end");
   const total = closedTrades.length;
 
-  // By setup
   const bySetup: SetupBacktestReport["bySetup"] = {};
   for (const kind of ["DD", "FB", "BB", "RB", "ARB", "IRB", "SB"] as SetupKind[]) {
     const setupTrades = closedTrades.filter((t) => t.setup === kind);
@@ -216,7 +352,6 @@ function computeReport(trades: SetupBacktestTrade[]): SetupBacktestReport {
     };
   }
 
-  // By pair
   const byPair: SetupBacktestReport["byPair"] = {};
   const pairSet = new Set(closedTrades.map((t) => t.pair));
   for (const p of Array.from(pairSet)) {
@@ -231,7 +366,6 @@ function computeReport(trades: SetupBacktestTrade[]): SetupBacktestReport {
     };
   }
 
-  // Overall
   const overallWins = closedTrades.filter((t) => t.realizedRiskReward > 0);
 
   return {

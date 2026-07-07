@@ -132,27 +132,46 @@ describe("FB — First Break", () => {
 // ---------------------------------------------------------------------------
 
 describe("BB — Block Break", () => {
-  test("detects BB with compression near EMA in uptrend", () => {
-    // Build uptrend then tight compression near EMA
-    const candles = makeCandles([
-      ...Array.from({ length: 25 }, (_, i) => ({
-        o: 100 + i * 0.5,
-        h: 100.5 + i * 0.5,
-        l: 99.5 + i * 0.5,
-        c: 100 + i * 0.5,
-      })),
-      // Tight block
-      { o: 112.5, h: 112.6, l: 112.4, c: 112.5 },
-      { o: 112.5, h: 112.6, l: 112.4, c: 112.55 },
-      { o: 112.55, h: 112.65, l: 112.45, c: 112.5 },
-      { o: 112.5, h: 112.6, l: 112.4, c: 112.5 },
-      { o: 112.5, h: 112.6, l: 112.45, c: 112.55 },
-    ]);
+  test("detects BB on a real breakout candle after the block", () => {
+    const candles: Candle[] = [];
+
+    for (let i = 0; i < 23; i++) {
+      const base = 100 + i * 0.55;
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: base,
+        high: base + 1.6,
+        low: base - 1.4,
+        close: base + 0.4125,
+        volume: 100,
+      });
+    }
+
+    const blockBase = 108;
+    candles.push(
+      { time: 1700000000000 + 23 * 3600000, open: blockBase, high: 108.18, low: 107.86, close: 108.05, volume: 90 },
+      { time: 1700000000000 + 24 * 3600000, open: 108.01, high: 108.18, low: 107.86, close: 108.06, volume: 90 },
+      { time: 1700000000000 + 25 * 3600000, open: 108.02, high: 108.18, low: 107.86, close: 108.03, volume: 90 },
+      { time: 1700000000000 + 26 * 3600000, open: 108.03, high: 108.18, low: 107.86, close: 108.04, volume: 90 },
+      { time: 1700000000000 + 27 * 3600000, open: 108.04, high: 108.18, low: 107.86, close: 108.08, volume: 90 },
+    );
+    candles.push({
+      time: 1700000000000 + 28 * 3600000,
+      open: 108.4,
+      high: 109.4,
+      low: 107.8,
+      close: 109.2,
+      volume: 120,
+    });
+
     const ctx = buildContext(candles);
     const last = candles.length - 1;
     const signal = detectBb(candles, last, ctx);
-    // May or may not detect — just ensure no crash
-    expect(signal === null || signal!.setup === "BB").toBe(true);
+    expect(signal).not.toBeNull();
+    expect(signal!.setup).toBe("BB");
+    expect(signal!.direction).toBe("LONG");
+    expect(signal!.triggerIndex).toBe(last);
+    expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
   });
 });
 
@@ -161,23 +180,46 @@ describe("BB — Block Break", () => {
 // ---------------------------------------------------------------------------
 
 describe("RB — Range Break", () => {
-  test("detects RB with range and EMA transitioning", () => {
-    const candles = makeCandles([
-      ...Array.from({ length: 15 }, () => ({
-        o: 100, h: 101.5, l: 98.5, c: 100.5,
-      })),
-      // Range forming
-      { o: 100, h: 101, l: 99, c: 100.3 },
-      { o: 100.3, h: 101.2, l: 99.2, c: 100.5 },
-      { o: 100.5, h: 101.3, l: 99.3, c: 100.6 },
-      { o: 100.6, h: 101.5, l: 99.5, c: 100.8 },
-      { o: 100.8, h: 102, l: 100, c: 101.5 },
-      { o: 101.5, h: 103, l: 101, c: 102.5 },
-    ]);
+  test("detects RB on a confirmed range breakout", () => {
+    const candles: Candle[] = [];
+
+    for (let i = 0; i < 23; i++) {
+      const base = 100;
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: base,
+        high: base + 1.1,
+        low: base - 1.1,
+        close: base,
+        volume: 100,
+      });
+    }
+
+    candles.push(
+      { time: 1700000000000 + 23 * 3600000, open: 100, high: 101.0, low: 99.0, close: 100.0, volume: 90 },
+      { time: 1700000000000 + 24 * 3600000, open: 100.0, high: 101.1, low: 99.1, close: 100.05, volume: 90 },
+      { time: 1700000000000 + 25 * 3600000, open: 100.05, high: 101.05, low: 99.05, close: 100.02, volume: 90 },
+      { time: 1700000000000 + 26 * 3600000, open: 100.02, high: 101.0, low: 99.0, close: 100.03, volume: 90 },
+      { time: 1700000000000 + 27 * 3600000, open: 100.03, high: 101.08, low: 99.08, close: 100.04, volume: 90 },
+      { time: 1700000000000 + 28 * 3600000, open: 100.04, high: 101.1, low: 99.1, close: 100.01, volume: 90 },
+    );
+    candles.push({
+      time: 1700000000000 + 29 * 3600000,
+      open: 100.3,
+      high: 101.45,
+      low: 99.9,
+      close: 101.2,
+      volume: 120,
+    });
+
     const ctx = buildContext(candles);
     const last = candles.length - 1;
     const signal = detectRb(candles, last, ctx);
-    expect(signal === null || signal!.setup === "RB").toBe(true);
+    expect(signal).not.toBeNull();
+    expect(signal!.setup).toBe("RB");
+    expect(signal!.direction).toBe("LONG");
+    expect(signal!.triggerIndex).toBe(last);
+    expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
   });
 });
 
@@ -186,21 +228,46 @@ describe("RB — Range Break", () => {
 // ---------------------------------------------------------------------------
 
 describe("ARB — Advanced Range Break", () => {
-  test("detects ARB with multiple edge tests", () => {
-    const candles = makeCandles([
-      ...Array.from({ length: 15 }, () => ({
-        o: 100, h: 101, l: 99, c: 100.5,
-      })),
-      // Range with edge tests
-      { o: 100.5, h: 102, l: 99, c: 101 },
-      { o: 101, h: 102, l: 99.5, c: 100 },
-      { o: 100, h: 102, l: 98.5, c: 101.5 },
-      { o: 101.5, h: 103, l: 101.5, c: 103 }, // breakout
-    ]);
+  test("detects ARB after repeated edge tests and a clean breakout", () => {
+    const candles: Candle[] = [];
+
+    for (let i = 0; i < 14; i++) {
+      const base = 100 + i * 0.08;
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: base,
+        high: base + 1.1,
+        low: base - 1.1,
+        close: base + 0.03,
+        volume: 100,
+      });
+    }
+
+    candles.push(
+      { time: 1700000000000 + 14 * 3600000, open: 101.2, high: 102.2, low: 99.0, close: 99.0, volume: 90 },
+      { time: 1700000000000 + 15 * 3600000, open: 99.0, high: 102.1, low: 99.0, close: 99.0, volume: 90 },
+      { time: 1700000000000 + 16 * 3600000, open: 99.1, high: 101.9, low: 99.1, close: 100.2, volume: 90 },
+      { time: 1700000000000 + 17 * 3600000, open: 100.2, high: 102.3, low: 99.2, close: 101.0, volume: 90 },
+      { time: 1700000000000 + 18 * 3600000, open: 101.0, high: 102.4, low: 99.1, close: 100.1, volume: 90 },
+      { time: 1700000000000 + 19 * 3600000, open: 100.1, high: 102.5, low: 99.0, close: 100.3, volume: 90 },
+    );
+    candles.push({
+      time: 1700000000000 + 20 * 3600000,
+      open: 100.4,
+      high: 103.2,
+      low: 100.2,
+      close: 102.9,
+      volume: 120,
+    });
+
     const ctx = buildContext(candles);
     const last = candles.length - 1;
     const signal = detectArb(candles, last, ctx);
-    expect(signal === null || signal!.setup === "ARB").toBe(true);
+    expect(signal).not.toBeNull();
+    expect(signal!.setup).toBe("ARB");
+    expect(signal!.direction).toBe("LONG");
+    expect(signal!.triggerIndex).toBe(last);
+    expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
   });
 });
 
@@ -209,20 +276,46 @@ describe("ARB — Advanced Range Break", () => {
 // ---------------------------------------------------------------------------
 
 describe("IRB — Inside Range Break", () => {
-  test("detects IRB with nested ranges", () => {
-    const candles = makeCandles([
-      ...Array.from({ length: 15 }, () => ({
-        o: 100, h: 103, l: 97, c: 100.5,
-      })),
-      // RangeInner near top of RangeOuter
-      { o: 102, h: 103, l: 102, c: 102.5 },
-      { o: 102.5, h: 103, l: 102.5, c: 102.8 },
-      { o: 102.8, h: 104, l: 102.5, c: 104 },
-    ]);
+  test("detects IRB with nested ranges and a breakout through both ranges", () => {
+    const candles: Candle[] = [];
+
+    for (let i = 0; i < 14; i++) {
+      const base = 100;
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: base,
+        high: base + 2.2,
+        low: base - 1.8,
+        close: base + 0.4,
+        volume: 100,
+      });
+    }
+
+    candles.push(
+      { time: 1700000000000 + 14 * 3600000, open: 102.0, high: 102.3, low: 101.8, close: 102.06, volume: 90 },
+      { time: 1700000000000 + 15 * 3600000, open: 102.03, high: 102.32, low: 101.83, close: 102.09, volume: 90 },
+      { time: 1700000000000 + 16 * 3600000, open: 102.06, high: 102.34, low: 101.86, close: 102.12, volume: 90 },
+      { time: 1700000000000 + 17 * 3600000, open: 102.09, high: 102.33, low: 101.84, close: 102.08, volume: 90 },
+      { time: 1700000000000 + 18 * 3600000, open: 102.12, high: 102.35, low: 101.85, close: 102.11, volume: 90 },
+      { time: 1700000000000 + 19 * 3600000, open: 102.15, high: 102.36, low: 101.87, close: 102.14, volume: 90 },
+    );
+    candles.push({
+      time: 1700000000000 + 20 * 3600000,
+      open: 102.2,
+      high: 102.8,
+      low: 102.1,
+      close: 102.6,
+      volume: 120,
+    });
+
     const ctx = buildContext(candles);
     const last = candles.length - 1;
     const signal = detectIrb(candles, last, ctx);
-    expect(signal === null || signal!.setup === "IRB").toBe(true);
+    expect(signal).not.toBeNull();
+    expect(signal!.setup).toBe("IRB");
+    expect(signal!.direction).toBe("LONG");
+    expect(signal!.triggerIndex).toBe(last);
+    expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
   });
 });
 

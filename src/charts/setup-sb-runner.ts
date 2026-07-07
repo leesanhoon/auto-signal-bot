@@ -16,7 +16,7 @@ const logger = createLogger("charts:setup-sb-runner");
  *
  * @returns SB signals (opposite direction reversals) and the remaining valid signals
  */
-const SB_BUILDUP_LOOKAHEAD = 3; // candles to wait after false-break for compression to form
+export const SB_BUILDUP_LOOKAHEAD = 3; // candles to wait after false-break for compression to form
 
 export function runSbDetection(
   candles: Candle[],
@@ -37,6 +37,14 @@ export function runSbDetection(
       const maxLookahead = Math.min(2, candles.length - 1 - signal.triggerIndex);
       const fbResult = isFalseBreak(candles, signal.triggerIndex, levelHigh, levelLow, signal.direction, maxLookahead);
       if (fbResult) {
+        if (currentIndex < signal.triggerIndex + 2) {
+          logger.debug(
+            `Dropped ${signal.setup} signal (false-break confirmed but insufficient trailing candles for SB)`,
+            { pair: signal.pair, triggerIndex: signal.triggerIndex, currentIndex },
+          );
+          continue;
+        }
+
         // False break detected — run SB at the correct index (near signal trigger)
         const sbIndex = Math.min(signal.triggerIndex + SB_BUILDUP_LOOKAHEAD, currentIndex);
         try {

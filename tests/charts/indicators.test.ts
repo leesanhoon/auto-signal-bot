@@ -359,6 +359,27 @@ describe("detectCompression", () => {
     const comp = detectCompression(candles, ema20, atr14, 4, 5);
     expect(comp).toBeNull();
   });
+
+  test("breakout candle must stay outside the compression window", () => {
+    const candles = makeCandles([
+      ...Array.from({ length: 19 }, (_, i) => ({
+        o: 100 + i * 0.01,
+        h: 100.2 + i * 0.01,
+        l: 99.8 + i * 0.01,
+        c: 100.05 + i * 0.01,
+      })),
+      { o: 100.3, h: 100.35, l: 100.1, c: 100.28 },
+      { o: 100.35, h: 101.2, l: 100.05, c: 101.1 },
+    ]);
+    const ema20 = calculateEma(candles, 20);
+    const atr14 = calculateAtr(candles, 14);
+
+    const validWindow = detectCompression(candles, ema20, atr14, 19, 5);
+    const invalidWindow = detectCompression(candles, ema20, atr14, 20, 5);
+
+    expect(validWindow).not.toBeNull();
+    expect(invalidWindow).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
