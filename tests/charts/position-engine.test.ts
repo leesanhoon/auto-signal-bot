@@ -55,8 +55,8 @@ describe("charts/position-engine", () => {
       setup: "Breakout",
       entry: "1.1000",
       stopLoss: "1.0960",
-      takeProfit1: "1.1080",
-      takeProfit2: "1.1120",
+      takeProfit1: "1.1120",
+      takeProfit2: "1.1160",
       reasons: ["EMA touch"],
     });
 
@@ -66,9 +66,9 @@ describe("charts/position-engine", () => {
       tp1_close_percent: 50,
       tp1_closed_percent: 0,
       last_management_action: "NONE",
-      min_risk_reward_ratio: 1.5,
+      min_risk_reward_ratio: 3,
     });
-    expect(Number(row?.risk_reward_ratio)).toBeCloseTo(2.5, 2);
+    expect(Number(row?.risk_reward_ratio)).toBeCloseTo(3.5, 2);
   });
 
   test("creates a TP1 partial close patch and moves SL to breakeven", () => {
@@ -266,9 +266,9 @@ describe("charts/position-engine", () => {
       delete process.env.POSITION_MIN_RISK_REWARD_RATIO;
     });
 
-    it("should return default 1.5 when env not set", () => {
+    it("should return default 3 when env not set", () => {
       const ratio = getConfiguredMinRiskRewardRatio();
-      expect(ratio).toBe(1.5);
+      expect(ratio).toBe(3);
     });
 
     it("should parse configured ratio from env", () => {
@@ -280,7 +280,7 @@ describe("charts/position-engine", () => {
     it("should return default when env value is invalid", () => {
       vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO", "invalid");
       const ratio = getConfiguredMinRiskRewardRatio();
-      expect(ratio).toBe(1.5);
+      expect(ratio).toBe(3);
     });
   });
 
@@ -336,7 +336,7 @@ describe("charts/position-engine", () => {
       vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "ARB:2.0,INVALID:abc,RB:1.2");
       expect(getConfiguredMinRiskRewardRatioForPattern("ARB")).toBe(2.0);
       expect(getConfiguredMinRiskRewardRatioForPattern("RB")).toBe(1.2);
-      expect(getConfiguredMinRiskRewardRatioForPattern("INVALID")).toBe(1.5); // falls back to default global
+      expect(getConfiguredMinRiskRewardRatioForPattern("INVALID")).toBe(3); // falls back to default global
     });
 
     it("should handle case-insensitive pattern matching", () => {
@@ -348,8 +348,8 @@ describe("charts/position-engine", () => {
 
     it("should return global default for null/undefined pattern", () => {
       vi.stubEnv("POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN", "ARB:2.0");
-      expect(getConfiguredMinRiskRewardRatioForPattern(null)).toBe(1.5);
-      expect(getConfiguredMinRiskRewardRatioForPattern(undefined)).toBe(1.5);
+      expect(getConfiguredMinRiskRewardRatioForPattern(null)).toBe(3);
+      expect(getConfiguredMinRiskRewardRatioForPattern(undefined)).toBe(3);
     });
   });
 

@@ -3,7 +3,12 @@ import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:position-engine");
 
-export type PositionDecisionAction = "NONE" | "PARTIAL_TP1" | "MOVE_SL_TO_BE" | "TRAIL_SL" | "TP2_CLOSE";
+export type PositionDecisionAction =
+  | "NONE"
+  | "PARTIAL_TP1"
+  | "MOVE_SL_TO_BE"
+  | "TRAIL_SL"
+  | "TP2_CLOSE";
 
 export type PositionDecisionOutcome = {
   decision: "HOLD" | "CLOSE" | "STOP";
@@ -58,7 +63,9 @@ export type OpenPositionValidation = {
 };
 
 function parsePrice(value: string | number): number {
-  const str = String(value ?? "").replace(/,/g, "").trim();
+  const str = String(value ?? "")
+    .replace(/,/g, "")
+    .trim();
   const parsed = Number(str);
   return Number.isFinite(parsed) ? parsed : NaN;
 }
@@ -73,7 +80,11 @@ function clampRiskReward(value: number): number {
   return Math.max(0, Math.round(value * 100) / 100);
 }
 
-function validateOrderTypeForDirection(setup: Pick<TradeSetup, "direction"> & { orderType?: TradeSetup["orderType"] }): string | null {
+function validateOrderTypeForDirection(
+  setup: Pick<TradeSetup, "direction"> & {
+    orderType?: TradeSetup["orderType"];
+  },
+): string | null {
   if (!setup.orderType) return null;
   if (setup.direction === "LONG" && setup.orderType.startsWith("SELL")) {
     return "Loai lenh SELL khong phu hop voi huong LONG.";
@@ -86,12 +97,14 @@ function validateOrderTypeForDirection(setup: Pick<TradeSetup, "direction"> & { 
 
 export function getConfiguredMinRiskRewardRatio(): number {
   const raw = process.env.POSITION_MIN_RISK_REWARD_RATIO?.trim();
-  if (!raw) return 1.5;
+  if (!raw) return 3;
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1.5;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
 }
 
-export function getConfiguredMinRiskRewardRatioForPattern(pattern: string | null | undefined): number {
+export function getConfiguredMinRiskRewardRatioForPattern(
+  pattern: string | null | undefined,
+): number {
   const patternMap = new Map<string, number>();
   const raw = process.env.POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN?.trim();
   if (raw) {
@@ -103,15 +116,22 @@ export function getConfiguredMinRiskRewardRatioForPattern(pattern: string | null
         if (Number.isFinite(value) && value > 0) {
           patternMap.set(pattStr.toUpperCase(), value);
         } else {
-          logger.warn(`Invalid POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN entry: ${pair} (non-numeric or <= 0 value)`);
+          logger.warn(
+            `Invalid POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN entry: ${pair} (non-numeric or <= 0 value)`,
+          );
         }
       } else {
-        logger.warn(`Malformed POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN entry: ${pair} (missing ':' separator)`);
+        logger.warn(
+          `Malformed POSITION_MIN_RISK_REWARD_RATIO_BY_PATTERN entry: ${pair} (missing ':' separator)`,
+        );
       }
     }
   }
 
-  const normalizedPattern = pattern && typeof pattern === "string" ? pattern.trim().toUpperCase() : null;
+  const normalizedPattern =
+    pattern && typeof pattern === "string"
+      ? pattern.trim().toUpperCase()
+      : null;
   if (normalizedPattern && patternMap.has(normalizedPattern)) {
     return patternMap.get(normalizedPattern)!;
   }
@@ -127,36 +147,54 @@ export function getConfiguredTp1ClosePercent(): number {
 }
 
 export function calculateRiskRewardPlan(
-  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "setup">,
+  setup: Pick<
+    TradeSetup,
+    "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "setup"
+  >,
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
 ): RiskRewardPlan | null {
   const entry = parsePrice(setup.entry);
   const stopLoss = parsePrice(setup.stopLoss);
   const takeProfit1 = parsePrice(setup.takeProfit1);
   const takeProfit2 = setup.takeProfit2 ? parsePrice(setup.takeProfit2) : null;
-  const partialClosePercent = clampPercent(options.partialClosePercent ?? getConfiguredTp1ClosePercent());
-  const minRiskReward = options.minRiskReward ?? getConfiguredMinRiskRewardRatioForPattern(setup.setup);
+  const partialClosePercent = clampPercent(
+    options.partialClosePercent ?? getConfiguredTp1ClosePercent(),
+  );
+  const minRiskReward =
+    options.minRiskReward ??
+    getConfiguredMinRiskRewardRatioForPattern(setup.setup);
 
   const risk = setup.direction === "LONG" ? entry - stopLoss : stopLoss - entry;
-  const tp1Reward = setup.direction === "LONG" ? takeProfit1 - entry : entry - takeProfit1;
-  const tp2Reward = takeProfit2 === null
-    ? null
-    : setup.direction === "LONG"
-      ? takeProfit2 - entry
-      : entry - takeProfit2;
+  const tp1Reward =
+    setup.direction === "LONG" ? takeProfit1 - entry : entry - takeProfit1;
+  const tp2Reward =
+    takeProfit2 === null
+      ? null
+      : setup.direction === "LONG"
+        ? takeProfit2 - entry
+        : entry - takeProfit2;
 
-  if (![entry, stopLoss, takeProfit1].every(Number.isFinite) || (takeProfit2 !== null && !Number.isFinite(takeProfit2))) {
+  if (
+    ![entry, stopLoss, takeProfit1].every(Number.isFinite) ||
+    (takeProfit2 !== null && !Number.isFinite(takeProfit2))
+  ) {
     return null;
   }
 
-  if (risk <= 0 || tp1Reward <= 0 || (takeProfit2 !== null && tp2Reward !== null && tp2Reward <= 0)) {
+  if (
+    risk <= 0 ||
+    tp1Reward <= 0 ||
+    (takeProfit2 !== null && tp2Reward !== null && tp2Reward <= 0)
+  ) {
     return null;
   }
 
   const tp1RiskReward = clampRiskReward(tp1Reward / risk);
-  const tp2RiskReward = tp2Reward === null ? null : clampRiskReward(tp2Reward / risk);
+  const tp2RiskReward =
+    tp2Reward === null ? null : clampRiskReward(tp2Reward / risk);
   const expectedRiskReward = clampRiskReward(
-    (partialClosePercent / 100) * tp1RiskReward + (1 - partialClosePercent / 100) * (tp2RiskReward ?? tp1RiskReward),
+    (partialClosePercent / 100) * tp1RiskReward +
+      (1 - partialClosePercent / 100) * (tp2RiskReward ?? tp1RiskReward),
   );
 
   return {
@@ -176,7 +214,10 @@ export function calculateRiskRewardPlan(
 }
 
 export function validateTradeSetupForOpen(
-  setup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "setup"> & {
+  setup: Pick<
+    TradeSetup,
+    "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "setup"
+  > & {
     orderType?: TradeSetup["orderType"];
   },
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
@@ -211,7 +252,17 @@ export function validateTradeSetupForOpen(
 }
 
 export function buildOpenPositionInsertRow(
-  setup: Pick<TradeSetup, "pair" | "direction" | "setup" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "reasons">,
+  setup: Pick<
+    TradeSetup,
+    | "pair"
+    | "direction"
+    | "setup"
+    | "entry"
+    | "stopLoss"
+    | "takeProfit1"
+    | "takeProfit2"
+    | "reasons"
+  >,
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
 ): Record<string, unknown> | null {
   const validation = validateTradeSetupForOpen(setup, options);
@@ -253,12 +304,21 @@ export function deriveManagementPatch(
 ): { patch: OpenPositionManagementPatch | null; closePosition: boolean } {
   const now = new Date().toISOString();
   const partialClosePercent = clampPercent(
-    options.partialClosePercent ?? decision.partialClosePercent ?? getConfiguredTp1ClosePercent(),
+    options.partialClosePercent ??
+      decision.partialClosePercent ??
+      getConfiguredTp1ClosePercent(),
   );
-  const existingTp1ClosedPercent = Math.max(0, Math.min(100, Math.round(Number(options.existingTp1ClosedPercent ?? 0))));
+  const existingTp1ClosedPercent = Math.max(
+    0,
+    Math.min(100, Math.round(Number(options.existingTp1ClosedPercent ?? 0))),
+  );
   const breakevenStopLoss = decision.newStopLoss?.trim() || entry;
 
-  if (decision.managementAction === "TP2_CLOSE" || decision.tp2Reached || decision.decision === "STOP") {
+  if (
+    decision.managementAction === "TP2_CLOSE" ||
+    decision.tp2Reached ||
+    decision.decision === "STOP"
+  ) {
     return {
       patch: {
         tradeStage: "closed",
@@ -266,7 +326,10 @@ export function deriveManagementPatch(
         tp1ClosedAt: existingTp1ClosedPercent > 0 ? now : null,
         trailingStopLoss: decision.newStopLoss ?? currentStopLoss,
         trailingStartedAt: now,
-        lastManagementAction: decision.managementAction === "NONE" ? "TP2_CLOSE" : decision.managementAction,
+        lastManagementAction:
+          decision.managementAction === "NONE"
+            ? "TP2_CLOSE"
+            : decision.managementAction,
         lastManagementComment: decision.comment,
         lastManagementAt: now,
         stopLoss: decision.newStopLoss ?? currentStopLoss,
@@ -279,7 +342,10 @@ export function deriveManagementPatch(
     return {
       patch: {
         tradeStage: "tp1_partial",
-        tp1ClosedPercent: Math.max(existingTp1ClosedPercent, partialClosePercent),
+        tp1ClosedPercent: Math.max(
+          existingTp1ClosedPercent,
+          partialClosePercent,
+        ),
         tp1ClosedAt: now,
         trailingStopLoss: breakevenStopLoss,
         trailingStartedAt: now,
@@ -292,7 +358,10 @@ export function deriveManagementPatch(
     };
   }
 
-  if (decision.managementAction === "MOVE_SL_TO_BE" || decision.managementAction === "TRAIL_SL") {
+  if (
+    decision.managementAction === "MOVE_SL_TO_BE" ||
+    decision.managementAction === "TRAIL_SL"
+  ) {
     return {
       patch: {
         tradeStage: "trailing",

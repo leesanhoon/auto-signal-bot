@@ -14,6 +14,7 @@ describe("shared/telegram", () => {
     expect(message).toContain("Manual run");
     expect(message).toContain("no-cache");
     expect(message).toContain("Scanner vẫn đang hoạt động bình thường.");
+    expect(message).toContain("Last closed candle");
   });
 
   test("buildPositionDecisionMessage labels original reasons compactly", () => {
@@ -187,6 +188,7 @@ describe("shared/telegram", () => {
     await sendAllAnalyses(result, notifier, { source: "cached", candleKey: "2026-07-03T08:ai" });
 
     expect(sends.join("\n")).toContain("từ cache");
+    expect(sends.join("\n")).toContain("last closed candle");
     expect(sends.join("\n")).toContain("Cache summary");
     expect(notifier.sendPhoto).not.toHaveBeenCalled();
   });

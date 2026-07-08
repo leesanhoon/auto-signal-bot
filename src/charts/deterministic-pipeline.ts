@@ -33,14 +33,18 @@ export function passesDeterministicWindowFilter(
  * Analyze all pairs using the deterministic numeric engine instead of AI vision.
  *
  * For each pair:
- * 1. Fetch OHLC history for H4 (200 bars)
+ * 1. Fetch OHLC history for the runtime timeframe (200 bars)
  * 2. Session/volatility filter (London/NY overlap + ATR floor)
  * 3. Calculate indicators (EMA20, ATR14)
- * 4. Run 7 Volman setup detectors on H4 (primary timeframe)
+ * 4. Run 7 Volman setup detectors on the runtime primary timeframe
  * 5. Check false-break → run SB detector on failed signals
  * 6. Resolve conflicts (max 1 signal per pair)
  * 7. Build TradeSetup[] and PairSummary[] from signals
  * 8. Filter out null (price-sanity rejected) setups
+ *
+ * Contract: fetchOhlcHistory(...) must return candles ordered oldest -> newest,
+ * and the last element in the returned array must be the last closed candle for
+ * the requested timeframe. The detectors below always anchor on `lastIndex`.
  */
 export async function analyzeAllChartsDeterministic(
   pairs: Array<{ pair: string; symbol: string }>,
@@ -66,6 +70,10 @@ export async function analyzeAllChartsDeterministic(
       }
 
       const primaryCandles = ohlcResult as Candle[];
+      if (primaryCandles.length === 0) {
+        logger.warn(`  ! Skip ${pair}: OHLC returned no closed candles`);
+        return { kind: "skip" as const, pair, error: "Khong co closed candle hop le" };
+      }
       const ema20 = calculateEma(primaryCandles, 20);
       const atr14 = calculateAtr(primaryCandles, 14);
       const lastIndex = primaryCandles.length - 1;

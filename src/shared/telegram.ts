@@ -194,7 +194,7 @@ export function buildHeartbeatMessage(options: {
     "🫀 *Bob Volman Algorithm Scanner heartbeat*",
     `*Run:* ${runLabel}`,
     `*Engine:* ${options.engineMode}`,
-    `*Candle:* ${options.candleKey}`,
+    `*Last closed candle:* ${options.candleKey}`,
     `*Reason:* ${options.reason}`,
   ];
 
@@ -550,7 +550,7 @@ export async function sendAllAnalyses(
   const sourceLabel = isCached ? " từ cache" : " từ thuật toán";
   const cacheLine = isCached
     ? deliveryContext.candleKey
-      ? `📦 Dữ liệu phân tích lấy từ cache candle *${deliveryContext.candleKey}*`
+      ? `📦 Dữ liệu phân tích lấy từ cache của *last closed candle ${deliveryContext.candleKey}*`
       : "📦 Dữ liệu phân tích lấy từ cache"
     : "";
   const setupHeaderSuffix = isCached ? " từ cache" : " từ thuật toán";
@@ -558,7 +558,7 @@ export async function sendAllAnalyses(
 
   if (setups.length === 0) {
     await notifier.sendMessage(
-      `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)\n\n⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ thuật toán"}\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
+      `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)\n\n⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ thuật toán"}\n\n_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
     );
     logger.info(
       `  → No setups above threshold (${threshold}%). Notification sent with ${summaries.length} eligible summaries (${footerLabel}).`,
@@ -567,7 +567,7 @@ export async function sendAllAnalyses(
   }
 
   await notifier.sendMessage(
-    `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%) — tìm thấy *${setups.length}* setup${setupHeaderSuffix}`,
+    `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%) — tìm thấy *${setups.length}* setup${setupHeaderSuffix}\n\n_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
   );
 
   for (const setup of setups) {
@@ -595,6 +595,6 @@ export async function sendAllAnalyses(
   }
 
   await notifier.sendMessage(
-    `✅ *Scan hoàn tất* — ${summaries.length} cặp và ${setups.length} setup(s) đạt ngưỡng (≥${threshold}%)${isCached ? " từ cache" : " từ thuật toán"}\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
+    `✅ *Scan hoàn tất* — ${summaries.length} cặp và ${setups.length} setup(s) đạt ngưỡng (≥${threshold}%)${isCached ? " từ cache" : " từ thuật toán"}\n\n⚠️ _Phân tích luôn bám theo last closed candle, không phải nến đang chạy._`,
   );
 }

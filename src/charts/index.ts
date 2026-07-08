@@ -21,7 +21,7 @@ import {
   shouldUseLatestCacheForManualRun,
 } from "./chart-config-env.js";
 import type { AnalysisResult, TradeSetup } from "./chart-types.js";
-import { getCurrentH4CandleCloseKey, isWithinCandleCloseWindow } from "./chart-cache.js";
+import { getLastClosedH4CandleKey, isWithinCandleCloseWindow } from "./chart-cache.js";
 import {
   loadChartAnalysisCache,
   loadLatestChartAnalysisCache,
@@ -152,7 +152,7 @@ export async function main(): Promise<void> {
   const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
   logger.info("Bob Volman scanner starting", { engineMode: "deterministic", runContext, timeframeMode, primaryTimeframe });
 
-  const candleBaseKey = getCurrentH4CandleCloseKey();
+  const candleBaseKey = getLastClosedH4CandleKey();
   const candleKey = buildChartAnalysisCacheKey(candleBaseKey, "deterministic", timeframeMode, primaryTimeframe);
   let latestCacheCandleKey: string | null = null;
   let result: AnalysisResult | null = null;
@@ -168,7 +168,7 @@ export async function main(): Promise<void> {
   if (result && origin) {
     await handleAnalysisResult(result, origin);
   } else {
-    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ đóng nến H4 (${candleKey}), vẫn kiểm tra trade/pending`);
+    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed H4 candle (${candleKey}), vẫn kiểm tra trade/pending`);
   }
 
   logger.info("Checking open positions");

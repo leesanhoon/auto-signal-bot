@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getCurrentH4CandleCloseKey, isWithinCandleCloseWindow } from "../../src/charts/chart-cache.js";
+import { getCurrentH4CandleCloseKey, getLastClosedH4CandleKey, isWithinCandleCloseWindow } from "../../src/charts/chart-cache.js";
 
 describe("charts/chart-cache", () => {
   describe("getCurrentH4CandleCloseKey", () => {
@@ -48,6 +48,11 @@ describe("charts/chart-cache", () => {
       const now = new Date("2026-07-04T01:30:00Z");
       expect(getCurrentH4CandleCloseKey(now)).toBe("2026-07-04T00");
     });
+  });
+
+  test("getLastClosedH4CandleKey keeps the same last-closed semantics", () => {
+    const now = new Date("2026-07-03T13:45:00Z");
+    expect(getLastClosedH4CandleKey(now)).toBe("2026-07-03T12");
   });
 
   describe("isWithinCandleCloseWindow", () => {
