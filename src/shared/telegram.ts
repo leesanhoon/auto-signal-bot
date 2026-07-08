@@ -25,7 +25,87 @@ export type TelegramCommand = {
 export type ChartAnalysisDeliveryContext = {
   source?: "live" | "cached";
   candleKey?: string;
+  systemLabel?: "bob-volman" | "smc";
 };
+
+const SMC_SEPARATOR = "━━━━━━━━━━━━━━━━━━━━━━━";
+
+function formatPlainPrice(value: unknown): string {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return String(value ?? "");
+  return num.toFixed(num >= 100 ? 2 : 5).replace(/\.?0+$/, (m) => (m.startsWith(".") ? "" : m));
+}
+
+function getSmcDirectionLabel(direction: TradeSetup["direction"]): "BUY" | "SELL" {
+  return direction === "LONG" ? "BUY" : "SELL";
+}
+
+function parseNumericLike(value: unknown): number | null {
+  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatRiskRewardValue(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) return `${value.toFixed(1)}:1`;
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  return "N/A";
+}
+
+export function buildSmcSignalMessage(setup: TradeSetup): string {
+  const grade = setup.grade ?? "N/A";
+  const score = setup.score ?? setup.confidence ?? 0;
+  const lines: string[] = [
+    `[SIGNAL] ${setup.pair} - ${getSmcDirectionLabel(setup.direction)} | Grade: ${grade} | Score: ${score}/100`,
+    SMC_SEPARATOR,
+    `Timeframe: ${setup.primaryTimeframe ?? "N/A"}${setup.sessionLabel ? ` | Session: ${setup.sessionLabel}` : ""}`,
+  ];
+  if (setup.market) lines.push(`Market: ${setup.market}`);
+  lines.push(SMC_SEPARATOR, "", `[ENTRY] ${setup.entry}`);
+  if (setup.entryZone) lines.push(`Entry Zone: ${setup.entryZone.low} - ${setup.entryZone.high}`);
+
+  const stopLossDistance = setup.stopLossDistance
+    ?? (() => {
+      const entry = parseNumericLike(setup.entry);
+      const sl = parseNumericLike(setup.stopLoss);
+      return entry !== null && sl !== null ? `$${Math.abs(entry - sl).toFixed(2)}` : null;
+    })();
+  lines.push("", `[SL] ${setup.stopLoss}${stopLossDistance ? ` | SL Distance: ${stopLossDistance}` : ""}`);
+
+  const allocation = setup.takeProfitAllocations;
+  const liquidityByTarget = new Map((setup.liquidityTargets ?? []).map((item) => [item.target, item]));
+  const tpEntries = [
+    { key: "TP1", price: setup.takeProfit1, alloc: allocation?.tp1 },
+    { key: "TP2", price: setup.takeProfit2, alloc: allocation?.tp2 },
+    ...(setup.takeProfit3 ? [{ key: "TP3", price: setup.takeProfit3, alloc: allocation?.tp3 }] : []),
+  ];
+  for (const tp of tpEntries) {
+    const liq = liquidityByTarget.get(tp.key as "TP1" | "TP2" | "TP3");
+    const rr = formatRiskRewardValue(liq?.riskReward ?? setup.riskReward);
+    const allocText = typeof tp.alloc === "number" ? ` | Chốt ${tp.alloc}%` : "";
+    const liqText = liq ? ` | ${liq.label} ${liq.price}` : "";
+    lines.push("", `[${tp.key}] ${tp.price} | R:R ${rr}${allocText}${liqText}`);
+  }
+
+  lines.push("", SMC_SEPARATOR, "NHẬN ĐỊNH:");
+  if (setup.reasons.length > 0) {
+    for (const reason of setup.reasons) lines.push(`- ${reason}`);
+  } else {
+    lines.push("- (Không có nhận định chi tiết)");
+  }
+
+  lines.push("", "QUẢN LÝ VỐN:");
+  const capitalManagement = setup.capitalManagement?.length
+    ? setup.capitalManagement
+    : [
+        "Risk 1-2% tài khoản cho lệnh này.",
+        setup.takeProfit3 ? "Chiến lược chốt lời: 50% tại TP1, 30% tại TP2, 20% tại TP3." : "Chiến lược chốt lời: 50% tại TP1, 50% tại TP2.",
+        "Kéo SL về entry (breakeven) ngay khi chạm TP1 để bảo toàn vốn.",
+      ];
+  for (const line of capitalManagement) lines.push(`- ${line}`);
+
+  lines.push("", `THẬN TRỌNG: ${setup.caution ?? "Thanh khoản thấp ngoài khung giờ vàng có thể gây biến động bất ngờ."}`);
+  return lines.join("\n");
+}
 
 function getTelegramConfig() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -579,11 +659,20 @@ export async function sendAllAnalyses(
     ? `📊 Attempted: ${result.analysisStats.attemptedPairs} | Summaries: ${result.summaries.length} | Skipped: ${result.analysisStats.skippedPairs} | Setups: ${result.analysisStats.setupCount}`
     : "";
   const noSetupReasonSection = buildNoSetupReasonSection(result);
+  const setupSystem = result.setups.find((setup) => setup.detectionSource === "smc")
+    ? "smc"
+    : result.setups.length > 0
+      ? "bob-volman"
+      : null;
+  const scannerSystem = deliveryContext.systemLabel ?? setupSystem ?? "bob-volman";
+  const scannerLabel = scannerSystem === "smc"
+    ? "SMC Multi-Timeframe Scanner"
+    : "Bob Volman Multi-Timeframe Scanner";
 
   if (setups.length === 0) {
     await notifier.sendMessage(
       [
-        `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*`,
+        `🚀 *${scannerLabel}${sourceLabel}*`,
         `📅 ${timestamp}`,
         cacheLine,
         `📊 Đã quét/thử *${attemptedCount}* cặp (D1/H4/M15 + volume)`,
@@ -603,7 +692,7 @@ export async function sendAllAnalyses(
   }
 
   await notifier.sendMessage(
-    `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%) — tìm thấy *${setups.length}* setup${setupHeaderSuffix}\n\n_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
+    `🚀 *${scannerLabel}${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%) — tìm thấy *${setups.length}* setup${setupHeaderSuffix}\n\n_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
   );
 
   for (const setup of setups) {
@@ -625,7 +714,7 @@ export async function sendAllAnalyses(
       }
     }
 
-    await notifier.sendMessage(buildCopyableSetup(setup));
+    await notifier.sendMessage(setup.detectionSource === "smc" ? buildSmcSignalMessage(setup) : buildCopyableSetup(setup));
     logger.info(`  ✓ Sent setup: ${setup.pair} ${setup.direction}`);
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }

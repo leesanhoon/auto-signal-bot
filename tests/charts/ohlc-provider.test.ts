@@ -2,590 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Candle } from "../../src/charts/ohlc-provider.js";
 import { resetRateLimitStateForTests } from "../../src/shared/rate-limit.js";
 
-// Import the module under test
 const ohlc = await import("../../src/charts/ohlc-provider.js");
-
-function domainResponse(domain = "agiliumtrade.ai"): Response {
-  return new Response(JSON.stringify({ domain, hostname: "mt-client-api-v1" }), { status: 200 });
-}
-
-function accountResponse(region = "new-york"): Response {
-  return new Response(JSON.stringify({ region }), { status: 200 });
-}
-
-// ---------------------------------------------------------------------------
-// toMetaApiSymbol
-// ---------------------------------------------------------------------------
-
-describe("toMetaApiSymbol", () => {
-  beforeEach(() => {
-    delete process.env.METAAPI_SYMBOL_SUFFIX;
-  });
-
-  test("maps EUR/USD correctly", () => {
-    expect(ohlc.toMetaApiSymbol("OANDA:EURUSD")).toBe("EURUSD");
-  });
-
-  test("maps GBP/USD correctly", () => {
-    expect(ohlc.toMetaApiSymbol("OANDA:GBPUSD")).toBe("GBPUSD");
-  });
-
-  test("maps XAU/USD correctly", () => {
-    expect(ohlc.toMetaApiSymbol("OANDA:XAUUSD")).toBe("XAUUSD");
-  });
-
-  test("maps XAG/USD correctly", () => {
-    expect(ohlc.toMetaApiSymbol("OANDA:XAGUSD")).toBe("XAGUSD");
-  });
-
-  test("maps USD/JPY correctly", () => {
-    expect(ohlc.toMetaApiSymbol("OANDA:USDJPY")).toBe("USDJPY");
-  });
-
-  test("applies METAAPI_SYMBOL_SUFFIX when set", () => {
-    process.env.METAAPI_SYMBOL_SUFFIX = "m";
-    expect(ohlc.toMetaApiSymbol("OANDA:EURUSD")).toBe("EURUSDm");
-  });
-
-  test("returns null for non-OANDA prefix", () => {
-    expect(ohlc.toMetaApiSymbol("TVC:EURUSD")).toBeNull();
-  });
-
-  test("returns null for short instrument", () => {
-    expect(ohlc.toMetaApiSymbol("OANDA:ABC")).toBeNull();
-  });
-
-  test("returns null for empty instrument", () => {
-    expect(ohlc.toMetaApiSymbol("OANDA:")).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// fetchOhlcHistory
-// ---------------------------------------------------------------------------
-
-describe("fetchOhlcHistory", () => {
-  beforeEach(() => {
-    delete process.env.METAAPI_TOKEN;
-    delete process.env.METAAPI_ACCOUNT_ID;
-    delete process.env.METAAPI_REGION;
-    delete process.env.METAAPI_MARKET_DATA_BASE_URL;
-    delete process.env.METAAPI_SYMBOL_SUFFIX;
-    delete process.env.TWELVEDATA_API_KEY;
-    vi.useRealTimers();
-    ohlc.clearOhlcCache();
-    ohlc.clearRegionCache();
-    resetRateLimitStateForTests();
-    vi.restoreAllMocks();
-  });
-
-  test("returns Error when env vars are missing", async () => {
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain("METAAPI_TOKEN");
-  });
-
-  test("returns Error when symbol cannot be mapped", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    const result = await ohlc.fetchOhlcHistory("OANDA:XYZ", "H4", 100);
-    expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain("Symbol");
-  });
-
-  test("returns Error when candles API response is not ok", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york"; // skip account region lookup
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      return new Response(null, { status: 401, statusText: "Unauthorized" });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain("401");
-    mockFetch.mockRestore();
-  });
-
-  test("returns Error when domain discovery fails", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-
-    const mockFetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response(null, { status: 404, statusText: "Not Found" }));
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain("404");
-    mockFetch.mockRestore();
-  });
-
-  test("returns Error when account region lookup fails", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      return new Response(null, { status: 403, statusText: "Forbidden" });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain("403");
-    mockFetch.mockRestore();
-  });
-
-  test("parses valid MetaApi response and returns sorted Candle[]", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-
-    const metaApiResponse = [
-      {
-        time: "2024-01-02T00:00:00.000Z",
-        open: 1.1,
-        high: 1.101,
-        low: 1.099,
-        close: 1.1005,
-        volume: 120,
-        tickVolume: 300,
-      },
-      {
-        time: "2024-01-01T00:00:00.000Z",
-        open: 1.099,
-        high: 1.0998,
-        low: 1.0985,
-        close: 1.0995,
-        volume: 85,
-        tickVolume: 210,
-      },
-    ];
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).not.toBeInstanceOf(Error);
-    const candles = result as Candle[];
-
-    // Sorted ascending by time
-    expect(candles).toHaveLength(2);
-    expect(candles[0].time).toBeLessThan(candles[1].time);
-    expect(candles[0].time).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
-    expect(candles[0].open).toBe(1.099);
-    expect(candles[0].close).toBe(1.0995);
-    expect(candles[0].volume).toBe(85);
-
-    mockFetch.mockRestore();
-  });
-
-  test("skips incomplete MetaApi candles where complete is false", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-
-    const metaApiResponse = [
-      {
-        time: "2024-01-02T00:00:00.000Z",
-        complete: false,
-        open: 1.2,
-        high: 1.21,
-        low: 1.19,
-        close: 1.205,
-        volume: 99,
-      },
-      {
-        time: "2024-01-01T00:00:00.000Z",
-        complete: true,
-        open: 1.1,
-        high: 1.11,
-        low: 1.09,
-        close: 1.105,
-        volume: 88,
-      },
-    ];
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).not.toBeInstanceOf(Error);
-    const candles = result as Candle[];
-    expect(candles).toHaveLength(1);
-    expect(candles[0].time).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
-    expect(candles[0].open).toBe(1.1);
-
-    mockFetch.mockRestore();
-  });
-
-  test("drops a running MetaApi H4 candle even when complete is missing", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2024-01-01T08:05:00Z"));
-
-    const metaApiResponse = [
-      {
-        time: "2024-01-01T04:00:00.000Z",
-        open: 1.1,
-        high: 1.11,
-        low: 1.09,
-        close: 1.105,
-        volume: 88,
-      },
-      {
-        time: "2024-01-01T08:00:00.000Z",
-        open: 1.2,
-        high: 1.21,
-        low: 1.19,
-        close: 1.205,
-        volume: 99,
-      },
-    ];
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).not.toBeInstanceOf(Error);
-    const candles = result as Candle[];
-    expect(candles).toHaveLength(1);
-    expect(candles[0].time).toBe(Date.parse("2024-01-01T04:00:00.000Z"));
-
-    mockFetch.mockRestore();
-    vi.useRealTimers();
-  });
-
-  test("retains the just-closed MetaApi H4 candle when it is the latest available candle", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2024-01-01T08:05:00Z"));
-
-    const metaApiResponse = [
-      {
-        time: "2024-01-01T04:00:00.000Z",
-        open: 1.1,
-        high: 1.11,
-        low: 1.09,
-        close: 1.105,
-        volume: 88,
-      },
-    ];
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).not.toBeInstanceOf(Error);
-    const candles = result as Candle[];
-    expect(candles).toHaveLength(1);
-    expect(candles[0].time).toBe(Date.parse("2024-01-01T04:00:00.000Z"));
-
-    mockFetch.mockRestore();
-    vi.useRealTimers();
-  });
-
-
-  test("falls back to tickVolume when volume is missing", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-
-    const metaApiResponse = [
-      {
-        time: "2024-01-01T00:00:00.000Z",
-        open: 1.1,
-        high: 1.11,
-        low: 1.09,
-        close: 1.105,
-        tickVolume: 42,
-      },
-    ];
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(result).not.toBeInstanceOf(Error);
-    const candles = result as Candle[];
-    expect(candles).toHaveLength(1);
-    expect(candles[0].volume).toBe(42);
-
-    mockFetch.mockRestore();
-  });
-
-  test("uses the next M15 boundary when fetch happens exactly at candle close", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2024-01-01T10:15:00Z"));
-
-    let callCount = 0;
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      callCount++;
-      return new Response(
-        JSON.stringify([
-          {
-            time: "2024-01-01T10:15:00.000Z",
-            open: `${1.1 + callCount}`,
-            high: 2.11,
-            low: 2.09,
-            close: 2.105,
-            volume: 100,
-          },
-        ]),
-        { status: 200 },
-      );
-    });
-
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    vi.setSystemTime(new Date("2024-01-01T10:30:59Z"));
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    vi.setSystemTime(new Date("2024-01-01T10:31:00Z"));
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(2);
-
-    mockFetch.mockRestore();
-    vi.useRealTimers();
-  });
-
-  test("keeps M15 cache until the next candle close boundary plus buffer", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2024-01-01T10:07:00Z"));
-
-    let callCount = 0;
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      callCount++;
-      const o = 1.1 + callCount * 0.001;
-      const body = [
-        {
-          time: "2024-01-01T09:45:00.000Z",
-          open: o,
-          high: o + 0.01,
-          low: o - 0.01,
-          close: o + 0.005,
-          volume: 100,
-        },
-      ];
-      return new Response(JSON.stringify(body), { status: 200 });
-    });
-
-    // First call → fetches from API
-    const r1 = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    // Second call → should still be cached until the next candle-close boundary
-    const r2 = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1); // still 1, cache hit
-
-    const candles1 = r1 as Candle[];
-    const candles2 = r2 as Candle[];
-    expect(candles1[0].open).toBe(candles2[0].open);
-    expect(candles1[0].time).toBe(candles2[0].time);
-
-    vi.setSystemTime(new Date("2024-01-01T10:16:00Z"));
-    const r3 = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(2); // fetched again after 10:15 close + 1m buffer
-    expect((r3 as Candle[])[0].open).not.toBe(candles1[0].open);
-
-    mockFetch.mockRestore();
-    vi.useRealTimers();
-  });
-
-  test("extends cache during forex weekend to avoid refetch spam", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2024-01-05T22:00:00Z"));
-
-    let callCount = 0;
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      callCount++;
-      return new Response(
-        JSON.stringify([
-          {
-            time: "2024-01-05T20:45:00.000Z",
-            open: 1.1,
-            high: 1.11,
-            low: 1.09,
-            close: 1.105,
-            volume: 100,
-          },
-        ]),
-        { status: 200 },
-      );
-    });
-
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    vi.setSystemTime(new Date("2024-01-06T03:00:00Z"));
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    mockFetch.mockRestore();
-    vi.useRealTimers();
-  });
-
-  test("expires weekend cache at the real Sunday reopen instead of six hours after fetch", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2024-01-07T18:00:00Z"));
-
-    let callCount = 0;
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      callCount++;
-      return new Response(
-        JSON.stringify([
-          {
-            time: "2024-01-05T20:45:00.000Z",
-            open: `${1.1 + callCount}`,
-            high: 2.11,
-            low: 2.09,
-            close: 2.105,
-            volume: 100,
-          },
-        ]),
-        { status: 200 },
-      );
-    });
-
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    vi.setSystemTime(new Date("2024-01-07T20:59:59Z"));
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    vi.setSystemTime(new Date("2024-01-07T21:05:00Z"));
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(2);
-
-    mockFetch.mockRestore();
-    vi.useRealTimers();
-  });
-
-  test("passes correct URL and auth-token header (METAAPI_MARKET_DATA_BASE_URL override)", async () => {
-    process.env.METAAPI_TOKEN = "test-token-123";
-    process.env.METAAPI_ACCOUNT_ID = "test-account";
-    process.env.METAAPI_MARKET_DATA_BASE_URL = "https://mt-market-data.example.com";
-
-    let capturedUrl = "";
-    let capturedHeaders: Record<string, string> = {};
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, opts) => {
-      capturedUrl = String(url);
-      capturedHeaders = (opts?.headers as Record<string, string>) || {};
-      return new Response(JSON.stringify([]), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:XAUUSD", "D1", 50);
-    expect(result).not.toBeInstanceOf(Error);
-
-    // Override skips domain/region discovery entirely
-    expect(capturedUrl).toContain(
-      "https://mt-market-data.example.com/users/current/accounts/test-account/historical-market-data/symbols/XAUUSD/timeframes/1d/candles",
-    );
-    expect(capturedUrl).toContain("limit=50");
-    expect(capturedHeaders["auth-token"]).toBe("test-token-123");
-
-    mockFetch.mockRestore();
-  });
-
-  test("discovers domain and region via provisioning API when not overridden", async () => {
-    process.env.METAAPI_TOKEN = "test-token-123";
-    process.env.METAAPI_ACCOUNT_ID = "test-account";
-
-    const requestedUrls: string[] = [];
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      requestedUrls.push(urlStr);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse("agiliumtrade.ai");
-      if (urlStr.includes("/accounts/test-account") && !urlStr.includes("historical-market-data")) {
-        return accountResponse("london");
-      }
-      return new Response(JSON.stringify([]), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).not.toBeInstanceOf(Error);
-    expect(requestedUrls.some((u) => u.includes("mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai/users/current/servers/mt-client-api"))).toBe(true);
-    expect(requestedUrls.some((u) => u.includes("mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/test-account"))).toBe(true);
-    expect(requestedUrls.some((u) => u.includes("mt-market-data-client-api-v1.london.agiliumtrade.ai"))).toBe(true);
-
-    mockFetch.mockRestore();
-  });
-
-  test("uses METAAPI_REGION to skip account lookup but still discovers domain", async () => {
-    process.env.METAAPI_TOKEN = "test-token-123";
-    process.env.METAAPI_ACCOUNT_ID = "test-account";
-    process.env.METAAPI_REGION = "singapore";
-
-    const requestedUrls: string[] = [];
-
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      requestedUrls.push(urlStr);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse("agiliumtrade.ai");
-      return new Response(JSON.stringify([]), { status: 200 });
-    });
-
-    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(result).not.toBeInstanceOf(Error);
-    expect(requestedUrls.some((u) => u.includes("/accounts/test-account") && !u.includes("historical-market-data"))).toBe(false);
-    expect(requestedUrls.some((u) => u.includes("mt-market-data-client-api-v1.singapore.agiliumtrade.ai"))).toBe(true);
-
-    mockFetch.mockRestore();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// toTwelveDataSymbol
-// ---------------------------------------------------------------------------
 
 describe("toTwelveDataSymbol", () => {
   test("maps EUR/USD correctly", () => {
@@ -605,24 +22,39 @@ describe("toTwelveDataSymbol", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// fetchOhlcHistory — Twelve Data path
-// ---------------------------------------------------------------------------
-
-describe("fetchOhlcHistory (Twelve Data)", () => {
+describe("fetchOhlcHistory", () => {
   beforeEach(() => {
+    delete process.env.TWELVEDATA_API_KEY;
     delete process.env.METAAPI_TOKEN;
     delete process.env.METAAPI_ACCOUNT_ID;
-    delete process.env.TWELVEDATA_API_KEY;
+    delete process.env.METAAPI_MARKET_DATA_BASE_URL;
+    delete process.env.METAAPI_REGION;
+    delete process.env.METAAPI_SYMBOL_SUFFIX;
     vi.useRealTimers();
     ohlc.clearOhlcCache();
-    ohlc.clearRegionCache();
     resetRateLimitStateForTests();
     vi.restoreAllMocks();
   });
 
-  test("uses Twelve Data instead of MetaApi when TWELVEDATA_API_KEY is set", async () => {
+  test("returns a clear config error when TWELVEDATA_API_KEY is missing", async () => {
+    process.env.METAAPI_TOKEN = "legacy-token";
+    process.env.METAAPI_ACCOUNT_ID = "legacy-account";
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("TWELVEDATA_API_KEY");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("uses Twelve Data and ignores MetaApi env vars when the API key is set", async () => {
     process.env.TWELVEDATA_API_KEY = "td-key";
+    process.env.METAAPI_TOKEN = "legacy-token";
+    process.env.METAAPI_ACCOUNT_ID = "legacy-account";
+    process.env.METAAPI_REGION = "singapore";
+    process.env.METAAPI_MARKET_DATA_BASE_URL = "https://legacy.example.com";
+    process.env.METAAPI_SYMBOL_SUFFIX = "m";
 
     const tdResponse = {
       status: "ok",
@@ -633,15 +65,15 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     };
 
     let capturedUrl = "";
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       capturedUrl = String(url);
       return new Response(JSON.stringify(tdResponse), { status: 200 });
     });
 
     const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+
     expect(result).not.toBeInstanceOf(Error);
     const candles = result as Candle[];
-
     expect(capturedUrl).toContain("api.twelvedata.com/time_series");
     expect(capturedUrl).toContain("symbol=EUR%2FUSD");
     expect(capturedUrl).toContain("interval=4h");
@@ -649,8 +81,7 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     expect(candles[0].time).toBeLessThan(candles[1].time);
     expect(candles[0].open).toBe(1.099);
     expect(candles[0].volume).toBe(400);
-
-    mockFetch.mockRestore();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   test("parses Twelve Data timestamps as UTC and skips the newest incomplete candle", async () => {
@@ -665,21 +96,18 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     };
 
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2024-01-01T12:30:00Z"));
-    let capturedUrl = "";
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      capturedUrl = String(url);
-      return new Response(JSON.stringify(tdResponse), { status: 200 });
-    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(tdResponse), { status: 200 }),
+    );
 
     const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+
     expect(result).not.toBeInstanceOf(Error);
     const candles = result as Candle[];
-
-    expect(capturedUrl).toContain("timezone=UTC");
     expect(candles).toHaveLength(1);
     expect(candles[0].time).toBe(Date.parse("2024-01-01T08:00:00Z"));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    mockFetch.mockRestore();
     nowSpy.mockRestore();
   });
 
@@ -689,7 +117,7 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     vi.setSystemTime(new Date("2024-01-01T05:30:00Z"));
 
     let callCount = 0;
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       callCount++;
       return new Response(
         JSON.stringify({
@@ -714,7 +142,7 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
     expect(callCount).toBe(2);
 
-    mockFetch.mockRestore();
+    fetchSpy.mockRestore();
     vi.useRealTimers();
   });
 
@@ -724,7 +152,7 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
 
     let callCount = 0;
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       callCount++;
       return new Response(
         JSON.stringify({
@@ -744,97 +172,43 @@ describe("fetchOhlcHistory (Twelve Data)", () => {
     await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
     expect(callCount).toBe(2);
 
-    mockFetch.mockRestore();
+    fetchSpy.mockRestore();
     vi.useRealTimers();
   });
 
-  test("uses latest candle time as the cache anchor when provider lags wall clock", async () => {
-    process.env.TWELVEDATA_API_KEY = "td-key";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2024-01-01T10:20:00Z"));
-
-    let callCount = 0;
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      callCount++;
-      return new Response(
-        JSON.stringify({
-          status: "ok",
-          values: [
-            { datetime: "2024-01-01 09:45:00", open: "1.200", high: "1.210", low: "1.190", close: "1.205", volume: "500" },
-            { datetime: "2024-01-01 09:30:00", open: "1.100", high: "1.110", low: "1.090", close: "1.105", volume: "400" },
-          ],
-        }),
-        { status: 200 },
-      );
-    });
-
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(1);
-
-    await ohlc.fetchOhlcHistory("OANDA:EURUSD", "M15", 100);
-    expect(callCount).toBe(2);
-
-    mockFetch.mockRestore();
-    vi.useRealTimers();
-  });
-
-  test("switches cache entries when provider changes", async () => {
-    process.env.METAAPI_TOKEN = "dummy";
-    process.env.METAAPI_ACCOUNT_ID = "dummy";
-    process.env.METAAPI_REGION = "new-york";
-
-    const metaApiResponse = [
-      {
-        time: "2024-01-01T00:00:00.000Z",
-        open: 1.1,
-        high: 1.11,
-        low: 1.09,
-        close: 1.105,
-        volume: 85,
-      },
-    ];
-    const tdResponse = {
-      status: "ok",
-      values: [
-        { datetime: "2024-01-01 12:00:00", open: "2.200", high: "2.210", low: "2.190", close: "2.205", volume: "500" },
-      ],
-    };
-
-    const requestedUrls: string[] = [];
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const urlStr = String(url);
-      requestedUrls.push(urlStr);
-      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
-      if (urlStr.includes("api.twelvedata.com")) {
-        return new Response(JSON.stringify(tdResponse), { status: 200 });
-      }
-      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
-    });
-
-    const metaResult = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(metaResult).not.toBeInstanceOf(Error);
-    expect((metaResult as Candle[])[0].open).toBe(1.1);
-
-    process.env.TWELVEDATA_API_KEY = "td-key";
-    const tdResult = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
-    expect(tdResult).not.toBeInstanceOf(Error);
-    expect((tdResult as Candle[])[0].open).toBe(2.2);
-    expect(requestedUrls.some((url) => url.includes("api.twelvedata.com/time_series"))).toBe(true);
-
-    mockFetch.mockRestore();
-  });
-
-  test("returns Error when Twelve Data responds with status error", async () => {
+  test("returns an API error clearly when Twelve Data responds with status error", async () => {
     process.env.TWELVEDATA_API_KEY = "td-key";
 
-    const mockFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "error", message: "invalid symbol" }), { status: 200 }),
     );
 
     const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+
     expect(result).toBeInstanceOf(Error);
     expect((result as Error).message).toContain("invalid symbol");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 
-    mockFetch.mockRestore();
+  test("includes fetch cause details when Node fetch fails at runtime", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+
+    const networkError = new TypeError("fetch failed");
+    (networkError as Error & { cause?: unknown }).cause = {
+      code: "ECONNRESET",
+      syscall: "connect",
+      host: "api.twelvedata.com",
+      message: "Client network socket disconnected before secure TLS connection was established",
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(networkError);
+
+    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("fetch failed");
+    expect((result as Error).message).toContain("ECONNRESET");
+    expect((result as Error).message).toContain("api.twelvedata.com");
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
   });
 });

@@ -2,6 +2,7 @@ import type { ChartTimeframe } from "./chart-types.js";
 import { withRetry } from "../shared/retry.js";
 import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 import { createLogger } from "../shared/logger.js";
+import { formatFetchErrorDetails } from "../shared/fetch-diagnostics.js";
 
 const logger = createLogger("charts:ohlc-provider");
 
@@ -23,8 +24,6 @@ interface CacheEntry {
   expiresAt: number;
 }
 
-type OhlcProvider = "metaapi" | "twelvedata";
-
 type CandleRowMap = {
   timeField: "time" | "datetime";
   openField: string;
@@ -38,7 +37,6 @@ type CandleRowMap = {
 
 type TimeframeConfig = {
   intervalMs: number;
-  metaApiCode: string;
   twelveDataCode: string;
 };
 
@@ -64,17 +62,14 @@ type FetchJsonOptions = FetchWithRetryOptions;
 const TIMEFRAME_CONFIG: Record<ChartTimeframe, TimeframeConfig> = {
   M15: {
     intervalMs: 15 * 60 * 1000,
-    metaApiCode: "15m",
     twelveDataCode: "15min",
   },
   H4: {
     intervalMs: 4 * 60 * 60 * 1000,
-    metaApiCode: "4h",
     twelveDataCode: "4h",
   },
   D1: {
     intervalMs: 24 * 60 * 60 * 1000,
-    metaApiCode: "1d",
     twelveDataCode: "1day",
   },
 };
@@ -90,14 +85,16 @@ function isCacheEnabled(timeframe: ChartTimeframe): boolean {
   return timeframe !== "D1";
 }
 
-function cacheKey(symbol: string, timeframe: ChartTimeframe, provider: OhlcProvider): string {
-  return `${provider}:${symbol}:${timeframe}`;
+function cacheKey(symbol: string, timeframe: ChartTimeframe): string {
+  return `${symbol}:${timeframe}`;
 }
 
 function parseUtcTimestamp(value: unknown): number {
   if (typeof value !== "string") return NaN;
   const normalized = value.replace(" ", "T");
-  return /([zZ]|[+-]\d\d:?\d\d)$/.test(normalized) ? Date.parse(normalized) : Date.parse(`${normalized}Z`);
+  return /([zZ]|[+-]\d\d:?\d\d)$/.test(normalized)
+    ? Date.parse(normalized)
+    : Date.parse(`${normalized}Z`);
 }
 
 function readFiniteNumber(value: unknown): number {
@@ -143,12 +140,11 @@ function parseCandleRow(raw: unknown, map: CandleRowMap): Candle | null {
   };
 }
 
-function getIntervalMs(timeframe: ChartTimeframe): number {
-  return getTimeframeConfig(timeframe).intervalMs;
-}
-
-function getNextCandleCloseMs(timeframe: ChartTimeframe, fromMs: number): number {
-  const intervalMs = getIntervalMs(timeframe);
+function getNextCandleCloseMs(
+  timeframe: ChartTimeframe,
+  fromMs: number,
+): number {
+  const intervalMs = getTimeframeConfig(timeframe).intervalMs;
   return Math.floor(fromMs / intervalMs) * intervalMs + intervalMs;
 }
 
@@ -163,25 +159,30 @@ function isForexWeekendClosed(nowMs: number): boolean {
   return false;
 }
 
-function shouldSkipLatestCandle(latestTime: number, timeframe: ChartTimeframe): boolean {
+function shouldSkipLatestCandle(
+  latestTime: number,
+  timeframe: ChartTimeframe,
+): boolean {
   if (!Number.isFinite(latestTime)) return false;
   if (isForexWeekendClosed(Date.now())) return false;
-  return Date.now() - latestTime < getIntervalMs(timeframe);
+  return Date.now() - latestTime < getTimeframeConfig(timeframe).intervalMs;
 }
 
 function getNextWeekendReopenMs(fromMs: number): number {
   const date = new Date(fromMs);
   const day = date.getUTCDay();
   const daysUntilSunday = (7 - day) % 7;
-  const reopen = new Date(Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate() + daysUntilSunday,
-    21,
-    0,
-    0,
-    0,
-  ));
+  const reopen = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() + daysUntilSunday,
+      21,
+      0,
+      0,
+      0,
+    ),
+  );
 
   if (reopen.getTime() <= fromMs) {
     reopen.setUTCDate(reopen.getUTCDate() + 7);
@@ -190,18 +191,26 @@ function getNextWeekendReopenMs(fromMs: number): number {
   return reopen.getTime();
 }
 
-function getCacheExpiryMs(timeframe: ChartTimeframe, nowMs: number, latestCandleTime: number | null): number {
+function getCacheExpiryMs(
+  timeframe: ChartTimeframe,
+  nowMs: number,
+  latestCandleTime: number | null,
+): number {
   if (isForexWeekendClosed(nowMs)) {
     return getNextWeekendReopenMs(nowMs);
   }
 
-  const anchor = typeof latestCandleTime === "number" && Number.isFinite(latestCandleTime)
-    ? latestCandleTime + getIntervalMs(timeframe)
-    : nowMs;
+  const anchor =
+    typeof latestCandleTime === "number" && Number.isFinite(latestCandleTime)
+      ? latestCandleTime + getTimeframeConfig(timeframe).intervalMs
+      : nowMs;
   return getNextCandleCloseMs(timeframe, anchor) + CANDLE_CLOSE_BUFFER_MS;
 }
 
-async function fetchWithRetry(url: string, options: FetchWithRetryOptions): Promise<Response | Error> {
+async function fetchWithRetry(
+  url: string,
+  options: FetchWithRetryOptions,
+): Promise<Response | Error> {
   const run = async (): Promise<Response> =>
     withRetry(
       async () => {
@@ -222,7 +231,9 @@ async function fetchWithRetry(url: string, options: FetchWithRetryOptions): Prom
         baseDelayMs: options.retryOptions?.baseDelayMs ?? 1000,
         isRetryable: options.retryOptions?.isRetryable,
         onRetry: (error, attempt, maxAttempts, delayMs) => {
-          logger.warn(`${options.label} retry ${attempt}/${maxAttempts} sau ${delayMs}ms: ${error instanceof Error ? error.message : error}`);
+          logger.warn(
+            `${options.label} retry ${attempt}/${maxAttempts} sau ${delayMs}ms: ${formatFetchErrorDetails(error)}`,
+          );
         },
       },
     );
@@ -236,21 +247,15 @@ async function fetchWithRetry(url: string, options: FetchWithRetryOptions): Prom
     if (error instanceof Error && "status" in error) {
       return error;
     }
-    const msg = error instanceof Error ? error.message : "Unknown network error";
+    const msg = formatFetchErrorDetails(error);
     return new Error(`Loi mang khi goi ${options.label}: ${msg}`);
   }
 }
 
-// ---------------------------------------------------------------------------
-// Region + domain resolution
-// ---------------------------------------------------------------------------
-
-const PROVISIONING_HOST = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
-
-let regionDomainCache: { region: string; domain: string; expiresAt: number } | null = null;
-const REGION_DOMAIN_CACHE_TTL = 60 * 60 * 1000;
-
-async function fetchJson<T>(url: string, options: FetchJsonOptions): Promise<T | Error> {
+async function fetchJson<T>(
+  url: string,
+  options: FetchJsonOptions,
+): Promise<T | Error> {
   const response = await fetchWithRetry(url, options);
   if (response instanceof Error) return response;
 
@@ -259,73 +264,6 @@ async function fetchJson<T>(url: string, options: FetchJsonOptions): Promise<T |
   } catch {
     return new Error(`Khong the parse JSON response tu ${options.label}`);
   }
-}
-
-async function resolveRegionAndDomain(
-  token: string,
-  accountId: string,
-): Promise<{ region: string; domain: string } | Error> {
-  if (regionDomainCache && regionDomainCache.expiresAt > Date.now()) {
-    return regionDomainCache;
-  }
-
-  const envRegion = process.env.METAAPI_REGION?.trim();
-
-  const domainBody = await fetchJson<{ domain?: string }>(
-    `${PROVISIONING_HOST}/users/current/servers/mt-client-api`,
-    {
-      label: "MetaApi domain discovery",
-      headers: { "auth-token": token, Accept: "application/json" },
-      retryOptions: { maxAttempts: 3, baseDelayMs: 1000 },
-    },
-  );
-  if (domainBody instanceof Error) return domainBody;
-  if (!domainBody.domain) return new Error("MetaApi domain discovery response thieu truong 'domain'");
-
-  let region = envRegion;
-  if (!region) {
-    const accountBody = await fetchJson<{ region?: string }>(
-      `${PROVISIONING_HOST}/users/current/accounts/${accountId}`,
-      {
-        label: "MetaApi account lookup",
-        headers: { "auth-token": token, Accept: "application/json" },
-        retryOptions: { maxAttempts: 3, baseDelayMs: 1000 },
-      },
-    );
-    if (accountBody instanceof Error) return accountBody;
-    if (!accountBody.region) return new Error("MetaApi account lookup response thieu truong 'region'");
-    region = accountBody.region;
-  }
-
-  regionDomainCache = { region, domain: domainBody.domain, expiresAt: Date.now() + REGION_DOMAIN_CACHE_TTL };
-  return regionDomainCache;
-}
-
-/** Clear cached account region/domain. */
-export function clearRegionCache(): void {
-  regionDomainCache = null;
-}
-
-// ---------------------------------------------------------------------------
-// Symbol mapping
-// ---------------------------------------------------------------------------
-
-export function toMetaApiSymbol(symbol: string): string | null {
-  const prefix = "OANDA:";
-  if (!symbol.startsWith(prefix)) return null;
-  const instrument = symbol.slice(prefix.length);
-  if (instrument.length < 6) return null;
-
-  const suffix = process.env.METAAPI_SYMBOL_SUFFIX?.trim() || "";
-  return `${instrument}${suffix}`;
-}
-
-// ---------------------------------------------------------------------------
-// Timeframe mapping
-// ---------------------------------------------------------------------------
-
-function toMetaApiTimeframe(timeframe: ChartTimeframe): string {
-  return getTimeframeConfig(timeframe).metaApiCode;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,12 +301,17 @@ async function fetchFromTwelveData(
   const body = await fetchJson<any>(url, {
     label: "Twelve Data",
     headers: { Accept: "application/json" },
-    rateLimit: { key: "twelvedata", envVar: "TWELVEDATA_RATE_LIMIT_RPM", defaultRpm: 7 },
+    rateLimit: {
+      key: "twelvedata",
+      envVar: "TWELVEDATA_RATE_LIMIT_RPM",
+      defaultRpm: 7,
+    },
     retryOptions: { maxAttempts: 3, baseDelayMs: 1000 },
     onHttpError: async (res) => {
       let apiMessage: string | undefined;
       try {
-        apiMessage = ((await res.clone().json()) as { message?: string })?.message;
+        apiMessage = ((await res.clone().json()) as { message?: string })
+          ?.message;
       } catch {
         // ignore
       }
@@ -403,7 +346,10 @@ async function fetchFromTwelveData(
   }
 
   candles.sort((a, b) => a.time - b.time);
-  if (candles.length > 0 && shouldSkipLatestCandle(candles[candles.length - 1].time, timeframe)) {
+  if (
+    candles.length > 0 &&
+    shouldSkipLatestCandle(candles[candles.length - 1].time, timeframe)
+  ) {
     candles.pop();
   }
 
@@ -420,93 +366,32 @@ export async function fetchOhlcHistory(
   bars: number,
 ): Promise<Candle[] | Error> {
   const twelveDataApiKey = process.env.TWELVEDATA_API_KEY?.trim();
-  const provider: OhlcProvider = twelveDataApiKey ? "twelvedata" : "metaapi";
-  const key = cacheKey(symbol, timeframe, provider);
+  if (!twelveDataApiKey) {
+    return new Error("TWELVEDATA_API_KEY chua cau hinh");
+  }
+
+  const key = cacheKey(symbol, timeframe);
   const cached = isCacheEnabled(timeframe) ? cache.get(key) : undefined;
   if (cached && cached.expiresAt > Date.now()) {
     return cached.candles.slice();
   }
 
-  if (twelveDataApiKey) {
-    const result = await fetchFromTwelveData(symbol, timeframe, bars, twelveDataApiKey);
-    if (result instanceof Error) return result;
-    if (isCacheEnabled(timeframe)) {
-      const latestCandleTime = result.length > 0 ? result[result.length - 1].time : null;
-      cache.set(key, { candles: result.slice(), expiresAt: getCacheExpiryMs(timeframe, Date.now(), latestCandleTime) });
-    }
-    return result;
-  }
-
-  const token = process.env.METAAPI_TOKEN?.trim();
-  const accountId = process.env.METAAPI_ACCOUNT_ID?.trim();
-  if (!token || !accountId) {
-    return new Error("METAAPI_TOKEN/METAAPI_ACCOUNT_ID chua cau hinh");
-  }
-
-  const instrument = toMetaApiSymbol(symbol);
-  if (!instrument) {
-    return new Error(`Symbol khong dung dinh dang OANDA:XXXYYY: "${symbol}"`);
-  }
-
-  const mtTimeframe = toMetaApiTimeframe(timeframe);
-
-  let baseUrl = process.env.METAAPI_MARKET_DATA_BASE_URL?.trim();
-  if (!baseUrl) {
-    const resolved = await resolveRegionAndDomain(token, accountId);
-    if (resolved instanceof Error) {
-      return resolved;
-    }
-    baseUrl = `https://mt-market-data-client-api-v1.${resolved.region}.${resolved.domain}`;
-  }
-  const url = `${baseUrl}/users/current/accounts/${accountId}/historical-market-data/symbols/${instrument}/timeframes/${mtTimeframe}/candles?limit=${Math.min(bars, 1000)}`;
-
-  const body = await fetchJson<unknown>(url, {
-    label: "MetaApi",
-    headers: {
-      "auth-token": token,
-      Accept: "application/json",
-    },
-    retryOptions: { maxAttempts: 3, baseDelayMs: 1000 },
-    onHttpError: async (res) => {
-      const error = new Error(`MetaApi API tra ve ${res.status} cho ${instrument} ${mtTimeframe}`);
-      (error as any).status = res.status;
-      return error;
-    },
-  });
-  if (body instanceof Error) return body;
-
-  if (!Array.isArray(body)) {
-    return new Error("MetaApi response khong phai mang candles");
-  }
-
-  const candles: Candle[] = [];
-  for (const raw of body) {
-    const candle = parseCandleRow(raw, {
-      timeField: "time",
-      openField: "open",
-      highField: "high",
-      lowField: "low",
-      closeField: "close",
-      volumeField: "volume",
-      fallbackVolumeField: "tickVolume",
-      skipIfCompleteFalse: true,
-    });
-    if (candle) candles.push(candle);
-  }
-
-  candles.sort((a, b) => a.time - b.time);
-  if (candles.length > 0 && shouldSkipLatestCandle(candles[candles.length - 1].time, timeframe)) {
-    candles.pop();
-  }
-
+  const result = await fetchFromTwelveData(
+    symbol,
+    timeframe,
+    bars,
+    twelveDataApiKey,
+  );
+  if (result instanceof Error) return result;
   if (isCacheEnabled(timeframe)) {
+    const latestCandleTime =
+      result.length > 0 ? result[result.length - 1].time : null;
     cache.set(key, {
-      candles: candles.slice(),
-      expiresAt: getCacheExpiryMs(timeframe, Date.now(), candles.length > 0 ? candles[candles.length - 1].time : null),
+      candles: result.slice(),
+      expiresAt: getCacheExpiryMs(timeframe, Date.now(), latestCandleTime),
     });
   }
-
-  return candles;
+  return result;
 }
 
 export function clearOhlcCache(): void {
@@ -517,6 +402,5 @@ export function invalidateOhlcCache(
   symbol: string,
   timeframe: ChartTimeframe,
 ): void {
-  cache.delete(cacheKey(symbol, timeframe, "metaapi"));
-  cache.delete(cacheKey(symbol, timeframe, "twelvedata"));
+  cache.delete(cacheKey(symbol, timeframe));
 }

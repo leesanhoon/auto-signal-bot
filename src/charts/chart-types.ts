@@ -44,7 +44,7 @@ export type PairSummary = {
   status: string;
   confidence: number;
   ruleTrace?: string[];
-  detectionSource?: "deterministic" | "ai";
+  detectionSource?: "deterministic" | "ai" | "smc";
 };
 
 export type TradeSetup = {
@@ -68,10 +68,28 @@ export type TradeSetup = {
   autoTracked?: boolean;
   chartFallbackUsed?: boolean;
   ruleTrace?: string[];
-  detectionSource?: "deterministic" | "ai";
+  detectionSource?: "deterministic" | "ai" | "smc";
   sourceCharts?: ChartAnalysisSource[];
   telegramChart?: ChartAnalysisSource;
   lastPrice?: number | null;
+  // ---- SMC metadata (optional, không phá Bob Volman fields) ----
+  grade?: "A" | "B" | "C" | "D";
+  score?: number;
+  market?: string;
+  session?: string;
+  sessionLabel?: string;
+  entryZone?: { low: string; high: string };
+  stopLossDistance?: string;
+  takeProfit3?: string;
+  takeProfitAllocations?: { tp1: number; tp2: number; tp3: number };
+  liquidityTargets?: Array<{
+    label: string;
+    price: string;
+    target: "TP1" | "TP2" | "TP3";
+    riskReward?: string;
+  }>;
+  caution?: string;
+  capitalManagement?: string[];
 };
 
 export type AnalysisStats = {

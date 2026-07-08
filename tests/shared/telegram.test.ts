@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { buildHeartbeatMessage, buildPositionDecisionMessage, sendAllAnalyses, findScreenshotForSetup } from "../../src/shared/telegram.js";
+import { buildHeartbeatMessage, buildPositionDecisionMessage, sendAllAnalyses, findScreenshotForSetup, buildSmcSignalMessage } from "../../src/shared/telegram.js";
 import type { AnalysisResult, TradeSetup, ScreenshotResult } from "../../src/charts/chart-types.js";
 
 describe("shared/telegram", () => {
@@ -328,6 +328,113 @@ describe("shared/telegram", () => {
     expect(calls[0][1]).toContain("OANDA:EURUSD M15");
     expect(calls[0][1]).toContain("Nguồn ảnh: exact-m15.jpg");
     expect(sends.join("\n")).toContain("Buy Stop — lệnh chờ breakout lên vùng entry");
+  });
+
+  test("buildSmcSignalMessage renders SMC format and defaults", () => {
+    const message = buildSmcSignalMessage({
+      pair: "XAUTUSDT",
+      direction: "SHORT",
+      setup: "SMC_BOS_OB",
+      primaryTimeframe: "M15",
+      reasons: ["Đa khung đồng thuận", "OB trùng FVG"],
+      risks: [],
+      confidence: 51,
+      entry: "4128.37",
+      stopLoss: "4142.51",
+      takeProfit1: "4085.95",
+      takeProfit2: "4056.61",
+      takeProfit3: "3945.50",
+      riskReward: "3:1",
+      summary: "SMC summary",
+      grade: "B",
+      score: 51,
+      market: "Binance Spot XAUTUSDT",
+      sessionLabel: "LONDON (Khung giờ vàng)",
+      entryZone: { low: "4128.37", high: "4131.83" },
+      stopLossDistance: "$14.14",
+      takeProfitAllocations: { tp1: 50, tp2: 30, tp3: 20 },
+      liquidityTargets: [
+        { label: "EQL", price: "4056.11", target: "TP2", riskReward: "5.1:1" },
+        { label: "PWL", price: "3945.00", target: "TP3", riskReward: "11.2:1" },
+      ],
+      caution: "Thanh khoản thấp ngoài khung giờ vàng có thể gây biến động bất ngờ.",
+      capitalManagement: [
+        "Risk 1-2% tài khoản cho lệnh này.",
+        "Chiến lược chốt lời: 50% tại TP1, 30% tại TP2, 20% tại TP3.",
+        "Kéo SL về entry (breakeven) ngay khi chạm TP1 để bảo toàn vốn.",
+      ],
+      ruleTrace: [],
+      detectionSource: "smc",
+    } as TradeSetup);
+
+    expect(message).toContain("[SIGNAL] XAUTUSDT - SELL | Grade: B | Score: 51/100");
+    expect(message).toContain("Timeframe: M15 | Session: LONDON (Khung giờ vàng)");
+    expect(message).toContain("Market: Binance Spot XAUTUSDT");
+    expect(message).toContain("[ENTRY] 4128.37");
+    expect(message).toContain("Entry Zone: 4128.37 - 4131.83");
+    expect(message).toContain("[SL] 4142.51 | SL Distance: $14.14");
+    expect(message).toContain("[TP1] 4085.95 | R:R 3:1 | Chốt 50%");
+    expect(message).toContain("[TP2] 4056.61 | R:R 5.1:1 | Chốt 30% | EQL 4056.11");
+    expect(message).toContain("[TP3] 3945.50 | R:R 11.2:1 | Chốt 20% | PWL 3945.00");
+    expect(message).toContain("NHẬN ĐỊNH:");
+    expect(message).toContain("QUẢN LÝ VỐN:");
+    expect(message).toContain("THẬN TRỌNG:");
+  });
+
+  test("sendAllAnalyses routes SMC setup to SMC formatter", async () => {
+    const sends: string[] = [];
+    const notifier = {
+      sendMessage: vi.fn(async (message: string) => {
+        sends.push(message);
+      }),
+      sendPhoto: vi.fn(async () => undefined),
+    };
+    const result: AnalysisResult = {
+      summaries: [{ pair: "XAUTUSDT", trend: "Tăng", status: "OK", confidence: 80 }],
+      setups: [{
+        pair: "XAUTUSDT",
+        direction: "SHORT",
+        setup: "SMC_BOS_OB",
+        reasons: ["Đa khung đồng thuận"],
+        risks: [],
+        confidence: 80,
+        entry: "4128.37",
+        stopLoss: "4142.51",
+        takeProfit1: "4085.95",
+        takeProfit2: "4056.61",
+        riskReward: "3:1",
+        summary: "SMC summary",
+        detectionSource: "smc",
+        grade: "B",
+        score: 51,
+      } as TradeSetup],
+      noSetupReason: "",
+      screenshots: [],
+    };
+    await sendAllAnalyses(result, notifier);
+    expect(sends.join("\n")).toContain("[SIGNAL] XAUTUSDT - SELL");
+    expect(sends.join("\n")).toContain("SMC Multi-Timeframe Scanner");
+  });
+
+  test("sendAllAnalyses keeps SMC scanner header on no-setup run when systemLabel is smc", async () => {
+    const sends: string[] = [];
+    const notifier = {
+      sendMessage: vi.fn(async (message: string) => {
+        sends.push(message);
+      }),
+      sendPhoto: vi.fn(async () => undefined),
+    };
+    const result: AnalysisResult = {
+      summaries: [],
+      setups: [],
+      noSetupReason: "Khong co setup",
+      screenshots: [],
+    };
+
+    await sendAllAnalyses(result, notifier, { systemLabel: "smc" });
+
+    expect(sends.join("\n")).toContain("SMC Multi-Timeframe Scanner");
+    expect(sends.join("\n")).not.toContain("Bob Volman Multi-Timeframe Scanner");
   });
 
   test("sendAllAnalyses warns when the chart uses a fallback timeframe", async () => {

@@ -1,6 +1,29 @@
-export type ChartEngineMode = "ai" | "deterministic" | "shadow";
+export type ChartEngineMode = "ai" | "deterministic" | "shadow" | "smc";
 export type ChartRunContext = "manual" | "auto";
 export type ChartTimeframeMode = "multi" | "single";
+
+/**
+ * Hệ thống trading mà chart runtime sẽ sử dụng.
+ * - `bob-volman`: pipeline deterministic Bob Volman hiện có (default).
+ * - `smc`: pipeline Smart Money Concepts mới, tách biệt.
+ */
+export type ChartTradingSystem = "bob-volman" | "smc";
+
+/**
+ * Đọc CHART_TRADING_SYSTEM từ env và trả về hệ thống trading đã chọn.
+ * Mặc định: `bob-volman` (không thay đổi hành vi hiện tại).
+ * Giá trị không hợp lệ rơi về `bob-volman`.
+ */
+export function getConfiguredChartTradingSystem(): ChartTradingSystem {
+  const raw = process.env.CHART_TRADING_SYSTEM?.trim().toLowerCase();
+  if (raw === "bob-volman" || raw === "bob_volman") {
+    return "bob-volman";
+  }
+  if (raw === "smc") {
+    return "smc";
+  }
+  return "bob-volman";
+}
 
 /**
  * Đọc CHART_ENGINE_MODE từ env.

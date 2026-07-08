@@ -15,6 +15,7 @@ import {
   getConfiguredChartEngineMode,
   getConfiguredChartRunContext,
   getConfiguredChartSignalConfidenceThreshold,
+  getConfiguredChartTradingSystem,
   getConfiguredChartTimeframeMode,
   shouldSendHeartbeatOnManualRun,
   shouldSendHeartbeatOutsideCloseWindow,
@@ -31,6 +32,7 @@ import {
   saveChartAnalysisCache,
 } from "./chart-cache-repository.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
+import { analyzeAllChartsSmc } from "./smc/smc-pipeline.js";
 import { CHARTS, getChartsForTimeframeMode } from "./charts.config.js";
 import { buildChartAnalysisCacheKey } from "./analyzer.js";
 
@@ -54,23 +56,31 @@ function getPairs(): Array<{ pair: string; symbol: string }> {
   return Array.from(seen.entries()).map(([pair, symbol]) => ({ pair, symbol }));
 }
 
+export function getChartScannerErrorScope(tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>): string {
+  return tradingSystem === "smc"
+    ? "SMC multi-timeframe scanner"
+    : "Bob Volman multi-timeframe scanner";
+}
+
 async function analyzeCurrentWindow(
   candleKey: string,
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
+  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
 ): Promise<AnalysisResult> {
   const runtimeCharts = getChartsForTimeframeMode(timeframeMode, primaryTimeframe);
-  logger.info("Using deterministic engine (no AI vision)", {
+  logger.info(`Using ${tradingSystem} engine (no AI vision)`, {
     timeframeMode,
     primaryTimeframe,
+    tradingSystem,
     intervals: Array.from(new Set(runtimeCharts.map((chart) => chart.timeframe))),
   });
-  const detResult = await analyzeAllChartsDeterministic(getPairs(), {
-    timeframeMode,
-    primaryTimeframe,
-  });
-  await saveChartAnalysisCache(candleKey, detResult);
-  return detResult;
+  const result =
+    tradingSystem === "smc"
+      ? await analyzeAllChartsSmc(getPairs(), { timeframeMode, primaryTimeframe })
+      : await analyzeAllChartsDeterministic(getPairs(), { timeframeMode, primaryTimeframe });
+  await saveChartAnalysisCache(candleKey, result);
+  return result;
 }
 
 async function loadAnalysisForRun(
@@ -79,19 +89,21 @@ async function loadAnalysisForRun(
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   runContext: ReturnType<typeof getConfiguredChartRunContext>,
+  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
 ): Promise<{ result: AnalysisResult | null; origin: AnalysisOrigin | null; heartbeatReason: "no-cache" | "no-event" | null }> {
-  const cacheKey = buildChartAnalysisCacheKey(candleBaseKey, "deterministic", timeframeMode, primaryTimeframe);
+  const cacheLabel = tradingSystem === "smc" ? "smc" : "deterministic";
+  const cacheKey = buildChartAnalysisCacheKey(candleBaseKey, cacheLabel, timeframeMode, primaryTimeframe);
   const cached = await loadChartAnalysisCache(cacheKey);
   if (cached) return { result: cached, origin: { source: "cached", candleKey: cacheKey }, heartbeatReason: null };
 
   const withinCloseWindow = isWithinTimeframeCandleCloseWindow(analysisTimeframe, new Date(), CANDLE_CLOSE_WINDOW_MS);
   if (withinCloseWindow) {
-    const liveResult = await analyzeCurrentWindow(cacheKey, timeframeMode, primaryTimeframe);
+    const liveResult = await analyzeCurrentWindow(cacheKey, timeframeMode, primaryTimeframe, tradingSystem);
     return { result: liveResult, origin: { source: "live", candleKey: cacheKey }, heartbeatReason: null };
   }
 
   if (runContext === "manual" && shouldUseLatestCacheForManualRun()) {
-    const latest = await loadLatestChartAnalysisCache("deterministic", timeframeMode, primaryTimeframe);
+    const latest = await loadLatestChartAnalysisCache(cacheLabel, timeframeMode, primaryTimeframe);
     if (latest) {
       return { result: latest.result, origin: { source: "cached", candleKey: latest.candleKey }, heartbeatReason: null };
     }
@@ -101,7 +113,11 @@ async function loadAnalysisForRun(
   return { result: null, origin: null, heartbeatReason: shouldSendHeartbeatOutsideCloseWindow() ? "no-event" : null };
 }
 
-async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrigin): Promise<void> {
+async function handleAnalysisResult(
+  result: AnalysisResult,
+  origin: AnalysisOrigin,
+  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
+): Promise<void> {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
   for (const setup of result.setups) {
     if (shouldAutoTrackAsOpen(setup, threshold)) {
@@ -136,7 +152,7 @@ async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrig
   }
 
   logger.info("Sending results to Telegram", { source: origin.source, candleKey: origin.candleKey });
-  await sendAllAnalyses(result, undefined, { source: origin.source, candleKey: origin.candleKey });
+  await sendAllAnalyses(result, undefined, { source: origin.source, candleKey: origin.candleKey, systemLabel: tradingSystem });
 }
 
 async function maybeSendHeartbeat(
@@ -146,34 +162,36 @@ async function maybeSendHeartbeat(
   latestCacheCandleKey?: string | null,
 ): Promise<void> {
   if (!heartbeatReason) return;
-  await sendMessage(buildHeartbeatMessage({ runContext, engineMode: "deterministic", reason: heartbeatReason, candleKey, latestCacheCandleKey: latestCacheCandleKey ?? null }));
+  await sendMessage(buildHeartbeatMessage({ runContext, engineMode: getConfiguredChartTradingSystem(), reason: heartbeatReason, candleKey, latestCacheCandleKey: latestCacheCandleKey ?? null }));
 }
 
 export async function main(): Promise<void> {
   const startTime = Date.now();
   const runContext = getConfiguredChartRunContext();
+  const tradingSystem = getConfiguredChartTradingSystem();
   const timeframeMode = getConfiguredChartTimeframeMode();
   const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
   const analysisTimeframe = timeframeMode === "single" ? primaryTimeframe : "H4";
-  logger.info("Bob Volman scanner starting", { engineMode: "deterministic", runContext, timeframeMode, primaryTimeframe, analysisTimeframe });
+  logger.info("Chart scanner starting", { engineMode: tradingSystem, runContext, timeframeMode, primaryTimeframe, analysisTimeframe });
 
   const candleBaseKey = getLastClosedCandleKey(analysisTimeframe);
-  const candleKey = buildChartAnalysisCacheKey(candleBaseKey, "deterministic", timeframeMode, primaryTimeframe);
+  const cacheLabel = tradingSystem === "smc" ? "smc" : "deterministic";
+  const candleKey = buildChartAnalysisCacheKey(candleBaseKey, cacheLabel, timeframeMode, primaryTimeframe);
   let latestCacheCandleKey: string | null = null;
   let result: AnalysisResult | null = null;
   let origin: AnalysisOrigin | null = null;
   let heartbeatReason: "no-cache" | "no-event" | null = null;
 
-  const analysisState = await loadAnalysisForRun(candleBaseKey, analysisTimeframe, timeframeMode, primaryTimeframe, runContext);
+  const analysisState = await loadAnalysisForRun(candleBaseKey, analysisTimeframe, timeframeMode, primaryTimeframe, runContext, tradingSystem);
   result = analysisState.result;
   origin = analysisState.origin;
   heartbeatReason = analysisState.heartbeatReason;
   if (origin?.source === "cached") latestCacheCandleKey = origin.candleKey;
 
   if (result && origin) {
-    await handleAnalysisResult(result, origin);
+    await handleAnalysisResult(result, origin, tradingSystem);
   } else {
-    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`);
+    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`, { engineMode: tradingSystem });
   }
 
   logger.info("Checking open positions");
@@ -197,7 +215,7 @@ export async function main(): Promise<void> {
     skippedPairs,
     setupCount,
     elapsedSeconds: Number(elapsed),
-    engineMode: "deterministic",
+    engineMode: tradingSystem,
     runContext,
     timeframeMode,
     primaryTimeframe,
@@ -210,7 +228,7 @@ export async function main(): Promise<void> {
 if (!process.env.VITEST) {
   main().catch(async (error) => {
     logger.error("Fatal error", { error });
-    await notifyError("Bob Volman multi-timeframe scanner", error);
+    await notifyError(getChartScannerErrorScope(getConfiguredChartTradingSystem()), error);
     process.exit(1);
   });
 }

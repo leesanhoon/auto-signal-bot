@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { getChartScannerErrorScope } from "../../src/charts/index.js";
 
 // ============================================================
 // Mock state (vi.hoisted — runs before factory functions)
@@ -25,8 +26,10 @@ const mocks = vi.hoisted(() => ({
   savePendingOrder: vi.fn(),
   validateTradeSetupForOpen: vi.fn(),
   analyzeAllChartsDeterministic: vi.fn(),
+  analyzeAllChartsSmc: vi.fn(),
   getConfiguredChartSignalConfidenceThreshold: vi.fn(),
   getConfiguredChartEngineMode: vi.fn(),
+  getConfiguredChartTradingSystem: vi.fn(),
   getConfiguredChartRunContext: vi.fn(),
   getConfiguredChartTimeframeMode: vi.fn(),
   getConfiguredChartPrimaryTimeframe: vi.fn(),
@@ -100,9 +103,14 @@ vi.mock("../../src/charts/deterministic-pipeline.js", () => ({
   analyzeAllChartsDeterministic: mocks.analyzeAllChartsDeterministic,
 }));
 
+vi.mock("../../src/charts/smc/smc-pipeline.js", () => ({
+  analyzeAllChartsSmc: mocks.analyzeAllChartsSmc,
+}));
+
 vi.mock("../../src/charts/chart-config-env.js", () => ({
   getConfiguredChartSignalConfidenceThreshold: mocks.getConfiguredChartSignalConfidenceThreshold,
   getConfiguredChartEngineMode: mocks.getConfiguredChartEngineMode,
+  getConfiguredChartTradingSystem: mocks.getConfiguredChartTradingSystem,
   getConfiguredChartRunContext: mocks.getConfiguredChartRunContext,
   getConfiguredChartTimeframeMode: mocks.getConfiguredChartTimeframeMode,
   getConfiguredChartPrimaryTimeframe: mocks.getConfiguredChartPrimaryTimeframe,
@@ -156,6 +164,7 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(false);
     mocks.getConfiguredChartSignalConfidenceThreshold.mockReturnValue(50);
     mocks.getConfiguredChartEngineMode.mockReturnValue("ai");
+    mocks.getConfiguredChartTradingSystem.mockReturnValue("bob-volman");
     mocks.getConfiguredChartRunContext.mockReturnValue("manual");
     mocks.getConfiguredChartTimeframeMode.mockReturnValue("multi");
     mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("M15");
@@ -167,6 +176,7 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.savePendingOrder.mockResolvedValue(true);
     mocks.captureAllCharts.mockResolvedValue([{ filepath: "/tmp/chart.png" }]);
     mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
+    mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
     mocks.runCheckPendingOrders.mockResolvedValue(0);
     mocks.sendMessage.mockResolvedValue(undefined);
@@ -273,7 +283,7 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
-      { source: "cached", candleKey: "2026-07-03T08:deterministic" },
+      { source: "cached", candleKey: "2026-07-03T08:deterministic", systemLabel: "bob-volman" },
     );
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
@@ -423,7 +433,50 @@ describe("charts/index main() — H4 close guard", () => {
       summaryPairs: 0,
       skippedPairs: 8,
       setupCount: 0,
-      engineMode: "deterministic",
+      engineMode: "bob-volman",
     });
+  });
+
+  test("khi trading system là smc thì gọi SMC pipeline và dùng cache label smc", async () => {
+    mocks.getConfiguredChartTradingSystem.mockReturnValue("smc");
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
+    mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT as any);
+
+    await main();
+
+    expect(mocks.analyzeAllChartsSmc).toHaveBeenCalledTimes(1);
+    expect(mocks.analyzeAllChartsDeterministic).not.toHaveBeenCalled();
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expect.stringContaining(":smc:"));
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
+      MOCK_RESULT,
+      undefined,
+      expect.objectContaining({ source: "live", systemLabel: "smc" }),
+    );
+  });
+
+  test("fatal error scope follows the selected trading system", () => {
+    expect(getChartScannerErrorScope("bob-volman")).toBe("Bob Volman multi-timeframe scanner");
+    expect(getChartScannerErrorScope("smc")).toBe("SMC multi-timeframe scanner");
+  });
+
+  test("ngoài window + manual run + SMC + có latest cache thì dùng latest cache label smc", async () => {
+    mocks.getConfiguredChartTradingSystem.mockReturnValue("smc");
+    mocks.getConfiguredChartRunContext.mockReturnValue("manual");
+    mocks.loadLatestChartAnalysisCache.mockResolvedValue({
+      candleKey: "2026-07-03T08:smc",
+      result: MOCK_RESULT as any,
+    });
+
+    await main();
+
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
+    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith("smc", "multi", "M15");
+    expect(mocks.analyzeAllChartsSmc).not.toHaveBeenCalled();
+    expect(mocks.analyzeAllChartsDeterministic).not.toHaveBeenCalled();
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
+      MOCK_RESULT,
+      undefined,
+      expect.objectContaining({ source: "cached", candleKey: "2026-07-03T08:smc", systemLabel: "smc" }),
+    );
   });
 });
