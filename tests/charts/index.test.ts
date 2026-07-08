@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   loadLatestChartAnalysisCache: vi.fn(),
   saveChartAnalysisCache: vi.fn(),
   isWithinCandleCloseWindow: vi.fn(),
+  isWithinTimeframeCandleCloseWindow: vi.fn(),
   runCheckOpenTrades: vi.fn(),
   runCheckPendingOrders: vi.fn(),
   sendAllAnalyses: vi.fn(),
@@ -32,6 +33,13 @@ const mocks = vi.hoisted(() => ({
   shouldUseLatestCacheForManualRun: vi.fn(),
   shouldSendHeartbeatOutsideCloseWindow: vi.fn(),
   shouldSendHeartbeatOnManualRun: vi.fn(),
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn(),
+  },
 }));
 
 // ============================================================
@@ -56,6 +64,7 @@ vi.mock("../../src/charts/chart-cache.js", async (importOriginal) => {
   return {
     ...original,
     isWithinCandleCloseWindow: mocks.isWithinCandleCloseWindow,
+    isWithinTimeframeCandleCloseWindow: mocks.isWithinTimeframeCandleCloseWindow,
   };
 });
 
@@ -72,6 +81,10 @@ vi.mock("../../src/shared/telegram.js", () => ({
   sendMessage: mocks.sendMessage,
   buildHeartbeatMessage: mocks.buildHeartbeatMessage,
   notifyError: mocks.notifyError,
+}));
+
+vi.mock("../../src/shared/logger.js", () => ({
+  createLogger: () => mocks.logger,
 }));
 
 vi.mock("../../src/charts/positions-repository.js", () => ({
@@ -101,8 +114,6 @@ vi.mock("../../src/charts/chart-config-env.js", () => ({
 // ============================================================
 // Mock data
 // ============================================================
-const CANDLE_KEY = "2026-07-03T12";
-
 const MOCK_RESULT = {
   summaries: [
     { pair: "EUR/USD", trend: "LONG", status: "tích lũy", confidence: 80 },
@@ -142,6 +153,7 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.loadChartAnalysisCache.mockResolvedValue(null);
     mocks.loadLatestChartAnalysisCache.mockResolvedValue(null);
     mocks.isWithinCandleCloseWindow.mockReturnValue(false);
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(false);
     mocks.getConfiguredChartSignalConfidenceThreshold.mockReturnValue(50);
     mocks.getConfiguredChartEngineMode.mockReturnValue("ai");
     mocks.getConfiguredChartRunContext.mockReturnValue("manual");
@@ -158,7 +170,9 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.runCheckOpenTrades.mockResolvedValue(0);
     mocks.runCheckPendingOrders.mockResolvedValue(0);
     mocks.sendMessage.mockResolvedValue(undefined);
+    mocks.sendAllAnalyses.mockResolvedValue(undefined);
     mocks.buildHeartbeatMessage.mockReturnValue("HEARTBEAT");
+    mocks.logger.child.mockReturnValue(mocks.logger);
 
     // Dynamic import to get fresh module instance each test
     const mod = await import("../../src/charts/index.js");
@@ -200,7 +214,7 @@ describe("charts/index main() — H4 close guard", () => {
   });
 
   test("không cache + trong window → capture+analyze + check trade/pending", async () => {
-    mocks.isWithinCandleCloseWindow.mockReturnValue(true);
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
 
     await main();
     const expectedCacheKey = getExpectedCacheKey();
@@ -224,7 +238,7 @@ describe("charts/index main() — H4 close guard", () => {
 
   test("có cache + trong window → ưu tiên cache, không capture+analyze", async () => {
     mocks.loadChartAnalysisCache.mockResolvedValue(MOCK_RESULT as any);
-    mocks.isWithinCandleCloseWindow.mockReturnValue(true);
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
 
     await main();
     const expectedCacheKey = getExpectedCacheKey();
@@ -311,11 +325,59 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
+  test("deterministic single mode M15 dùng timeframe runtime cho cache key và close window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-03T10:15:05Z"));
+    mocks.getConfiguredChartEngineMode.mockReturnValue("deterministic");
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("single");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("M15");
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
+
+    await main();
+    const expectedCacheKey = getExpectedCacheKey();
+
+    expect(expectedCacheKey).toBe("2026-07-03T10:15:deterministic:single:M15");
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledTimes(1);
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledWith(
+      expect.any(Array),
+      { timeframeMode: "single", primaryTimeframe: "M15" },
+    );
+    expect(mocks.saveChartAnalysisCache).toHaveBeenCalledWith(
+      expectedCacheKey,
+      MOCK_RESULT,
+    );
+    vi.useRealTimers();
+  });
+
+  test("deterministic single mode D1 vẫn dùng runtime timeframe cho cache key và close window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T00:00:05Z"));
+    mocks.getConfiguredChartEngineMode.mockReturnValue("deterministic");
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("single");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("D1");
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
+
+    await main();
+    const expectedCacheKey = getExpectedCacheKey();
+
+    expect(expectedCacheKey).toBe("2026-07-04T00:deterministic:single:D1");
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledWith(
+      expect.any(Array),
+      { timeframeMode: "single", primaryTimeframe: "D1" },
+    );
+    expect(mocks.saveChartAnalysisCache).toHaveBeenCalledWith(
+      expectedCacheKey,
+      MOCK_RESULT,
+    );
+    vi.useRealTimers();
+  });
+
   test("deterministic single mode truyền timeframe thực xuống pipeline", async () => {
     mocks.getConfiguredChartEngineMode.mockReturnValue("deterministic");
     mocks.getConfiguredChartTimeframeMode.mockReturnValue("single");
     mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("D1");
-    mocks.isWithinCandleCloseWindow.mockReturnValue(true);
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
 
     await main();
     const expectedCacheKey = getExpectedCacheKey();
@@ -330,5 +392,38 @@ describe("charts/index main() — H4 close guard", () => {
       expectedCacheKey,
       MOCK_RESULT,
     );
+  });
+
+  test("final Run complete log dùng analysisStats.attemptedPairs khi có stats", async () => {
+    mocks.getConfiguredChartEngineMode.mockReturnValue("deterministic");
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("single");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("M15");
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
+    mocks.analyzeAllChartsDeterministic.mockResolvedValue({
+      summaries: [],
+      setups: [],
+      noSetupReason: "",
+      screenshots: [],
+      analysisStats: {
+        attemptedPairs: 8,
+        okPairs: 0,
+        skippedPairs: 8,
+        setupCount: 0,
+      },
+    } as any);
+
+    await main();
+
+    const runCompleteCall = mocks.logger.info.mock.calls.find(([message]) => message === "Run complete");
+
+    expect(runCompleteCall).toBeDefined();
+    expect(runCompleteCall?.[1]).toMatchObject({
+      scannedPairs: 8,
+      attemptedPairs: 8,
+      summaryPairs: 0,
+      skippedPairs: 8,
+      setupCount: 0,
+      engineMode: "deterministic",
+    });
   });
 });

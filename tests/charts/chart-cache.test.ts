@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { getCurrentH4CandleCloseKey, getLastClosedH4CandleKey, isWithinCandleCloseWindow } from "../../src/charts/chart-cache.js";
+import {
+  getCurrentH4CandleCloseKey,
+  getLastClosedCandleKey,
+  getLastClosedH4CandleKey,
+  isWithinCandleCloseWindow,
+  isWithinTimeframeCandleCloseWindow,
+} from "../../src/charts/chart-cache.js";
 
 describe("charts/chart-cache", () => {
   describe("getCurrentH4CandleCloseKey", () => {
@@ -55,6 +61,25 @@ describe("charts/chart-cache", () => {
     expect(getLastClosedH4CandleKey(now)).toBe("2026-07-03T12");
   });
 
+  describe("getLastClosedCandleKey timeframe-aware semantics", () => {
+    test("M15 boundary rules include minutes", () => {
+      expect(getLastClosedCandleKey("M15", new Date("2026-07-03T10:14:59Z"))).toBe("2026-07-03T10:00");
+      expect(getLastClosedCandleKey("M15", new Date("2026-07-03T10:15:00Z"))).toBe("2026-07-03T10:15");
+      expect(getLastClosedCandleKey("M15", new Date("2026-07-03T10:29:59Z"))).toBe("2026-07-03T10:15");
+    });
+
+    test("H4 boundary rules stay backward compatible", () => {
+      expect(getLastClosedCandleKey("H4", new Date("2026-07-03T07:59:59Z"))).toBe("2026-07-03T04");
+      expect(getLastClosedCandleKey("H4", new Date("2026-07-03T08:00:00Z"))).toBe("2026-07-03T08");
+      expect(getLastClosedCandleKey("H4", new Date("2026-07-03T08:05:00Z"))).toBe("2026-07-03T08");
+    });
+
+    test("D1 boundary rules use the UTC daily boundary", () => {
+      expect(getLastClosedCandleKey("D1", new Date("2026-07-03T23:59:59Z"))).toBe("2026-07-03T00");
+      expect(getLastClosedCandleKey("D1", new Date("2026-07-04T00:00:00Z"))).toBe("2026-07-04T00");
+    });
+  });
+
   describe("isWithinCandleCloseWindow", () => {
     test("tại thời điểm đóng nến (12:00) — true", () => {
       const now = new Date("2026-07-03T12:00:00Z");
@@ -93,6 +118,21 @@ describe("charts/chart-cache", () => {
     test("1ms trước 20 phút — true (sát biên dưới)", () => {
       const now = new Date("2026-07-03T12:19:59.999Z");
       expect(isWithinCandleCloseWindow(now, 20 * 60 * 1000)).toBe(true);
+    });
+  });
+
+  describe("isWithinTimeframeCandleCloseWindow", () => {
+    test("M15 respects minute precision and close-window boundaries", () => {
+      expect(isWithinTimeframeCandleCloseWindow("M15", new Date("2026-07-03T10:14:59Z"), 20 * 60 * 1000)).toBe(true);
+      expect(isWithinTimeframeCandleCloseWindow("M15", new Date("2026-07-03T10:15:00Z"), 20 * 60 * 1000)).toBe(true);
+      expect(isWithinTimeframeCandleCloseWindow("M15", new Date("2026-07-03T10:34:59.999Z"), 20 * 60 * 1000)).toBe(true);
+      expect(isWithinTimeframeCandleCloseWindow("M15", new Date("2026-07-03T10:35:00Z"), 5 * 60 * 1000)).toBe(false);
+    });
+
+    test("H4 remains compatible through the timeframe-aware helper", () => {
+      expect(isWithinTimeframeCandleCloseWindow("H4", new Date("2026-07-03T12:00:00Z"), 20 * 60 * 1000)).toBe(true);
+      expect(isWithinTimeframeCandleCloseWindow("H4", new Date("2026-07-03T12:19:59.999Z"), 20 * 60 * 1000)).toBe(true);
+      expect(isWithinTimeframeCandleCloseWindow("H4", new Date("2026-07-03T12:20:00Z"), 20 * 60 * 1000)).toBe(false);
     });
   });
 });

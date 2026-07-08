@@ -73,11 +73,21 @@ export type TradeSetup = {
   telegramChart?: ChartAnalysisSource;
   lastPrice?: number | null;
 };
+
+export type AnalysisStats = {
+  attemptedPairs: number;
+  okPairs: number;
+  noSetupPairs: number;
+  skippedPairs: number;
+  setupCount: number;
+};
+
 export type AnalysisResult = {
   summaries: PairSummary[];
   setups: TradeSetup[];
   noSetupReason: string;
   screenshots: ScreenshotResult[];
+  analysisStats?: AnalysisStats;
 };
 
 export type PendingOrderStatus = "PENDING" | "TRIGGERED" | "EXPIRED" | "CANCELLED";

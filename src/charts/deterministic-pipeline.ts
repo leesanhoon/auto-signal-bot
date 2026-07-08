@@ -162,25 +162,41 @@ export async function analyzeAllChartsDeterministic(
   const summaries: AnalysisResult["summaries"] = [];
   const setups: AnalysisResult["setups"] = [];
   const noSetupReasons: string[] = [];
+  let okPairs = 0;
+  let noSetupPairs = 0;
+  let skippedPairs = 0;
 
   for (const r of pairResults) {
     if (r.kind === "ok") {
+      okPairs += 1;
       summaries.push(...r.summaries);
       setups.push(...r.setups);
     } else if (r.kind === "no_setups") {
+      noSetupPairs += 1;
       summaries.push(...r.summaries);
       noSetupReasons.push(`[${r.pair}] Khong phat hien setup nao`);
     } else {
+      skippedPairs += 1;
       noSetupReasons.push(`[${r.pair}] ${r.error}`);
     }
   }
 
-  logger.info(`  ✓ ${summaries.length} pairs scanned, ${setups.length} setup(s) returned by deterministic engine`);
+  const attemptedPairs = pairs.length;
+  logger.info(
+    `  ✓ ${attemptedPairs} pairs attempted, ${summaries.length} summaries, ${skippedPairs} skipped, ${setups.length} setup(s) returned by deterministic engine`,
+  );
 
   return {
     summaries,
     setups,
     noSetupReason: noSetupReasons.join("\n").trim(),
     screenshots: [],
+    analysisStats: {
+      attemptedPairs,
+      okPairs,
+      noSetupPairs,
+      skippedPairs,
+      setupCount: setups.length,
+    },
   };
 }

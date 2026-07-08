@@ -193,6 +193,50 @@ describe("shared/telegram", () => {
     expect(notifier.sendPhoto).not.toHaveBeenCalled();
   });
 
+  test("sendAllAnalyses no-setup message includes stats and truncated skip reasons", async () => {
+    const sends: string[] = [];
+    const notifier = {
+      sendMessage: vi.fn(async (message: string) => {
+        sends.push(message);
+      }),
+      sendPhoto: vi.fn(async () => undefined),
+    };
+
+    const result: AnalysisResult = {
+      summaries: [],
+      setups: [],
+      noSetupReason: [
+        "[XAU/USD] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[EUR/USD] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[GBP/USD] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[USD/JPY] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[AUD/USD] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[NZD/USD] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[USD/CAD] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[USD/CHF] ATR data chua du hoac ngoai khung giao dich hop le",
+        "[EUR/GBP] ATR data chua du hoac ngoai khung giao dich hop le",
+      ].join("\n"),
+      analysisStats: {
+        attemptedPairs: 8,
+        okPairs: 0,
+        noSetupPairs: 0,
+        skippedPairs: 8,
+        setupCount: 0,
+      },
+      screenshots: [],
+    };
+
+    await sendAllAnalyses(result, notifier);
+
+    const fullText = sends.join("\n");
+
+    expect(fullText).toContain("Đã quét/thử *8* cặp");
+    expect(fullText).toContain("Attempted: 8 | Summaries: 0 | Skipped: 8 | Setups: 0");
+    expect(fullText).toContain("\\[XAU/USD\\] ATR data chua du hoac ngoai khung giao dich hop le");
+    expect(fullText).toContain("\\[USD/CHF\\] ATR data chua du hoac ngoai khung giao dich hop le");
+    expect(fullText).not.toContain("\\[EUR/GBP\\] ATR data chua du hoac ngoai khung giao dich hop le");
+  });
+
   test("sendAllAnalyses prefers exact provenance over fuzzy screenshot matching", async () => {
     const sendPhoto = vi.fn(async () => undefined);
     const sends: string[] = [];

@@ -2,7 +2,7 @@ import { getDb } from "../shared/db.js";
 import { createLogger } from "../shared/logger.js";
 import type { ChartEngineMode, ChartTimeframeMode } from "./chart-config-env.js";
 import type { ChartTimeframe } from "./chart-types.js";
-import type { AnalysisResult, TradeSetup } from "./chart-types.js";
+import type { AnalysisResult, AnalysisStats, TradeSetup } from "./chart-types.js";
 
 const logger = createLogger("chart-cache-repository");
 
@@ -22,6 +22,7 @@ export async function saveChartAnalysisCache(
         filepath: s.filepath,
         lastPrice: s.lastPrice,
       })),
+      ...(result.analysisStats ? { analysisStats: result.analysisStats } : {}),
     };
 
     await (getDb().from("chart_analysis_cache") as any).upsert(
@@ -58,6 +59,18 @@ export const SETUP_FIELD_CHECKS: Array<{
   { field: "summary", check: (v) => typeof v === "string" },
 ];
 
+function isValidAnalysisStats(obj: unknown): obj is AnalysisStats {
+  if (typeof obj !== "object" || obj === null) return false;
+  const stats = obj as Record<string, unknown>;
+  return (
+    Number.isFinite(stats.attemptedPairs) &&
+    Number.isFinite(stats.okPairs) &&
+    Number.isFinite(stats.noSetupPairs) &&
+    Number.isFinite(stats.skippedPairs) &&
+    Number.isFinite(stats.setupCount)
+  );
+}
+
 /**
  * Validate một cached result có đúng shape AnalysisResult không.
  * Check cả field top-level lẫn shape từng TradeSetup.
@@ -67,6 +80,7 @@ export function isValidAnalysisResult(obj: unknown): obj is AnalysisResult {
   const r = obj as Record<string, unknown>;
   if (!Array.isArray(r.summaries) || !Array.isArray(r.setups) || !Array.isArray(r.screenshots)) return false;
   if (typeof r.noSetupReason !== "string" && r.noSetupReason !== undefined) return false;
+  if (r.analysisStats !== undefined && !isValidAnalysisStats(r.analysisStats)) return false;
   // Validate each TradeSetup has required fields via schema-driven checks
   for (const s of r.setups) {
     if (typeof s !== "object" || s === null) return false;
@@ -89,6 +103,7 @@ function toCachedAnalysisResult(raw: unknown): AnalysisResult | null {
     setups: r.setups ?? [],
     noSetupReason: r.noSetupReason ?? "",
     screenshots: [],
+    ...(r.analysisStats ? { analysisStats: r.analysisStats } : {}),
   };
 }
 

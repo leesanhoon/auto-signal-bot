@@ -129,5 +129,49 @@ describe("deterministic pipeline", () => {
     expect(result.setups).toHaveLength(1);
     expect(result.setups[0].pair).toBe("EUR/USD");
     expect(result.summaries[0].pair).toBe("EUR/USD");
+    expect(result.analysisStats).toEqual({
+      attemptedPairs: 1,
+      okPairs: 1,
+      noSetupPairs: 0,
+      skippedPairs: 0,
+      setupCount: 1,
+    });
+  });
+
+  test("records skippedPairs when runtime filter rejects a pair", async () => {
+    const candles: Candle[] = Array.from({ length: 31 }, (_, i) => ({
+      time: (i + 1) * 1000,
+      open: 1 + i * 0.001,
+      high: 1.1 + i * 0.001,
+      low: 0.9 + i * 0.001,
+      close: 1.05 + i * 0.001,
+      volume: 10 + i,
+    }));
+    mocks.fetchOhlcHistory.mockResolvedValue(candles);
+    mocks.calculateEma.mockReturnValue([1, 1, 1]);
+    mocks.calculateAtr.mockReturnValue([0.5, 0.5, 0.5]);
+    mocks.isTradableWindow.mockReturnValue(false);
+    mocks.detectDd.mockReturnValue(null);
+    mocks.detectFb.mockReturnValue(null);
+    mocks.detectBb.mockReturnValue(null);
+    mocks.detectRb.mockReturnValue(null);
+    mocks.detectArb.mockReturnValue(null);
+    mocks.detectIrb.mockReturnValue(null);
+
+    const result = await analyzeAllChartsDeterministic([{ pair: "EUR/USD", symbol: "OANDA:EURUSD" }], {
+      timeframeMode: "single",
+      primaryTimeframe: "H4",
+    });
+
+    expect(result.summaries).toHaveLength(0);
+    expect(result.setups).toHaveLength(0);
+    expect(result.noSetupReason).toContain("ATR data chua du hoac ngoai khung giao dich hop le");
+    expect(result.analysisStats).toEqual({
+      attemptedPairs: 1,
+      okPairs: 0,
+      noSetupPairs: 0,
+      skippedPairs: 1,
+      setupCount: 0,
+    });
   });
 });

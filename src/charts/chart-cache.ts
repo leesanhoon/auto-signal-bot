@@ -1,16 +1,46 @@
+import type { ChartTimeframe } from "./chart-types.js";
+
+const TIMEFRAME_INTERVAL_MS: Record<ChartTimeframe, number> = {
+  M15: 15 * 60 * 1000,
+  H4: 4 * 60 * 60 * 1000,
+  D1: 24 * 60 * 60 * 1000,
+};
+
+function getTimeframeIntervalMs(timeframe: ChartTimeframe): number {
+  return TIMEFRAME_INTERVAL_MS[timeframe];
+}
+
+function getLastClosedBoundaryMs(timeframe: ChartTimeframe, nowMs: number): number {
+  const intervalMs = getTimeframeIntervalMs(timeframe);
+  return Math.floor(nowMs / intervalMs) * intervalMs;
+}
+
+function formatBoundaryKey(timeframe: ChartTimeframe, boundaryMs: number): string {
+  const boundary = new Date(boundaryMs);
+  const y = boundary.getUTCFullYear();
+  const m = String(boundary.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(boundary.getUTCDate()).padStart(2, "0");
+  const hh = String(boundary.getUTCHours()).padStart(2, "0");
+
+  if (timeframe === "M15") {
+    const mm = String(boundary.getUTCMinutes()).padStart(2, "0");
+    return `${y}-${m}-${d}T${hh}:${mm}`;
+  }
+
+  return `${y}-${m}-${d}T${hh}`;
+}
+
+export function getLastClosedCandleKey(timeframe: ChartTimeframe, now: Date = new Date()): string {
+  return formatBoundaryKey(timeframe, getLastClosedBoundaryMs(timeframe, now.getTime()));
+}
+
 /**
  * Helper tính key cho "last closed H4 candle" dạng YYYY-MM-DDTHH.
  * Mốc này là candle H4 đã đóng gần nhất, không phải candle đang chạy trên chart.
  * Khớp lịch cron trong .github/workflows/analyze.yml: 5 0,4,8,12,16,20 * * 1-5 (UTC).
  */
 export function getLastClosedH4CandleKey(now: Date = new Date()): string {
-  const utcHours = now.getUTCHours();
-  const clampedHour = Math.floor(utcHours / 4) * 4; // 0, 4, 8, 12, 16, 20
-  const y = now.getUTCFullYear();
-  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(now.getUTCDate()).padStart(2, "0");
-  const hh = String(clampedHour).padStart(2, "0");
-  return `${y}-${m}-${d}T${hh}`;
+  return getLastClosedCandleKey("H4", now);
 }
 
 /**
@@ -22,21 +52,18 @@ export function getCurrentH4CandleCloseKey(now: Date = new Date()): string {
 }
 
 /**
- * Kiểm tra xem thời điểm hiện tại có nằm trong cửa sổ windowMs sau khi nến H4 đóng cửa hay không.
+ * Kiểm tra xem thời điểm hiện tại có nằm trong cửa sổ windowMs sau khi nến của timeframe đã đóng cửa hay không.
  * Dùng để quyết định có nên chạy capture+AI (chỉ chạy trong cửa sổ ngắn sau nến đóng).
  */
-export function isWithinCandleCloseWindow(now: Date, windowMs: number): boolean {
-  const utcHours = now.getUTCHours();
-  const clampedHour = Math.floor(utcHours / 4) * 4; // 0, 4, 8, 12, 16, 20
-  const candleCloseTime = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      clampedHour,
-      0, 0, 0,
-    ),
-  );
+export function isWithinTimeframeCandleCloseWindow(timeframe: ChartTimeframe, now: Date, windowMs: number): boolean {
+  const candleCloseTime = new Date(getLastClosedBoundaryMs(timeframe, now.getTime()));
   const diff = now.getTime() - candleCloseTime.getTime();
   return diff >= 0 && diff < windowMs;
+}
+
+/**
+ * Backward-compatible H4-only wrapper.
+ */
+export function isWithinCandleCloseWindow(now: Date, windowMs: number): boolean {
+  return isWithinTimeframeCandleCloseWindow("H4", now, windowMs);
 }

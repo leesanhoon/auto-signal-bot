@@ -21,7 +21,10 @@ import {
   shouldUseLatestCacheForManualRun,
 } from "./chart-config-env.js";
 import type { AnalysisResult, TradeSetup } from "./chart-types.js";
-import { getLastClosedH4CandleKey, isWithinCandleCloseWindow } from "./chart-cache.js";
+import {
+  getLastClosedCandleKey,
+  isWithinTimeframeCandleCloseWindow,
+} from "./chart-cache.js";
 import {
   loadChartAnalysisCache,
   loadLatestChartAnalysisCache,
@@ -72,6 +75,7 @@ async function analyzeCurrentWindow(
 
 async function loadAnalysisForRun(
   candleBaseKey: string,
+  analysisTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   runContext: ReturnType<typeof getConfiguredChartRunContext>,
@@ -80,7 +84,7 @@ async function loadAnalysisForRun(
   const cached = await loadChartAnalysisCache(cacheKey);
   if (cached) return { result: cached, origin: { source: "cached", candleKey: cacheKey }, heartbeatReason: null };
 
-  const withinCloseWindow = isWithinCandleCloseWindow(new Date(), CANDLE_CLOSE_WINDOW_MS);
+  const withinCloseWindow = isWithinTimeframeCandleCloseWindow(analysisTimeframe, new Date(), CANDLE_CLOSE_WINDOW_MS);
   if (withinCloseWindow) {
     const liveResult = await analyzeCurrentWindow(cacheKey, timeframeMode, primaryTimeframe);
     return { result: liveResult, origin: { source: "live", candleKey: cacheKey }, heartbeatReason: null };
@@ -150,16 +154,17 @@ export async function main(): Promise<void> {
   const runContext = getConfiguredChartRunContext();
   const timeframeMode = getConfiguredChartTimeframeMode();
   const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
-  logger.info("Bob Volman scanner starting", { engineMode: "deterministic", runContext, timeframeMode, primaryTimeframe });
+  const analysisTimeframe = timeframeMode === "single" ? primaryTimeframe : "H4";
+  logger.info("Bob Volman scanner starting", { engineMode: "deterministic", runContext, timeframeMode, primaryTimeframe, analysisTimeframe });
 
-  const candleBaseKey = getLastClosedH4CandleKey();
+  const candleBaseKey = getLastClosedCandleKey(analysisTimeframe);
   const candleKey = buildChartAnalysisCacheKey(candleBaseKey, "deterministic", timeframeMode, primaryTimeframe);
   let latestCacheCandleKey: string | null = null;
   let result: AnalysisResult | null = null;
   let origin: AnalysisOrigin | null = null;
   let heartbeatReason: "no-cache" | "no-event" | null = null;
 
-  const analysisState = await loadAnalysisForRun(candleBaseKey, timeframeMode, primaryTimeframe, runContext);
+  const analysisState = await loadAnalysisForRun(candleBaseKey, analysisTimeframe, timeframeMode, primaryTimeframe, runContext);
   result = analysisState.result;
   origin = analysisState.origin;
   heartbeatReason = analysisState.heartbeatReason;
@@ -168,7 +173,7 @@ export async function main(): Promise<void> {
   if (result && origin) {
     await handleAnalysisResult(result, origin);
   } else {
-    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed H4 candle (${candleKey}), vẫn kiểm tra trade/pending`);
+    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`);
   }
 
   logger.info("Checking open positions");
@@ -181,13 +186,22 @@ export async function main(): Promise<void> {
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  const attemptedPairs = result?.analysisStats?.attemptedPairs ?? result?.summaries.length ?? 0;
+  const summaryPairs = result?.summaries.length ?? 0;
+  const skippedPairs = result?.analysisStats?.skippedPairs ?? 0;
+  const setupCount = result?.analysisStats?.setupCount ?? result?.setups.length ?? 0;
   logger.info("Run complete", {
-    scannedPairs: result?.setups.length ?? 0,
+    scannedPairs: attemptedPairs,
+    attemptedPairs,
+    summaryPairs,
+    skippedPairs,
+    setupCount,
     elapsedSeconds: Number(elapsed),
     engineMode: "deterministic",
     runContext,
     timeframeMode,
     primaryTimeframe,
+    analysisTimeframe,
     openTradeNotifications,
     pendingNotifications,
   });

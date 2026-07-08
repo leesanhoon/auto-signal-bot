@@ -229,6 +229,83 @@ describe("fetchOhlcHistory", () => {
     mockFetch.mockRestore();
   });
 
+  test("drops a running MetaApi H4 candle even when complete is missing", async () => {
+    process.env.METAAPI_TOKEN = "dummy";
+    process.env.METAAPI_ACCOUNT_ID = "dummy";
+    process.env.METAAPI_REGION = "new-york";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T08:05:00Z"));
+
+    const metaApiResponse = [
+      {
+        time: "2024-01-01T04:00:00.000Z",
+        open: 1.1,
+        high: 1.11,
+        low: 1.09,
+        close: 1.105,
+        volume: 88,
+      },
+      {
+        time: "2024-01-01T08:00:00.000Z",
+        open: 1.2,
+        high: 1.21,
+        low: 1.19,
+        close: 1.205,
+        volume: 99,
+      },
+    ];
+
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
+      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
+    });
+
+    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+    expect(result).not.toBeInstanceOf(Error);
+    const candles = result as Candle[];
+    expect(candles).toHaveLength(1);
+    expect(candles[0].time).toBe(Date.parse("2024-01-01T04:00:00.000Z"));
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
+  });
+
+  test("retains the just-closed MetaApi H4 candle when it is the latest available candle", async () => {
+    process.env.METAAPI_TOKEN = "dummy";
+    process.env.METAAPI_ACCOUNT_ID = "dummy";
+    process.env.METAAPI_REGION = "new-york";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T08:05:00Z"));
+
+    const metaApiResponse = [
+      {
+        time: "2024-01-01T04:00:00.000Z",
+        open: 1.1,
+        high: 1.11,
+        low: 1.09,
+        close: 1.105,
+        volume: 88,
+      },
+    ];
+
+    const mockFetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes("servers/mt-client-api")) return domainResponse();
+      return new Response(JSON.stringify(metaApiResponse), { status: 200 });
+    });
+
+    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+    expect(result).not.toBeInstanceOf(Error);
+    const candles = result as Candle[];
+    expect(candles).toHaveLength(1);
+    expect(candles[0].time).toBe(Date.parse("2024-01-01T04:00:00.000Z"));
+
+    mockFetch.mockRestore();
+    vi.useRealTimers();
+  });
+
+
   test("falls back to tickVolume when volume is missing", async () => {
     process.env.METAAPI_TOKEN = "dummy";
     process.env.METAAPI_ACCOUNT_ID = "dummy";

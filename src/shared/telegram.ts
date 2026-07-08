@@ -38,6 +38,24 @@ function getTelegramConfig() {
   return { token, chatId, api: `https://api.telegram.org/bot${token}` };
 }
 
+function escapeMarkdownV1(text: string): string {
+  return text.replace(/([\\_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
+}
+
+function buildNoSetupReasonSection(result: AnalysisResult): string {
+  if (!result.noSetupReason.trim()) return "";
+
+  const lines = result.noSetupReason
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .slice(0, 8)
+    .map((line) => `• ${escapeMarkdownV1(line)}`);
+
+  if (lines.length === 0) return "";
+
+  return [`📋 *Lý do scan:*`, ...lines].join("\n");
+}
+
 async function postTelegramApi(
   path: string,
   payload: Record<string, unknown>,
@@ -556,9 +574,27 @@ export async function sendAllAnalyses(
   const setupHeaderSuffix = isCached ? " từ cache" : " từ thuật toán";
   const footerLabel = isCached ? "từ cache" : "từ thuật toán";
 
+  const attemptedCount = result.analysisStats?.attemptedPairs ?? result.summaries.length;
+  const statsLine = result.analysisStats
+    ? `📊 Attempted: ${result.analysisStats.attemptedPairs} | Summaries: ${result.summaries.length} | Skipped: ${result.analysisStats.skippedPairs} | Setups: ${result.analysisStats.setupCount}`
+    : "";
+  const noSetupReasonSection = buildNoSetupReasonSection(result);
+
   if (setups.length === 0) {
     await notifier.sendMessage(
-      `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)\n\n⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ thuật toán"}\n\n_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
+      [
+        `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*`,
+        `📅 ${timestamp}`,
+        cacheLine,
+        `📊 Đã quét/thử *${attemptedCount}* cặp (D1/H4/M15 + volume)`,
+        `📊 Có summary cho *${result.summaries.length}* cặp; lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)`,
+        "",
+        `⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ thuật toán"}`,
+        statsLine,
+        noSetupReasonSection,
+        "",
+        `_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
+      ].filter(Boolean).join("\n"),
     );
     logger.info(
       `  → No setups above threshold (${threshold}%). Notification sent with ${summaries.length} eligible summaries (${footerLabel}).`,

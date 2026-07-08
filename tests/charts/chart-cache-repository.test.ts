@@ -52,6 +52,13 @@ const MOCK_RESULT = {
     },
   ],
   noSetupReason: "",
+  analysisStats: {
+    attemptedPairs: 8,
+    okPairs: 2,
+    noSetupPairs: 1,
+    skippedPairs: 5,
+    setupCount: 1,
+  },
   screenshots: [
     {
       chart: { name: "EURUSD H4", symbol: "EURUSD", interval: "H4", description: "H4", timeframe: "H4" as const },
@@ -101,6 +108,7 @@ describe("charts/chart-cache-repository", () => {
       expect(upsertArg.result.summaries).toEqual(MOCK_RESULT.summaries);
       expect(upsertArg.result.setups).toEqual(MOCK_RESULT.setups);
       expect(upsertArg.result.noSetupReason).toBe(MOCK_RESULT.noSetupReason);
+      expect(upsertArg.result.analysisStats).toEqual(MOCK_RESULT.analysisStats);
 
       // Buffer bị loại bỏ — chỉ giữ chart, filepath, lastPrice
       expect(upsertArg.result.screenshots).toHaveLength(1);
@@ -143,6 +151,7 @@ describe("charts/chart-cache-repository", () => {
             summaries: MOCK_RESULT.summaries,
             setups: MOCK_RESULT.setups,
             noSetupReason: MOCK_RESULT.noSetupReason,
+            analysisStats: MOCK_RESULT.analysisStats,
             screenshots: [
               {
                 chart: MOCK_RESULT.screenshots[0].chart,
@@ -161,6 +170,7 @@ describe("charts/chart-cache-repository", () => {
       expect(result!.summaries).toEqual(MOCK_RESULT.summaries);
       expect(result!.setups).toEqual(MOCK_RESULT.setups);
       expect(result!.noSetupReason).toBe(MOCK_RESULT.noSetupReason);
+      expect(result!.analysisStats).toEqual(MOCK_RESULT.analysisStats);
       // screenshots luôn rỗng
       expect(result!.screenshots).toEqual([]);
     });
@@ -188,6 +198,13 @@ describe("charts/chart-cache-repository", () => {
             summaries: [],
             setups: [{ pair: "EUR/USD", direction: "LONG" }], // thiếu hầu hết field bắt buộc
             noSetupReason: "",
+            analysisStats: {
+              attemptedPairs: 1,
+              okPairs: 0,
+              noSetupPairs: 0,
+              skippedPairs: 1,
+              setupCount: 0,
+            },
             screenshots: [],
           },
         },
@@ -225,6 +242,7 @@ describe("charts/chart-cache-repository", () => {
             summaries: MOCK_RESULT.summaries,
             setups: MOCK_RESULT.setups,
             noSetupReason: MOCK_RESULT.noSetupReason,
+            analysisStats: MOCK_RESULT.analysisStats,
             screenshots: [],
           },
           created_at: "2026-07-03T08:05:00.000Z",
@@ -248,8 +266,15 @@ describe("charts/chart-cache-repository", () => {
           candle_key: "2026-07-03T08:ai",
           result: {
             summaries: [],
-            setups: [{ pair: "EUR/USD", direction: "LONG" }],
+            setups: [],
             noSetupReason: "",
+            analysisStats: {
+              attemptedPairs: 1,
+              okPairs: 0,
+              noSetupPairs: 0,
+              skippedPairs: 0,
+              setupCount: 0,
+            },
             screenshots: [],
           },
         },
@@ -257,8 +282,15 @@ describe("charts/chart-cache-repository", () => {
       };
 
       const result = await chartCacheRepository.loadLatestChartAnalysisCache("ai");
-      expect(result).toBeNull();
-      expect(loggerState.warn).toHaveBeenCalledTimes(1);
+      expect(result).not.toBeNull();
+      expect(result?.result.analysisStats).toEqual({
+        attemptedPairs: 1,
+        okPairs: 0,
+        noSetupPairs: 0,
+        skippedPairs: 0,
+        setupCount: 0,
+      });
+      expect(loggerState.warn).not.toHaveBeenCalled();
     });
   });
 
@@ -328,6 +360,14 @@ describe("charts/chart-cache-repository", () => {
 
     test("noSetupReason = undefined vẫn hợp lệ → true", () => {
       expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, noSetupReason: undefined })).toBe(true);
+    });
+
+    test("analysisStats hợp lệ vẫn hợp lệ → true", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, analysisStats: MOCK_RESULT.analysisStats })).toBe(true);
+    });
+
+    test("analysisStats sai kiểu → false", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({ ...validResult, analysisStats: { attemptedPairs: 'x' } })).toBe(false);
     });
 
     // --- Per-setup field checks (derived from production SETUP_FIELD_CHECKS) ---
