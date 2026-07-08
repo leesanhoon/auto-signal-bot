@@ -10,7 +10,10 @@ import { sendMessage } from "../shared/telegram.js";
 import type { LotteryRegion } from "./lottery-types.js";
 import { createLogger } from "../shared/logger.js";
 import type { EnsembleNumberPrediction } from "./lottery-ensemble-predict.js";
-import { loadDrawStatus, saveDrawStatus } from "./lottery-draw-status-repository.js";
+import {
+  loadDrawStatus,
+  saveDrawStatus,
+} from "./lottery-draw-status-repository.js";
 
 const logger = createLogger("lottery:lottery-predict-runner");
 const REGIONS: LotteryRegion[] = ["mien-nam", "mien-trung", "mien-bac"];
@@ -53,7 +56,9 @@ async function hasDrawnToday(
   // Thử cache trước
   const cached = await loadDrawStatus(dateStr, region);
   if (cached === true) {
-    logger.info(`↻ [${region}] Cache trả "đã có kết quả" cho ${dateStr} — bỏ qua scrape.`);
+    logger.info(
+      `↻ [${region}] Cache trả "đã có kết quả" cho ${dateStr} — bỏ qua scrape.`,
+    );
     return true;
   }
 
@@ -92,8 +97,10 @@ function formatReason(reason: string): string {
 
 const RANK_MEDAL = ["🥇", "🥈", "🥉"];
 
-/** Dự đoán AI top 3 số dễ ra mỗi miền — mỗi miền tự tính đúng ngày/thứ mục tiêu (hôm nay hoặc ngày mai nếu đã quay xong). */
-export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Promise<void> {
+/** Dự đoán top 3 số dễ ra mỗi miền bằng ensemble thuật toán — mỗi miền tự tính đúng ngày/thứ mục tiêu (hôm nay hoặc ngày mai nếu đã quay xong). */
+export async function runLotteryPredict(
+  regions: LotteryRegion[] = REGIONS,
+): Promise<void> {
   const today = vnDateOffset(0);
   logger.info(
     `🔮 Lottery Predictor — chạy ngày ${today.dateStr} (${WEEKDAY_LABELS[today.weekday]})\n`,
@@ -129,7 +136,7 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
         cached = await loadCachedPredictions(target.dateStr, region);
       } catch (error) {
         logger.error(
-          `⚠ [${region}] Đọc cache lỗi, sẽ gọi AI: ${error instanceof Error ? error.message : String(error)}`,
+          `⚠ [${region}] Đọc cache lỗi, sẽ tính lại dự đoán: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
 
@@ -144,11 +151,11 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
           }));
         if (predictions.length === 0) {
           logger.info(
-            `✗ [${region}] Cache có dữ liệu nhưng số không hợp lệ (không đúng 3 chữ số) — sẽ gọi AI.`,
+            `✗ [${region}] Cache có dữ liệu nhưng số không hợp lệ (không đúng 3 chữ số) — sẽ tính lại bằng thuật toán.`,
           );
         } else {
           logger.info(
-            `↻ [${region}] Dùng lại dự đoán đã lưu cho ${target.dateStr} (bỏ qua gọi AI).`,
+            `↻ [${region}] Dùng lại dự đoán đã lưu cho ${target.dateStr} (bỏ qua tính lại).`,
           );
           logger.info(
             `✓ [${region}] Top ${predictions.length} số dự đoán cho ${weekdayLabel} ${target.dateStr} từ ${periodCount} kỳ.`,
@@ -165,8 +172,18 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
       }
 
       try {
-        const predictions = await predictTopNumbersEnsemble(recordsForRegion, region, target.weekday, 3);
-        await savePredictions(target.dateStr, target.weekday, region, predictions);
+        const predictions = await predictTopNumbersEnsemble(
+          recordsForRegion,
+          region,
+          target.weekday,
+          3,
+        );
+        await savePredictions(
+          target.dateStr,
+          target.weekday,
+          region,
+          predictions,
+        );
         logger.info(
           `✓ [${region}] Top ${predictions.length} số dự đoán cho ${weekdayLabel} ${target.dateStr} từ ${periodCount} kỳ.`,
         );
@@ -180,22 +197,21 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
         };
       } catch (error) {
         logger.error(
-          `✗ [${region}] AI dự đoán lỗi — bỏ qua miền này: ${error instanceof Error ? error.message : String(error)}`,
+          `✗ [${region}] Dự đoán thuật toán lỗi — bỏ qua miền này: ${error instanceof Error ? error.message : String(error)}`,
         );
         return null;
       }
     }),
   );
 
-  const resolvedResults: Array<RegionPredictionResult | null> = regionResults.map(
-      (result, index) => {
-        if (result.status === "fulfilled") return result.value;
-        logger.error(
-          `✗ [${regions[index]}] AI dự đoán lỗi — bỏ qua miền này: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
-        );
-        return null;
-      },
-    );
+  const resolvedResults: Array<RegionPredictionResult | null> =
+    regionResults.map((result, index) => {
+      if (result.status === "fulfilled") return result.value;
+      logger.error(
+        `✗ [${regions[index]}] Dự đoán thuật toán lỗi — bỏ qua miền này: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+      );
+      return null;
+    });
 
   let anyPrediction = false;
   for (const result of resolvedResults) {
@@ -203,7 +219,9 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
     anyPrediction = true;
 
     lines.push("━━━━━━━━━━━━━━━");
-    lines.push(`${REGION_LABELS[result.region]} — ${result.weekdayLabel}, ${result.target.dateStr}`);
+    lines.push(
+      `${REGION_LABELS[result.region]} — ${result.weekdayLabel}, ${result.target.dateStr}`,
+    );
     lines.push(
       `_(${result.periodCount} kỳ ${result.weekdayLabel.toLowerCase()} đã thống kê${result.usedCache ? ", dùng cache" : ""})_`,
     );
@@ -213,9 +231,6 @@ export async function runLotteryPredict(regions: LotteryRegion[] = REGIONS): Pro
         `${RANK_MEDAL[i] ?? "▫️"} \`${p.number}\` — ${(p.confidence * 100).toFixed(0)}% tin cậy _(${formatReason(p.reason)})_`,
       );
       const parts: string[] = [];
-      if (p.breakdown.ai !== undefined) {
-        parts.push(`AI ${(p.breakdown.ai * 100).toFixed(0)}%`);
-      }
       if (p.breakdown.stats !== undefined) {
         parts.push(`Thống kê ${(p.breakdown.stats * 100).toFixed(0)}%`);
       }

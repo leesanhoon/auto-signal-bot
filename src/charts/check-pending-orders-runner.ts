@@ -1,4 +1,4 @@
-import { captureVerificationChartScreenshot, fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
+import { fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
 import {
   findOpenPositionIdByPair,
   loadPendingOrders,
@@ -6,86 +6,12 @@ import {
   updatePendingOrder,
 } from "./positions-repository.js";
 import { validateTradeSetupForOpen } from "./position-engine.js";
-import {
-  buildPendingOrderCheckPrompt,
-  parsePendingOrderCheckResponse,
-} from "./analyzer.js";
-import { callOpenRouter } from "../shared/openrouter.js";
-import { withRetry } from "../shared/retry.js";
-import { recordOpenRouterUsage } from "../shared/ai-usage.js";
 import { createLogger } from "../shared/logger.js";
-import { sendMessage, sendPhoto } from "../shared/telegram.js";
-import type { CandleRangeStats, PendingOrder, TradeSetup } from "./chart-types.js";
+import { sendMessage } from "../shared/telegram.js";
+import type { PendingOrder, TradeSetup } from "./chart-types.js";
+import { resolvePendingOrderDecision } from "./position-decision.js";
 
 const logger = createLogger("charts:check-pending-orders");
-const AI_PENDING_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
-
-function parsePrice(value: string): number | null {
-  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatPrice(value: number): string {
-  const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
-  return value.toFixed(precision);
-}
-
-function resolvePendingOrderByPrice(
-  order: PendingOrder,
-  stats: CandleRangeStats | null,
-): { status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string } | null {
-  if (stats === null) {
-    return null;
-  }
-
-  const entry = parsePrice(order.entry);
-  const stopLoss = parsePrice(order.stopLoss);
-  if (entry === null || stopLoss === null) {
-    return null;
-  }
-
-  if (order.direction === "LONG" && stats.low <= stopLoss) {
-    return {
-      status: "CANCELLED",
-      confidence: 98,
-      comment: `Giá thấp nhất ${formatPrice(stats.low)} đã xuyên stop loss, hủy lệnh chờ.`,
-    };
-  }
-
-  if (order.direction === "SHORT" && stats.high >= stopLoss) {
-    return {
-      status: "CANCELLED",
-      confidence: 98,
-      comment: `Giá cao nhất ${formatPrice(stats.high)} đã xuyên stop loss, hủy lệnh chờ.`,
-    };
-  }
-
-  const triggered = (() => {
-    switch (order.orderType) {
-      case "BUY_STOP":
-        return stats.high >= entry;
-      case "SELL_STOP":
-        return stats.low <= entry;
-      case "BUY_LIMIT":
-        return stats.low <= entry;
-      case "SELL_LIMIT":
-        return stats.high >= entry;
-      case "WAIT_FOR_CONFIRMATION":
-      default:
-        return false;
-    }
-  })();
-
-  if (triggered) {
-    return {
-      status: "TRIGGERED",
-      confidence: 96,
-      comment: `Giá cao nhất ${formatPrice(stats.high)} / giá thấp nhất ${formatPrice(stats.low)} đã chạm entry.`,
-    };
-  }
-
-  return null;
-}
 
 function formatCheckedAt(): string {
   return new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -110,55 +36,24 @@ function toTradeSetup(order: PendingOrder): TradeSetup {
   };
 }
 
-async function reviewPendingOrder(order: PendingOrder): Promise<{
-  status: "TRIGGERED" | "CANCELLED" | "PENDING";
-  confidence: number;
-  comment: string;
-}> {
+async function reviewPendingOrder(order: PendingOrder): Promise<{ status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string }> {
   const chart = findChartForPair(order.pair, order.primaryTimeframe ?? "H4");
   if (!chart) {
-    throw new Error(`No chart configuration found for ${order.pair}`);
-  }
-
-  const screenshot = await captureVerificationChartScreenshot(chart);
-  await sendPhoto(screenshot.buffer, `📊 ${order.pair} - kiểm tra pending (${chart.timeframe})`);
-
-  const response = await withRetry(
-    () =>
-      callOpenRouter({
-        model: AI_PENDING_MODEL,
-        systemPrompt: "You assess pending forex orders and return only concise JSON.",
-        userContent: [
-          {
-            type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${screenshot.buffer.toString("base64")}` },
-          },
-          {
-            type: "text",
-            text: buildPendingOrderCheckPrompt(order, screenshot.lastPrice),
-          },
-        ],
-        maxTokens: 250,
-        temperature: 0.2,
-        responseFormat: { type: "json_object" },
-      }),
-    {
-      onRetry: (error, attempt, maxAttempts, delayMs) =>
-        logger.warn(
-          `  ! Pending order AI temporary error for ${order.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`,
-        ),
-    },
-  );
-  void recordOpenRouterUsage(response, { model: AI_PENDING_MODEL, source: "chart" });
-
-  const parsed = parsePendingOrderCheckResponse(response.text);
-  if (!parsed) {
-    throw new Error(`Pending order parse failed. Raw: ${response.text.slice(0, 300)}`);
+    logger.warn("No chart configuration found; sending explicit warning", { pair: order.pair, id: order.id });
+    await sendMessage(
+      `⚠️ *Check Pending Orders*\n\nKhông tìm thấy cấu hình chart cho lệnh chờ #${order.id} ${order.pair}.\nBot không thể xác minh trigger / invalidation trong lượt này. Vui lòng kiểm tra cấu hình chart / mapping pair.`,
+    );
+    return resolvePendingOrderDecision(order, null, "missing_chart_config");
   }
 
   const stats = await fetchCandleRangeStats(chart.symbol, new Date(order.createdAt).getTime());
-  const priceDecision = resolvePendingOrderByPrice(order, stats);
-  return priceDecision ?? parsed;
+  if (stats === null) {
+    logger.warn("Failed to fetch OHLC for pending order; sending explicit warning", { pair: order.pair, id: order.id });
+    await sendMessage(
+      `⚠️ *Check Pending Orders*\n\nKhông lấy được OHLC để kiểm tra lệnh chờ #${order.id} ${order.pair}.\nBot tạm giữ lệnh chờ nhưng không thể xác minh trigger / invalidation trong lượt này. Vui lòng kiểm tra dữ liệu thị trường / nguồn chart.`,
+    );
+  }
+  return resolvePendingOrderDecision(order, stats);
 }
 
 async function triggerPendingOrder(order: PendingOrder): Promise<number | null> {
@@ -178,21 +73,19 @@ async function triggerPendingOrder(order: PendingOrder): Promise<number | null> 
 
 async function processPendingOrder(order: PendingOrder): Promise<boolean> {
   const nextRunCount = order.runCount + 1;
-  const ai = await reviewPendingOrder(order);
+  const decision = await reviewPendingOrder(order);
 
-  if (ai.status === "TRIGGERED") {
+  if (decision.status === "TRIGGERED") {
     const triggeredPositionId = await triggerPendingOrder(order);
     if (triggeredPositionId === null) {
       await updatePendingOrder(order.id, {
         status: "CANCELLED",
         runCount: nextRunCount,
         resolvedAt: new Date().toISOString(),
-        resolvedReason:
-          ai.comment ||
-          "Đã có vị thế khác đang mở cho pair này, bỏ qua lệnh chờ",
+        resolvedReason: `${decision.comment} Đã có vị thế khác đang mở hoặc setup không còn hợp lệ.`,
       });
       await sendMessage(
-        `❌ Lệnh chờ #${order.id} (${order.pair}) đã chạm entry nhưng hiện đã có vị thế khác đang mở hoặc setup không còn hợp lệ, nên hủy.\n*Cập nhật lúc:* ${formatCheckedAt()}`,
+        `❌ Lệnh chờ #${order.id} (${order.pair}) đã chạm entry nhưng không thể tạo vị thế mới, nên hủy.\nLý do: ${decision.comment}\n*Cập nhật lúc:* ${formatCheckedAt()}`,
       );
       logger.warn("Triggered order cancelled because open position could not be created", {
         id: order.id,
@@ -205,25 +98,25 @@ async function processPendingOrder(order: PendingOrder): Promise<boolean> {
       status: "TRIGGERED",
       runCount: nextRunCount,
       resolvedAt: new Date().toISOString(),
-      resolvedReason: ai.comment || "Khớp lệnh chờ",
+      resolvedReason: `${decision.comment} Khớp lệnh chờ.`,
       triggeredPositionId,
     });
     await sendMessage(
-      `✅ Lệnh chờ #${order.id} (${order.pair}) đã khớp, bot bắt đầu theo dõi.\n*Cập nhật lúc:* ${formatCheckedAt()}`,
+      `✅ Lệnh chờ #${order.id} (${order.pair}) đã khớp.\nLý do: ${decision.comment}\n*Cập nhật lúc:* ${formatCheckedAt()}`,
     );
     logger.info("Triggered pending order", { id: order.id, pair: order.pair, triggeredPositionId });
     return true;
   }
 
-  if (ai.status === "CANCELLED") {
+  if (decision.status === "CANCELLED") {
     await updatePendingOrder(order.id, {
       status: "CANCELLED",
       runCount: nextRunCount,
       resolvedAt: new Date().toISOString(),
-      resolvedReason: ai.comment || "Setup không còn hợp lệ",
+      resolvedReason: `${decision.comment} Setup không còn hợp lệ.`,
     });
     await sendMessage(
-      `❌ Setup #${order.id} (${order.pair}) không còn hợp lệ, nên hủy lệnh chờ trên sàn nếu đã đặt.\n*Cập nhật lúc:* ${formatCheckedAt()}`,
+      `❌ Setup #${order.id} (${order.pair}) không còn hợp lệ, nên hủy lệnh chờ trên sàn nếu đã đặt.\nLý do: ${decision.comment}\n*Cập nhật lúc:* ${formatCheckedAt()}`,
     );
     logger.info("Cancelled pending order", { id: order.id, pair: order.pair });
     return true;
@@ -234,10 +127,10 @@ async function processPendingOrder(order: PendingOrder): Promise<boolean> {
       status: "EXPIRED",
       runCount: nextRunCount,
       resolvedAt: new Date().toISOString(),
-      resolvedReason: ai.comment || `Quá hạn ${order.expiryRuns} lần kiểm tra mà chưa khớp`,
+      resolvedReason: `${decision.comment} Quá hạn ${order.expiryRuns} lần kiểm tra mà chưa khớp.`,
     });
     await sendMessage(
-      `⌛ Lệnh chờ #${order.id} (${order.pair}) đã quá hạn ${order.expiryRuns} lần kiểm tra mà chưa khớp, nên hủy lệnh chờ.\n*Cập nhật lúc:* ${formatCheckedAt()}`,
+      `⌛ Lệnh chờ #${order.id} (${order.pair}) đã quá hạn ${order.expiryRuns} lần kiểm tra mà chưa khớp, nên hủy lệnh chờ.\nLý do: ${decision.comment}\n*Cập nhật lúc:* ${formatCheckedAt()}`,
     );
     logger.info("Expired pending order", { id: order.id, pair: order.pair });
     return true;

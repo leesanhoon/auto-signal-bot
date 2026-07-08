@@ -10,34 +10,19 @@ describe("getConfiguredChartEngineMode", () => {
     delete process.env.CHART_ENGINE_MODE;
   });
 
-  test("defaults to shadow when env is not set", async () => {
-    const mod = await import("../../src/charts/chart-config-env.js");
-    expect(mod.getConfiguredChartEngineMode()).toBe("shadow");
-  });
-
-  test("returns ai when env is set to ai", async () => {
-    process.env.CHART_ENGINE_MODE = "ai";
-    const mod = await import("../../src/charts/chart-config-env.js");
-    expect(mod.getConfiguredChartEngineMode()).toBe("ai");
-  });
-
-  test("returns deterministic when env is set to deterministic", async () => {
-    process.env.CHART_ENGINE_MODE = "deterministic";
+  test("defaults to deterministic when env is not set", async () => {
     const mod = await import("../../src/charts/chart-config-env.js");
     expect(mod.getConfiguredChartEngineMode()).toBe("deterministic");
   });
 
-  test("returns shadow when env is set to shadow", async () => {
-    process.env.CHART_ENGINE_MODE = "shadow";
-    const mod = await import("../../src/charts/chart-config-env.js");
-    expect(mod.getConfiguredChartEngineMode()).toBe("shadow");
-  });
-
-  test("returns shadow for invalid values", async () => {
-    process.env.CHART_ENGINE_MODE = "invalid";
-    const mod = await import("../../src/charts/chart-config-env.js");
-    expect(mod.getConfiguredChartEngineMode()).toBe("shadow");
-  });
+  test.each(["ai", "shadow", "invalid"])(
+    "returns deterministic for %s values",
+    async (value) => {
+      process.env.CHART_ENGINE_MODE = value;
+      const mod = await import("../../src/charts/chart-config-env.js");
+      expect(mod.getConfiguredChartEngineMode()).toBe("deterministic");
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -21,14 +21,14 @@ function vnToday(): string {
 
 function sameNumberSet(left: Set<string>, right: Set<string>): boolean {
   if (left.size !== right.size) return false;
-  for (const number of left) {
+  for (const number of Array.from(left)) {
     if (!right.has(number)) return false;
   }
   return true;
 }
 
 function formatNumbers(numbers: Iterable<string>): string {
-  return [...numbers].join(", ");
+  return Array.from(numbers).join(", ");
 }
 
 async function sendResyncSummary(lines: string[]): Promise<void> {
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
 
   const resynced: string[] = [];
 
-  for (const group of groups.values()) {
+  for (const group of Array.from(groups.values())) {
     const history = (await historyForWeekday(group.weekday)).filter((record) => record.region === group.region);
     if (history.length === 0) {
       logger.info(`Skip ${group.region} ${group.date}: no history for weekday ${group.weekday}`);
@@ -124,7 +124,7 @@ async function main(): Promise<void> {
       logger.info(`Update ${group.region} ${group.date}: ${formatNumbers(group.numbers)} -> ${formatNumbers(freshNumbers)}`);
     } catch (error) {
       logger.error(
-        `Skip ${group.region} ${group.date}: AI prediction failed — ${error instanceof Error ? error.message : String(error)}`,
+        `Skip ${group.region} ${group.date}: algorithm prediction failed — ${error instanceof Error ? error.message : String(error)}`, 
       );
     }
   }

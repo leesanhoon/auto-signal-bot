@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // ============================================================
 const mocks = vi.hoisted(() => ({
   captureAllCharts: vi.fn(),
-  analyzeAllCharts: vi.fn(),
   buildChartAnalysisCacheKey: vi.fn((candleKey: string, engineMode: string, timeframeMode: string, primaryTimeframe?: string) =>
     timeframeMode === "single"
       ? `${candleKey}:${engineMode}:${timeframeMode}:${primaryTimeframe ?? "M15"}`
@@ -43,7 +42,6 @@ vi.mock("../../src/charts/screenshot.js", () => ({
 }));
 
 vi.mock("../../src/charts/analyzer.js", () => ({
-  analyzeAllCharts: mocks.analyzeAllCharts,
   buildChartAnalysisCacheKey: mocks.buildChartAnalysisCacheKey,
 }));
 
@@ -156,7 +154,6 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.saveOpenPosition.mockResolvedValue(true);
     mocks.savePendingOrder.mockResolvedValue(true);
     mocks.captureAllCharts.mockResolvedValue([{ filepath: "/tmp/chart.png" }]);
-    mocks.analyzeAllCharts.mockResolvedValue(MOCK_RESULT);
     mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
     mocks.runCheckPendingOrders.mockResolvedValue(0);
@@ -173,7 +170,6 @@ describe("charts/index main() — H4 close guard", () => {
 
     // Capture + analyze không được gọi
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
-    expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
     expect(mocks.saveChartAnalysisCache).not.toHaveBeenCalled();
 
     // Trade + pending runner vẫn được gọi
@@ -193,7 +189,6 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
-    expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
@@ -211,13 +206,13 @@ describe("charts/index main() — H4 close guard", () => {
     const expectedCacheKey = getExpectedCacheKey();
 
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
-    expect(mocks.captureAllCharts).toHaveBeenCalledTimes(1);
-    expect(mocks.analyzeAllCharts).toHaveBeenCalledTimes(1);
+    expect(mocks.captureAllCharts).not.toHaveBeenCalled();
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledTimes(1);
     expect(mocks.saveChartAnalysisCache).toHaveBeenCalledWith(
       expect.any(String),
       MOCK_RESULT,
     );
-    expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
+
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
@@ -237,7 +232,6 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
     // Cache hit → bỏ qua capture+analyze dù đang trong window
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
-    expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
@@ -251,7 +245,7 @@ describe("charts/index main() — H4 close guard", () => {
   test("ngoài window + manual run + không có cache hiện tại nhưng có latest cache → dùng latest cache", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("manual");
     mocks.loadLatestChartAnalysisCache.mockResolvedValue({
-      candleKey: "2026-07-03T08:ai",
+      candleKey: "2026-07-03T08:deterministic",
       result: MOCK_RESULT as any,
     });
 
@@ -260,13 +254,12 @@ describe("charts/index main() — H4 close guard", () => {
 
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
-    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith("ai", "multi", "M15");
+    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith("deterministic", "multi", "M15");
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
-    expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
-      { source: "cached", candleKey: "2026-07-03T08:ai" },
+      { source: "cached", candleKey: "2026-07-03T08:deterministic" },
     );
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
@@ -278,7 +271,6 @@ describe("charts/index main() — H4 close guard", () => {
     await main();
 
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
-    expect(mocks.analyzeAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).not.toHaveBeenCalled();
     expect(mocks.buildHeartbeatMessage).toHaveBeenCalledWith(
       expect.objectContaining({

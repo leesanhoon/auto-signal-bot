@@ -53,7 +53,7 @@ export function buildStatsMessage(report: StatsReport): string {
   if (report.aiUsageToday) {
     const totalTokens = report.aiUsageToday.inputTokens + report.aiUsageToday.outputTokens;
     lines.push(
-      `• AI hôm nay: *${report.aiUsageToday.requests}* req | *${formatCompactNumber(totalTokens)}* tokens | *${formatUsd(report.aiUsageToday.estimatedCostUsd)}*`,
+      `• AI usage hôm nay: *${report.aiUsageToday.requests}* req | *${formatCompactNumber(totalTokens)}* tokens | *${formatUsd(report.aiUsageToday.estimatedCostUsd)}*`,
     );
 
     if (report.aiUsageToday.byProvider.length > 0) {
@@ -65,7 +65,7 @@ export function buildStatsMessage(report: StatsReport): string {
       }
     }
   } else {
-    lines.push("• AI hôm nay: chưa có dữ liệu");
+    lines.push("• AI usage hôm nay: chưa có dữ liệu");
   }
 
   if (report.updatedAtLabel) {

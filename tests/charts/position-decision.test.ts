@@ -1,52 +1,197 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
-
-const state = vi.hoisted(() => ({
-  call: vi.fn(),
-  retry: vi.fn(async (request: () => Promise<unknown>) => request()),
-  callWithFallback: vi.fn(),
-}));
-vi.mock("../../src/shared/openrouter.js", () => ({ callOpenRouter: state.call }));
-vi.mock("../../src/shared/retry.js", () => ({ withRetry: state.retry }));
-vi.mock("../../src/shared/ai-model-fallback.js", () => ({
-  callOpenRouterWithFallback: state.callWithFallback,
-  parseModelFallbacks: vi.fn((val) => (val ? val.split(",").map((m: string) => m.trim()).filter(Boolean) : [])),
-}));
-const positionDecision = await import("../../src/charts/position-decision.js");
+import { describe, expect, test } from "vitest";
+import { resolveOpenPositionDecision, resolvePendingOrderDecision } from "../../src/charts/position-decision.js";
 
 describe("charts/position-decision", () => {
-  beforeEach(() => {
-    state.call.mockReset();
-    state.callWithFallback.mockClear();
-  });
-
-  test("parseDecisionResponse normalizes malformed decisions to HOLD", () => {
-    expect(positionDecision.parseDecisionResponse('{"decision":"WAIT","confidence":"abc","comment":"unclear"}')).toMatchObject({
-      decision: "HOLD", confidence: 0, comment: "unclear",
-    });
-  });
-
-  test("decidePosition uses the single OpenRouter path", async () => {
-    state.callWithFallback.mockResolvedValueOnce({
-      response: {
-        text: '{"decision":"CLOSE","confidence":87,"comment":"Trend failed"}',
-        usage: { promptTokens: 10, completionTokens: 5 },
+  test("open LONG chạm stop loss → STOP", () => {
+    const decision = resolveOpenPositionDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        tradeStage: "open",
+        tp1ClosedPercent: 0,
+        trailingStopLoss: null,
       },
-      model: "primary-model",
-    });
-    const result = await positionDecision.decidePosition({
-      id: 1, pair: "EUR/USD", direction: "LONG", setup: "Breakout", entry: "1.1000",
-      stopLoss: "1.0960", takeProfit1: "1.1080", takeProfit2: "1.1120", reasons: ["Trend broke"],
-      openedAt: "2026-07-01T00:00:00.000Z", status: "open", lastDecision: null,
-      lastDecisionConfidence: null, lastDecisionComment: null, lastCheckedAt: null, closedAt: null,
-    }, { chart: { symbol: "EURUSD", name: "EUR/USD" }, buffer: Buffer.from("chart"), filepath: "/tmp/chart.jpg", lastPrice: 1.105 });
-    expect(result).toMatchObject({ decision: "CLOSE", confidence: 87, comment: "Trend failed" });
-    expect(state.callWithFallback).toHaveBeenCalledTimes(1);
+      { high: 1.1020, low: 1.0978, lastClose: 1.0982 },
+    );
+    expect(decision).toMatchObject({ decision: "STOP", comment: expect.stringContaining("stop loss") });
+  });
 
-    // Check the requestBuilder creates the right request
-    const requestBuilder = state.callWithFallback.mock.calls[0][2];
-    const request = requestBuilder("test-model");
-    expect(request.systemPrompt).toContain("All user-facing text must be Vietnamese with accents.");
-    expect(request.userContent[1].text).toContain("- Pair: EUR/USD");
-    expect(request.userContent[1].text).not.toContain("|-");
+  test("open SHORT chạm TP1 lần đầu → HOLD + PARTIAL_TP1", () => {
+    const decision = resolveOpenPositionDecision(
+      {
+        direction: "SHORT",
+        entry: "1.1000",
+        stopLoss: "1.1030",
+        takeProfit1: "1.0960",
+        takeProfit2: "1.0920",
+        tradeStage: "open",
+        tp1ClosedPercent: 0,
+        trailingStopLoss: null,
+      },
+      { high: 1.1010, low: 1.0955, lastClose: 1.0962 },
+    );
+    expect(decision).toMatchObject({ decision: "HOLD", managementAction: "PARTIAL_TP1" });
+  });
+
+  test("pending BUY_STOP chạm entry → TRIGGERED", () => {
+    const decision = resolvePendingOrderDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        orderType: "BUY_STOP",
+      },
+      { high: 1.1008, low: 1.0991, lastClose: 1.1005 },
+    );
+    expect(decision).toMatchObject({ status: "TRIGGERED" });
+  });
+
+  test("open trailing SHORT with trailing stop better than breakeven stays untouched", () => {
+    const decision = resolveOpenPositionDecision(
+      {
+        direction: "SHORT",
+        entry: "1.1000",
+        stopLoss: "1.1030",
+        takeProfit1: "1.0960",
+        takeProfit2: "1.0920",
+        tradeStage: "trailing",
+        tp1ClosedPercent: 50,
+        trailingStopLoss: "1.0990",
+      },
+      { high: 1.1010, low: 1.0965, lastClose: 1.0972 },
+    );
+    expect(decision).toMatchObject({ decision: "HOLD", managementAction: "NONE", newStopLoss: null });
+  });
+
+  test("WAIT_FOR_CONFIRMATION triggers only after close confirms entry", () => {
+    const decision = resolvePendingOrderDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        orderType: "WAIT_FOR_CONFIRMATION",
+      },
+      { high: 1.1008, low: 1.0991, lastClose: 1.1005 },
+    );
+    expect(decision).toMatchObject({ status: "TRIGGERED", comment: expect.stringContaining("WAIT_FOR_CONFIRMATION") });
+  });
+
+  test("open position stats null default → OHLC fetch fail comment", () => {
+    const decision = resolveOpenPositionDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        tradeStage: "open",
+        tp1ClosedPercent: 0,
+        trailingStopLoss: null,
+      },
+      null,
+    );
+    expect(decision).toMatchObject({
+      decision: "HOLD",
+      comment: expect.stringContaining("Chưa lấy được OHLC"),
+    });
+    expect(decision.comment).not.toContain("Không tìm thấy cấu hình chart");
+  });
+
+  test("open position stats null with missing_chart_config reason → chart config comment", () => {
+    const decision = resolveOpenPositionDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        tradeStage: "open",
+        tp1ClosedPercent: 0,
+        trailingStopLoss: null,
+      },
+      null,
+      "missing_chart_config",
+    );
+    expect(decision).toMatchObject({
+      decision: "HOLD",
+      comment: expect.stringContaining("Không tìm thấy cấu hình chart"),
+    });
+    expect(decision.comment).not.toContain("Chưa lấy được OHLC");
+  });
+
+  test("open position stats null with ohlc_fetch_fail reason → OHLC fetch fail comment", () => {
+    const decision = resolveOpenPositionDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        takeProfit1: "1.1040",
+        takeProfit2: "1.1080",
+        tradeStage: "open",
+        tp1ClosedPercent: 0,
+        trailingStopLoss: null,
+      },
+      null,
+      "ohlc_fetch_fail",
+    );
+    expect(decision).toMatchObject({
+      decision: "HOLD",
+      comment: expect.stringContaining("Chưa lấy được OHLC"),
+    });
+  });
+
+  test("pending order stats null default → OHLC fetch fail comment", () => {
+    const decision = resolvePendingOrderDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        orderType: "BUY_STOP",
+      },
+      null,
+    );
+    expect(decision).toMatchObject({
+      status: "PENDING",
+      comment: expect.stringContaining("Chưa lấy được OHLC"),
+    });
+    expect(decision.comment).not.toContain("Không tìm thấy cấu hình chart");
+  });
+
+  test("pending order stats null with missing_chart_config reason → chart config comment", () => {
+    const decision = resolvePendingOrderDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        orderType: "BUY_STOP",
+      },
+      null,
+      "missing_chart_config",
+    );
+    expect(decision).toMatchObject({
+      status: "PENDING",
+      comment: expect.stringContaining("Không tìm thấy cấu hình chart"),
+    });
+    expect(decision.comment).not.toContain("Chưa lấy được OHLC");
+  });
+
+  test("pending order stats null with ohlc_fetch_fail reason → OHLC fetch fail comment", () => {
+    const decision = resolvePendingOrderDecision(
+      {
+        direction: "LONG",
+        entry: "1.1000",
+        stopLoss: "1.0980",
+        orderType: "BUY_STOP",
+      },
+      null,
+      "ohlc_fetch_fail",
+    );
+    expect(decision).toMatchObject({
+      status: "PENDING",
+      comment: expect.stringContaining("Chưa lấy được OHLC"),
+    });
   });
 });

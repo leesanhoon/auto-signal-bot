@@ -12,13 +12,13 @@ Số hóa (deterministic, rule-based) toàn bộ 7 setup của Bob Volman — **
 ARB, IRB, SB** — thay thế vision-LLM đoán pattern qua ảnh chart (`analyzer.ts`).
 Downstream (`positions-repository`, `position-engine`, `telegram.ts`) không đổi vì chỉ
 đọc field string có sẵn trong `TradeSetup` (`reasons`, `risks`, `summary`...), bất kể do
-AI viết hay do template sinh từ `ruleTrace`.
+Template sinh từ `ruleTrace`.
 
 Có 3 chế độ chạy, cấu hình qua env `CHART_ENGINE_MODE` (mặc định `shadow`,
 xem [chart-config-env.ts](../src/charts/chart-config-env.ts)):
-- `ai` — giữ nguyên hành vi cũ (chụp ảnh + OpenRouter vision).
-- `deterministic` — chỉ dùng engine số hóa mới, không gọi AI.
-- `shadow` — chạy song song cả hai để đối chiếu, nhưng chỉ gửi kết quả AI ra Telegram.
+- `ai` — giữ nguyên hành vi cũ (chụp ảnh + vision model cũ).
+- `deterministic` — chỉ dùng engine số hóa mới, không gọi model cũ.
+- `shadow` — chạy song song cả hai để đối chiếu, nhưng chỉ gửi kết quả từ engine cũ ra Telegram.
 
 ## Kiến trúc
 
@@ -40,7 +40,7 @@ False-break → SB + conflict resolve    src/charts/setup-sb-runner.ts, setup-re
 Backtest Replay Engine                 src/charts/setup-backtest.ts (+ *-runner.ts)
         │
         ▼
-Signal Assembly (template, KHÔNG AI)   src/charts/signal-assembly.ts
+Signal Assembly (template, KHÔNG model)   src/charts/signal-assembly.ts
         │
         ▼
 Orchestration                          src/charts/index.ts, deterministic-pipeline.ts
@@ -63,8 +63,8 @@ confidence scoring (`base=50` + bonus/penalty) nằm trong code (`indicators.ts`
 `setups/shared.ts`) — coi là điểm khởi đầu, cần backtest per-pair để tinh chỉnh trước
 khi bật `deterministic` toàn phần.
 
-Trước khi tắt hẳn AI: chạy shadow-mode đối chiếu đủ lâu + backtest replay
-(`npm run backtest:setups`) cho kết quả không tệ hơn AI hiện tại — đây là gate bắt
+Trước khi cutover hoàn toàn: chạy shadow-mode đối chiếu đủ lâu + backtest replay
+(`npm run backtest:setups`) cho kết quả không tệ hơn model hiện tại — đây là gate bắt
 buộc, không cutover dựa trên phỏng đoán ngưỡng.
 
 ## Lịch sử review & fix (4 vòng, 28 findings)
@@ -116,7 +116,7 @@ trùng lặp.
 - Chưa có bằng chứng đã chạy backtest thật trên dữ liệu OANDA để tinh chỉnh ngưỡng —
   đây vẫn là gate bắt buộc trước khi đổi `CHART_ENGINE_MODE` sang `deterministic` ở
   production.
-- Chưa thấy dấu vết đã chạy shadow-mode dài hạn để đối chiếu với AI cũ.
+- Chưa thấy dấu vết đã chạy shadow-mode dài hạn để đối chiếu với engine cũ.
 
 ## File tham chiếu chính
 
@@ -128,6 +128,6 @@ trùng lặp.
 - Backtest: [setup-backtest.ts](../src/charts/setup-backtest.ts),
   [setup-backtest-runner.ts](../src/charts/setup-backtest-runner.ts)
   (`npm run backtest:setups`)
-- Signal assembly (template, không AI): [signal-assembly.ts](../src/charts/signal-assembly.ts)
+- Signal assembly (template, deterministic): [signal-assembly.ts](../src/charts/signal-assembly.ts)
 - Cache: [chart-cache-repository.ts](../src/charts/chart-cache-repository.ts)
 - Orchestration/cutover: [index.ts](../src/charts/index.ts)

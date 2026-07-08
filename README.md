@@ -3,7 +3,7 @@
 Bot tự động quét tín hiệu từ nhiều nguồn, ưu tiên cho luồng trading chart:
 
 - Chụp chart TradingView đa khung thời gian
-- Phân tích bằng Gemini hoặc Claude
+- Phân tích bằng deterministic numeric engine
 - Xác minh setup confidence cao
 - Tự động lưu vị thế mở, theo dõi vị thế đang chạy
 - Gửi kết quả, thống kê và cảnh báo qua Telegram
@@ -18,7 +18,7 @@ Ngoài luồng chart, repo còn có các runner cho betting, lottery, backtestin
 - Phân tích multi-timeframe confluence thay vì chỉ nhìn một khung
 - Bật volume trên chart để model đọc được tương quan giá và khối lượng
 - Gắn nhãn rõ từng ảnh theo `PAIR` và `TIMEFRAME`
-- Có bước xác minh setup confidence cao bằng model khác trước khi auto-save vị thế
+- Có bước xác minh setup confidence cao bằng bộ kiểm tra độc lập trước khi auto-save vị thế
 
 ### 2. Quản Lý Vị Thế
 
@@ -32,7 +32,7 @@ Ngoài luồng chart, repo còn có các runner cho betting, lottery, backtestin
 - Lệnh Telegram `/stats` hiển thị:
   - số vị thế đang mở
   - win-rate gần đây
-  - usage AI trong ngày
+  - usage trong ngày
 - Có báo cáo hiệu suất định kỳ:
   - win-rate
   - R:R thực tế
@@ -44,8 +44,8 @@ Ngoài luồng chart, repo còn có các runner cho betting, lottery, backtestin
 
 - Structured logging
 - Telegram webhook idempotency để tránh xử lý trùng update
-- Rate limiting chủ động cho lời gọi AI
-- Theo dõi token/cost cho Gemini và Claude
+- Rate limiting chủ động cho các request ngoài
+- Theo dõi token/cost cho các request ngoài
 - Cảnh báo khi usage gần chạm ngưỡng cấu hình
 
 ### 5. Telegram Workflow
@@ -64,9 +64,9 @@ Ngoài luồng chart, repo còn có các runner cho betting, lottery, backtestin
 
 - **Node.js + TypeScript**: runtime chính
 - **Playwright**: chụp chart TradingView
-- **Gemini / Claude**: phân tích chart và xác minh setup
+- **Deterministic engine**: phân tích chart và xác minh setup
 - **Telegram Bot**: nhận lệnh, gửi kết quả, gửi cảnh báo
-- **Supabase**: lưu logs, idempotency, AI usage, performance tracking
+- **Supabase**: lưu logs, idempotency, usage, performance tracking
 - **GitHub Actions**: chạy định kỳ và dispatch workflow từ Telegram
 
 ## Cấu Trúc Chính
@@ -74,7 +74,7 @@ Ngoài luồng chart, repo còn có các runner cho betting, lottery, backtestin
 - `src/charts`: luồng phân tích chart, quyết định vị thế, backtest, performance report
 - `src/betting`: luồng quét và backtest kèo bóng đá
 - `src/lottery`: luồng quét, dự đoán, verify và backtest xổ số
-- `src/shared`: helper chung cho Telegram, logging, DB, stats, AI usage, rate limit
+- `src/shared`: helper chung cho Telegram, logging, DB, stats, usage, rate limit
 - `supabase/functions/telegram-webhook`: webhook nhận Telegram update và kích hoạt workflow
 
 ## Yêu Cầu
@@ -82,8 +82,6 @@ Ngoài luồng chart, repo còn có các runner cho betting, lottery, backtestin
 - Node.js 20+ khuyến nghị
 - npm
 - Playwright Chromium
-- Tài khoản Gemini API
-- Tài khoản Anthropic API nếu muốn dùng Claude fallback/verify
 - Telegram bot token
 - Supabase project cho webhook, logs và metrics
 - GitHub PAT có quyền `Actions: write`
@@ -103,10 +101,6 @@ Sao chép từ `.env.example` rồi điền giá trị thật.
 
 Các biến chính:
 
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL`
-- `VERIFY_PROVIDER`
-- `ANTHROPIC_API_KEY`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `TELEGRAM_WEBHOOK_SECRET`
@@ -172,7 +166,7 @@ npm run analyze
 Luồng này sẽ:
 
 1. Chụp chart theo cấu hình
-2. Gửi toàn bộ ảnh vào AI để phân tích
+2. Gửi toàn bộ ảnh vào engine deterministic để phân tích
 3. Xác minh các setup confidence cao
 4. Lưu vị thế đủ điều kiện
 5. Gửi kết quả qua Telegram
@@ -215,9 +209,9 @@ Menu nút bấm hiện có:
 
 ## Lưu Ý Khi Vận Hành
 
-- Gemini free tier có thể trả `503 UNAVAILABLE` khi quá tải, code đã có retry tự động
+- Provider phân tích ngoài có thể trả `503 UNAVAILABLE` khi quá tải, code đã có retry tự động
 - Phân tích đa khung thời gian làm tăng chi phí và thời gian chụp chart, nhưng đổi lại giảm false positive
-- Kết quả AI chỉ nên xem như hỗ trợ ra quyết định, không phải lời khuyên đầu tư
+- Kết quả phân tích chỉ nên xem như hỗ trợ ra quyết định, không phải lời khuyên đầu tư
 - Với Supabase webhook, nên dùng service role key ở server-side, không dùng anon key
 
 ## Free Tier / Chi Phí
@@ -226,7 +220,7 @@ Mục tiêu của project là vận hành gần như miễn phí với free tier
 
 - Số lần chạy mỗi ngày
 - Số chart cần chụp
-- Số lượt retry AI
+- Số lượt retry phân tích
 - Số token tiêu thụ khi xác minh setup và thống kê
 
 ## Tài Liệu Liên Quan

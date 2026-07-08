@@ -1,27 +1,19 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  call: vi.fn(),
-  retry: vi.fn(async (request: () => Promise<unknown>) => request()),
+  findChartForPair: vi.fn(),
+  fetchCandleRangeStats: vi.fn(),
   loadPendingOrders: vi.fn(),
   updatePendingOrder: vi.fn(),
   saveOpenPosition: vi.fn(),
   findOpenPositionIdByPair: vi.fn(),
   validateTradeSetupForOpen: vi.fn(),
-  captureVerificationChartScreenshot: vi.fn(),
-  findChartForPair: vi.fn(),
-  fetchCandleRangeStats: vi.fn(),
   sendMessage: vi.fn(async () => undefined),
-  sendPhoto: vi.fn(async () => undefined),
-  recordOpenRouterUsage: vi.fn(),
 }));
 
-vi.mock("../../src/shared/openrouter.js", () => ({ callOpenRouter: state.call }));
-vi.mock("../../src/shared/retry.js", () => ({ withRetry: state.retry }));
-vi.mock("../../src/shared/ai-usage.js", () => ({ recordOpenRouterUsage: state.recordOpenRouterUsage }));
-vi.mock("../../src/shared/telegram.js", () => ({
-  sendMessage: state.sendMessage,
-  sendPhoto: state.sendPhoto,
+vi.mock("../../src/charts/screenshot.js", () => ({
+  findChartForPair: state.findChartForPair,
+  fetchCandleRangeStats: state.fetchCandleRangeStats,
 }));
 vi.mock("../../src/charts/positions-repository.js", () => ({
   loadPendingOrders: state.loadPendingOrders,
@@ -32,29 +24,26 @@ vi.mock("../../src/charts/positions-repository.js", () => ({
 vi.mock("../../src/charts/position-engine.js", () => ({
   validateTradeSetupForOpen: state.validateTradeSetupForOpen,
 }));
-vi.mock("../../src/charts/screenshot.js", () => ({
-  findChartForPair: state.findChartForPair,
-  captureVerificationChartScreenshot: state.captureVerificationChartScreenshot,
-  fetchCandleRangeStats: state.fetchCandleRangeStats,
+vi.mock("../../src/shared/telegram.js", () => ({
+  sendMessage: state.sendMessage,
 }));
 
-const runner = await import("../../src/charts/check-pending-orders-runner.js");
+let runner: any;
+
+beforeAll(async () => {
+  runner = await import("../../src/charts/check-pending-orders-runner.js");
+});
 
 describe("charts/check-pending-orders-runner", () => {
   beforeEach(() => {
-    state.call.mockReset();
-    state.retry.mockClear();
+    state.findChartForPair.mockReset();
+    state.fetchCandleRangeStats.mockReset();
     state.loadPendingOrders.mockReset();
     state.updatePendingOrder.mockReset();
     state.saveOpenPosition.mockReset();
     state.findOpenPositionIdByPair.mockReset();
     state.validateTradeSetupForOpen.mockReset();
-    state.captureVerificationChartScreenshot.mockReset();
-    state.findChartForPair.mockReset();
-    state.fetchCandleRangeStats.mockReset();
     state.sendMessage.mockClear();
-    state.sendPhoto.mockClear();
-    state.recordOpenRouterUsage.mockClear();
 
     state.findChartForPair.mockReturnValue({
       symbol: "EURUSD",
@@ -63,17 +52,7 @@ describe("charts/check-pending-orders-runner", () => {
       interval: "15",
       description: "",
     });
-    state.captureVerificationChartScreenshot.mockResolvedValue({
-      chart: { symbol: "EURUSD", name: "EUR/USD M15", timeframe: "M15", interval: "15", description: "" },
-      buffer: Buffer.from("chart"),
-      filepath: "/tmp/chart-m15.jpg",
-      lastPrice: 1.0995,
-    });
-    state.fetchCandleRangeStats.mockResolvedValue({
-      high: 1.0995,
-      low: 1.0990,
-      lastClose: 1.0993,
-    });
+    state.fetchCandleRangeStats.mockResolvedValue({ high: 1.0995, low: 1.0990, lastClose: 1.0993 });
     state.validateTradeSetupForOpen.mockReturnValue({ accepted: true, reason: null, plan: null });
     state.saveOpenPosition.mockResolvedValue(true);
     state.findOpenPositionIdByPair.mockResolvedValue(123);
@@ -103,19 +82,15 @@ describe("charts/check-pending-orders-runner", () => {
       resolvedReason: null,
       triggeredPositionId: null,
       ...overrides,
-    };
+    } as any;
   }
 
   test("marks a pending order as triggered and creates an open position", async () => {
     state.loadPendingOrders.mockResolvedValueOnce([pendingOrder()]);
-    state.call.mockResolvedValueOnce({
-      text: '{"status":"TRIGGERED","confidence":91,"comment":"Entry touched"}',
-      usage: { promptTokens: 8, completionTokens: 2 },
-    });
+    state.fetchCandleRangeStats.mockResolvedValueOnce({ high: 1.1002, low: 1.0992, lastClose: 1.1001 });
 
     await runner.runCheckPendingOrders();
 
-    expect(state.sendPhoto).toHaveBeenCalledTimes(1);
     expect(state.saveOpenPosition).toHaveBeenCalledTimes(1);
     expect(state.updatePendingOrder).toHaveBeenCalledWith(
       7,
@@ -123,17 +98,15 @@ describe("charts/check-pending-orders-runner", () => {
         status: "TRIGGERED",
         runCount: 1,
         triggeredPositionId: 123,
+        resolvedReason: expect.stringContaining("Khớp lệnh chờ"),
       }),
     );
-    expect(state.sendMessage.mock.calls.map((call) => call[0]).join("\n")).toContain("đã khớp");
+    expect((state.sendMessage as any).mock.calls.map((call: any[]) => call[0]).join("\n")).toContain("đã khớp");
   });
 
   test("cancels a triggered order when another open position already exists for the pair", async () => {
     state.loadPendingOrders.mockResolvedValueOnce([pendingOrder()]);
-    state.call.mockResolvedValueOnce({
-      text: '{"status":"TRIGGERED","confidence":91,"comment":"Entry touched"}',
-      usage: { promptTokens: 8, completionTokens: 2 },
-    });
+    state.fetchCandleRangeStats.mockResolvedValueOnce({ high: 1.1002, low: 1.0992, lastClose: 1.1001 });
     state.saveOpenPosition.mockResolvedValueOnce(false);
 
     await runner.runCheckPendingOrders();
@@ -144,19 +117,15 @@ describe("charts/check-pending-orders-runner", () => {
       expect.objectContaining({
         status: "CANCELLED",
         runCount: 1,
+        resolvedReason: expect.stringContaining("Đã có vị thế khác"),
       }),
     );
-    const updatePatch = state.updatePendingOrder.mock.calls[0][1] as Record<string, unknown>;
-    expect(updatePatch.triggeredPositionId).toBeUndefined();
-    expect(state.sendMessage.mock.calls.map((call) => call[0]).join("\n")).toContain("đang mở");
+    expect((state.sendMessage as any).mock.calls.map((call: any[]) => call[0]).join("\n")).toContain("không thể tạo vị thế mới");
   });
 
-  test("marks a pending order as cancelled", async () => {
+  test("marks a pending order as cancelled when stop loss is invalidated", async () => {
     state.loadPendingOrders.mockResolvedValueOnce([pendingOrder()]);
-    state.call.mockResolvedValueOnce({
-      text: '{"status":"CANCELLED","confidence":73,"comment":"Pattern failed"}',
-      usage: { promptTokens: 8, completionTokens: 2 },
-    });
+    state.fetchCandleRangeStats.mockResolvedValueOnce({ high: 1.1002, low: 1.0975, lastClose: 1.0980 });
 
     await runner.runCheckPendingOrders();
 
@@ -165,37 +134,31 @@ describe("charts/check-pending-orders-runner", () => {
       expect.objectContaining({
         status: "CANCELLED",
         runCount: 1,
+        resolvedReason: expect.stringContaining("xuyên stop loss"),
       }),
     );
-    expect(state.sendMessage.mock.calls.map((call) => call[0]).join("\n")).toContain("không còn hợp lệ");
+    expect((state.sendMessage as any).mock.calls.map((call: any[]) => call[0]).join("\n")).toContain("hủy lệnh chờ");
   });
 
-  test("keeps pending orders quiet until expiry and then expires them", async () => {
+  test("WAIT_FOR_CONFIRMATION triggers and expires with deterministic confirmation", async () => {
     state.loadPendingOrders
-      .mockResolvedValueOnce([pendingOrder({ id: 8, runCount: 0, expiryRuns: 2 })])
-      .mockResolvedValueOnce([pendingOrder({ id: 9, runCount: 1, expiryRuns: 2 })]);
-    state.call
-      .mockResolvedValueOnce({
-        text: '{"status":"PENDING","confidence":61,"comment":"Still waiting"}',
-        usage: { promptTokens: 8, completionTokens: 2 },
-      })
-      .mockResolvedValueOnce({
-        text: '{"status":"PENDING","confidence":60,"comment":"Still waiting"}',
-        usage: { promptTokens: 8, completionTokens: 2 },
-      });
+      .mockResolvedValueOnce([pendingOrder({ id: 8, orderType: "WAIT_FOR_CONFIRMATION" })])
+      .mockResolvedValueOnce([pendingOrder({ id: 9, runCount: 1, expiryRuns: 2, orderType: "WAIT_FOR_CONFIRMATION" })]);
+    state.fetchCandleRangeStats.mockResolvedValueOnce({ high: 1.1002, low: 1.0992, lastClose: 1.1001 });
 
     await runner.runCheckPendingOrders();
     expect(state.updatePendingOrder).toHaveBeenCalledWith(
       8,
       expect.objectContaining({
+        status: "TRIGGERED",
         runCount: 1,
+        resolvedReason: expect.stringContaining("xác nhận entry"),
       }),
     );
-    expect(state.sendMessage.mock.calls.some((call) => String(call[0]).includes("quá hạn"))).toBe(false);
 
     state.sendMessage.mockClear();
     state.updatePendingOrder.mockClear();
-    state.captureVerificationChartScreenshot.mockClear();
+    state.findOpenPositionIdByPair.mockResolvedValueOnce(null);
 
     await runner.runCheckPendingOrders();
 
@@ -204,8 +167,29 @@ describe("charts/check-pending-orders-runner", () => {
       expect.objectContaining({
         status: "EXPIRED",
         runCount: 2,
+        resolvedReason: expect.stringContaining("Quá hạn"),
       }),
     );
-    expect(state.sendMessage.mock.calls.map((call) => call[0]).join("\n")).toContain("đã quá hạn 2 lần kiểm tra");
+    expect((state.sendMessage as any).mock.calls.map((call: any[]) => call[0]).join("\n")).toContain("quá hạn 2 lần kiểm tra");
+  });
+
+  test("không có chart config → giữ PENDING + gửi Telegram warning cấu hình chart thiếu", async () => {
+    state.loadPendingOrders.mockResolvedValueOnce([pendingOrder({ id: 10, expiryRuns: 3 })]);
+    state.findChartForPair.mockReturnValueOnce(null);
+
+    await runner.runCheckPendingOrders();
+
+    expect(state.fetchCandleRangeStats).not.toHaveBeenCalled();
+    // Order stays PENDING, runCount incremented
+    expect(state.updatePendingOrder).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({ runCount: 1 }),
+    );
+    expect(state.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("Không tìm thấy cấu hình chart"),
+    );
+    expect(state.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("không thể xác minh trigger / invalidation"),
+    );
   });
 });

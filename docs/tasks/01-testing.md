@@ -12,14 +12,14 @@ Hiện chưa có unit/integration test nào trong repo (không có vitest/jest c
 ## Việc cần làm
 - [x] Thêm `vitest` vào devDependencies, tạo `vitest.config.ts`.
 - [x] Thêm script `"test": "vitest run"` (và `"test:watch": "vitest"`) vào `package.json`.
-- [x] Viết unit test cho phần logic thuần (không gọi network/AI) của `analyzer.ts`.
-- [x] Viết unit test cho `position-decision.ts` (đặc biệt các nhánh quyết định dựa trên input cố định, mock phần gọi AI).
+- [x] Viết unit test cho phần logic thuần (không gọi network/model) của `analyzer.ts`.
+- [x] Viết unit test cho `position-decision.ts` (đặc biệt các nhánh quyết định dựa trên input cố định, mock phần gọi model).
 - [x] Viết unit test cho `lottery-predict.ts`.
 - [x] Thêm bước chạy test vào CI (GitHub Actions) nếu repo có workflow CI riêng cho lint/build.
 
 ## Acceptance criteria
 - [x] `npm test` chạy được và pass cho 3 file logic chính ở trên.
-- [x] Test không phụ thuộc vào gọi API thật (Gemini/Claude/Supabase) — dùng mock/fixture.
+- [x] Test không phụ thuộc vào gọi API thật (provider ngoài/Supabase) — dùng mock/fixture.
 - [x] Coverage tối thiểu bao phủ các nhánh quyết định quan trọng trong `position-decision.ts` (mở lệnh, đóng lệnh, giữ nguyên).
 
 ## Ghi chú / rủi ro

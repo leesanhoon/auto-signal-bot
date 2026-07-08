@@ -44,8 +44,21 @@ describe("shared/stats", () => {
 
     expect(message).toContain("Lệnh đang mở: *3*");
     expect(message).toContain("Win-rate 7 ngày: 60.00% (3W/1L/1BE)");
-    expect(message).toContain("AI hôm nay: *4* req");
+    expect(message).toContain("AI usage hôm nay: *4* req");
     expect(message).toContain("gemini: 3 req");
     expect(message).toContain("Cập nhật: 01/07/2026, 08:30:00");
+  });
+
+  test("empty AI usage shows consistent wording with populated state", () => {
+    const message = buildStatsMessage({
+      openPositions: 0,
+      performanceWindowLabel: "7 ngày",
+      recentPerformance: null,
+      aiUsageToday: null,
+      updatedAtLabel: "01/07/2026, 08:30:00",
+    });
+
+    expect(message).toContain("AI usage hôm nay: chưa có dữ liệu");
+    expect(message).not.toContain("Algorithm runs");
   });
 });

@@ -1,107 +1,263 @@
-import { withRetry } from "../shared/retry.js";
 import type { OpenPosition } from "./positions-repository.js";
-import { createLogger } from "../shared/logger.js";
+import type { CandleRangeStats, PendingOrder } from "./chart-types.js";
 import type { PositionDecisionOutcome } from "./position-engine.js";
-import { recordOpenRouterUsage } from "../shared/ai-usage.js";
-import { callOpenRouter } from "../shared/openrouter.js";
-import { callOpenRouterWithFallback, parseModelFallbacks } from "../shared/ai-model-fallback.js";
-import type { ScreenshotResult } from "./chart-types.js";
 
-const logger = createLogger("charts:position-decision");
-const MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
-const MODEL_FALLBACKS = parseModelFallbacks(
-  process.env.AI_VISION_MODEL_FALLBACKS?.trim(),
-);
-
-export function cleanResponse(text: string): string {
-  return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-}
-export function extractJsonObject(text: string): string {
-  const cleaned = cleanResponse(text);
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  return start !== -1 && end > start ? cleaned.slice(start, end + 1) : cleaned;
-}
-export function clampConfidence(value: unknown): number {
-  const num = Number(value);
-  return Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : 0;
+function parsePrice(value: string | number | null | undefined): number | null {
+  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function parseDecisionResponse(text: string): PositionDecisionOutcome | null {
-  try {
-    const parsed = JSON.parse(extractJsonObject(text)) as Partial<PositionDecisionOutcome> & {
-      managementAction?: string; partialClosePercent?: number; newStopLoss?: string;
-      tp1Reached?: boolean; tp2Reached?: boolean;
-    };
-    const decision: PositionDecisionOutcome["decision"] =
-      parsed.decision === "CLOSE" || parsed.decision === "STOP" ? parsed.decision : "HOLD";
-    const tp1Reached = Boolean(parsed.tp1Reached);
-    const tp2Reached = Boolean(parsed.tp2Reached);
-    const managementAction: PositionDecisionOutcome["managementAction"] =
-      parsed.managementAction === "PARTIAL_TP1" || parsed.managementAction === "MOVE_SL_TO_BE" ||
-      parsed.managementAction === "TRAIL_SL" || parsed.managementAction === "TP2_CLOSE"
-        ? parsed.managementAction
-        : tp2Reached ? "TP2_CLOSE" : tp1Reached ? "PARTIAL_TP1" : "NONE";
-    return {
-      decision,
-      confidence: clampConfidence(parsed.confidence),
-      comment: String(parsed.comment || ""),
-      managementAction,
-      partialClosePercent: Math.max(0, Math.min(100, Math.round(Number(parsed.partialClosePercent ?? (managementAction === "PARTIAL_TP1" ? 50 : 0))))),
-      newStopLoss: parsed.newStopLoss ? String(parsed.newStopLoss) : null,
-      tp1Reached,
-      tp2Reached,
-      riskReward: parsed.riskReward === undefined ? null : Number(parsed.riskReward),
-      tp1RiskReward: parsed.tp1RiskReward === undefined ? null : Number(parsed.tp1RiskReward),
-      tp2RiskReward: parsed.tp2RiskReward === undefined ? null : Number(parsed.tp2RiskReward),
-    };
-  } catch {
-    return null;
+function formatPrice(value: number): string {
+  const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
+  return value.toFixed(precision);
+}
+
+function buildHoldDecision(comment: string): PositionDecisionOutcome {
+  return {
+    decision: "HOLD",
+    confidence: 50,
+    comment,
+    managementAction: "NONE",
+    partialClosePercent: 0,
+    newStopLoss: null,
+    tp1Reached: false,
+    tp2Reached: false,
+    riskReward: null,
+    tp1RiskReward: null,
+    tp2RiskReward: null,
+  };
+}
+
+function buildStopDecision(comment: string): PositionDecisionOutcome {
+  return {
+    decision: "STOP",
+    confidence: 99,
+    comment,
+    managementAction: "NONE",
+    partialClosePercent: 0,
+    newStopLoss: null,
+    tp1Reached: false,
+    tp2Reached: false,
+    riskReward: null,
+    tp1RiskReward: null,
+    tp2RiskReward: null,
+  };
+}
+
+function buildCloseDecision(comment: string): PositionDecisionOutcome {
+  return {
+    decision: "CLOSE",
+    confidence: 99,
+    comment,
+    managementAction: "TP2_CLOSE",
+    partialClosePercent: 0,
+    newStopLoss: null,
+    tp1Reached: true,
+    tp2Reached: true,
+    riskReward: null,
+    tp1RiskReward: null,
+    tp2RiskReward: null,
+  };
+}
+
+function buildPartialTp1Decision(comment: string, entry: string): PositionDecisionOutcome {
+  return {
+    decision: "HOLD",
+    confidence: 96,
+    comment,
+    managementAction: "PARTIAL_TP1",
+    partialClosePercent: 50,
+    newStopLoss: entry,
+    tp1Reached: true,
+    tp2Reached: false,
+    riskReward: null,
+    tp1RiskReward: null,
+    tp2RiskReward: null,
+  };
+}
+
+function buildTrailDecision(comment: string, entry: string): PositionDecisionOutcome {
+  return {
+    decision: "HOLD",
+    confidence: 91,
+    comment,
+    managementAction: "MOVE_SL_TO_BE",
+    partialClosePercent: 0,
+    newStopLoss: entry,
+    tp1Reached: false,
+    tp2Reached: false,
+    riskReward: null,
+    tp1RiskReward: null,
+    tp2RiskReward: null,
+  };
+}
+
+function isMeaningfullyDifferent(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return a !== b;
+  return Math.abs(a - b) > 1e-10;
+}
+
+function shouldMoveStopToBreakeven(direction: "LONG" | "SHORT", trailingStopLoss: number | null, entry: number): boolean {
+  if (trailingStopLoss === null) return true;
+  if (direction === "LONG") {
+    return trailingStopLoss < entry && isMeaningfullyDifferent(trailingStopLoss, entry);
   }
+  return trailingStopLoss > entry && isMeaningfullyDifferent(trailingStopLoss, entry);
 }
 
-export async function decidePosition(position: OpenPosition, screenshot: ScreenshotResult): Promise<PositionDecisionOutcome> {
-  const prompt = `Review the current chart and the open trade below.
+export function resolveOpenPositionDecision(
+  position: Pick<OpenPosition, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "tradeStage" | "tp1ClosedPercent" | "trailingStopLoss">,
+  stats: CandleRangeStats | null,
+  reason?: "ohlc_fetch_fail" | "missing_chart_config",
+): PositionDecisionOutcome {
+  if (stats === null) {
+    const comment = reason === "missing_chart_config"
+      ? "Không tìm thấy cấu hình chart để kiểm tra SL/TP, giữ vị thế."
+      : "Chưa lấy được OHLC để kiểm tra SL/TP, giữ vị thế.";
+    return buildHoldDecision(comment);
+  }
 
-Trade:
-- Pair: ${position.pair}
-- Direction: ${position.direction}
-- Setup: ${position.setup ?? ""}
-- Entry: ${position.entry}
-- Stop loss: ${position.stopLoss}
-- Take profit 1: ${position.takeProfit1}
-- Take profit 2: ${position.takeProfit2 ?? ""}
-- Last price: ${screenshot.lastPrice ?? "unknown"}
-- Reasons: ${(position.reasons ?? []).slice(0, 4).join(" | ")}
+  const stopLoss = parsePrice(position.stopLoss);
+  const takeProfit1 = parsePrice(position.takeProfit1);
+  const takeProfit2 = position.takeProfit2 ? parsePrice(position.takeProfit2) : null;
+  const entry = parsePrice(position.entry);
+  if (stopLoss === null || takeProfit1 === null || entry === null || (position.takeProfit2 !== null && takeProfit2 === null)) {
+    return buildHoldDecision("Dữ liệu SL/TP không hợp lệ, giữ vị thế.");
+  }
 
-All user-facing fields must be Vietnamese with accents. The comment must be Vietnamese, concise, and directly explain HOLD/CLOSE/STOP.
-Return only JSON with keys decision, managementAction, partialClosePercent, newStopLoss, confidence, comment.
-decision must be one of HOLD, CLOSE, STOP.
-managementAction must be one of NONE, PARTIAL_TP1, MOVE_SL_TO_BE, TRAIL_SL, TP2_CLOSE.
-If TP1 is reached, use PARTIAL_TP1 and set partialClosePercent to 50 unless a different configured partial close is justified.
-If TP2 is reached, use decision CLOSE and managementAction TP2_CLOSE.
-Comment should be short and practical.`;
-  const mime = screenshot.buffer.length >= 8 && screenshot.buffer[0] === 0x89 && screenshot.buffer[1] === 0x50
-    ? "image/png" : "image/jpeg";
-  const { response, model: usedModel } = await callOpenRouterWithFallback(
-    MODEL,
-    MODEL_FALLBACKS,
-    (model) => ({
-      model,
-      systemPrompt: "You manage open trades from chart evidence. Answer only with concise JSON. All user-facing text must be Vietnamese with accents.",
-      userContent: [
-        { type: "image_url", image_url: { url: `data:${mime};base64,${screenshot.buffer.toString("base64")}` } },
-        { type: "text", text: prompt },
-      ],
-      maxTokens: 300,
-      temperature: 0.2,
-      responseFormat: { type: "json_object" },
-    }),
-    (error, attempt, maxAttempts, delayMs) =>
-      logger.warn(`  ! OpenRouter position decision temporary error for ${position.pair} (${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${error instanceof Error ? error.message : error}`),
-  );
-  void recordOpenRouterUsage(response, { model: usedModel, source: "chart" });
-  const parsed = parseDecisionResponse(response.text);
-  if (!parsed) throw new Error(`OpenRouter position decision parse failed for model ${usedModel}. Raw: ${response.text.slice(0, 300)}`);
-  return parsed;
+  const tp1AlreadyClosed = (position.tp1ClosedPercent ?? 0) > 0 || position.tradeStage === "tp1_partial" || position.tradeStage === "trailing";
+
+  if (position.direction === "LONG") {
+    if (stats.low <= stopLoss) {
+      return buildStopDecision(`Giá thấp nhất ${formatPrice(stats.low)} đã chạm stop loss ${formatPrice(stopLoss)}.`);
+    }
+
+    if (takeProfit2 !== null && stats.high >= takeProfit2) {
+      return buildCloseDecision(`Giá cao nhất ${formatPrice(stats.high)} đã chạm TP2 ${formatPrice(takeProfit2)}.`);
+    }
+
+    if (!tp1AlreadyClosed && stats.high >= takeProfit1) {
+      return buildPartialTp1Decision(`Giá cao nhất ${formatPrice(stats.high)} đã chạm TP1 ${formatPrice(takeProfit1)}.`, position.entry);
+    }
+
+    if (tp1AlreadyClosed && shouldMoveStopToBreakeven(position.direction, parsePrice(position.trailingStopLoss), entry)) {
+      return buildTrailDecision("Đã partial TP1, dời SL về entry theo dữ liệu OHLC.", position.entry);
+    }
+  } else {
+    if (stats.high >= stopLoss) {
+      return buildStopDecision(`Giá cao nhất ${formatPrice(stats.high)} đã chạm stop loss ${formatPrice(stopLoss)}.`);
+    }
+
+    if (takeProfit2 !== null && stats.low <= takeProfit2) {
+      return buildCloseDecision(`Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP2 ${formatPrice(takeProfit2)}.`);
+    }
+
+    if (!tp1AlreadyClosed && stats.low <= takeProfit1) {
+      return buildPartialTp1Decision(`Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP1 ${formatPrice(takeProfit1)}.`, position.entry);
+    }
+
+    if (tp1AlreadyClosed && shouldMoveStopToBreakeven(position.direction, parsePrice(position.trailingStopLoss), entry)) {
+      return buildTrailDecision("Đã partial TP1, dời SL về entry theo dữ liệu OHLC.", position.entry);
+    }
+  }
+
+  return buildHoldDecision("Chưa chạm SL/TP theo dữ liệu OHLC.");
+}
+
+export function resolvePendingOrderDecision(
+  order: Pick<PendingOrder, "direction" | "entry" | "stopLoss" | "orderType">,
+  stats: CandleRangeStats | null,
+  reason?: "ohlc_fetch_fail" | "missing_chart_config",
+): { status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string } {
+  if (stats === null) {
+    const comment = reason === "missing_chart_config"
+      ? "Không tìm thấy cấu hình chart để kiểm tra lệnh chờ, giữ pending."
+      : "Chưa lấy được OHLC để kiểm tra lệnh chờ, giữ pending.";
+    return {
+      status: "PENDING",
+      confidence: 0,
+      comment,
+    };
+  }
+
+  const entry = parsePrice(order.entry);
+  const stopLoss = parsePrice(order.stopLoss);
+  if (entry === null || stopLoss === null) {
+    return {
+      status: "PENDING",
+      confidence: 0,
+      comment: "Dữ liệu entry/stop loss không hợp lệ, giữ pending.",
+    };
+  }
+
+  const invalidated = order.direction === "LONG" ? stats.low <= stopLoss : stats.high >= stopLoss;
+  if (invalidated) {
+    return {
+      status: "CANCELLED",
+      confidence: 98,
+      comment: order.direction === "LONG"
+        ? `Giá thấp nhất ${formatPrice(stats.low)} đã xuyên stop loss ${formatPrice(stopLoss)}, hủy lệnh chờ.`
+        : `Giá cao nhất ${formatPrice(stats.high)} đã xuyên stop loss ${formatPrice(stopLoss)}, hủy lệnh chờ.`,
+    };
+  }
+
+  if (order.orderType === "WAIT_FOR_CONFIRMATION") {
+    if (stats.lastClose === null) {
+      return {
+        status: "PENDING",
+        confidence: 50,
+        comment: "WAIT_FOR_CONFIRMATION: OHLC thiếu close hợp lệ, giữ pending cho tới khi có dữ liệu xác nhận.",
+      };
+    }
+
+    const confirmed =
+      order.direction === "LONG"
+        ? stats.high >= entry && stats.lastClose >= entry
+        : stats.low <= entry && stats.lastClose <= entry;
+    if (confirmed) {
+      return {
+        status: "TRIGGERED",
+        confidence: 92,
+        comment:
+          order.direction === "LONG"
+            ? `WAIT_FOR_CONFIRMATION: high ${formatPrice(stats.high)} và close ${formatPrice(stats.lastClose)} đã xác nhận entry ${formatPrice(entry)}.`
+            : `WAIT_FOR_CONFIRMATION: low ${formatPrice(stats.low)} và close ${formatPrice(stats.lastClose)} đã xác nhận entry ${formatPrice(entry)}.`,
+      };
+    }
+
+    return {
+      status: "PENDING",
+      confidence: 50,
+      comment: "WAIT_FOR_CONFIRMATION: chưa có close xác nhận entry, giữ pending cho tới expiry.",
+    };
+  }
+
+  const triggered = (() => {
+    switch (order.orderType) {
+      case "BUY_STOP":
+        return stats.high >= entry;
+      case "SELL_STOP":
+        return stats.low <= entry;
+      case "BUY_LIMIT":
+        return stats.low <= entry;
+      case "SELL_LIMIT":
+        return stats.high >= entry;
+      default:
+        return false;
+    }
+  })();
+
+  if (triggered) {
+    return {
+      status: "TRIGGERED",
+      confidence: 96,
+      comment: `Giá high ${formatPrice(stats.high)} / low ${formatPrice(stats.low)} đã chạm entry ${formatPrice(entry)}.`,
+    };
+  }
+
+  return {
+    status: "PENDING",
+    confidence: 50,
+    comment: "Chưa chạm entry theo dữ liệu OHLC, giữ pending.",
+  };
 }

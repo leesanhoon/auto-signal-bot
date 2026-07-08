@@ -72,7 +72,7 @@ export async function loadUnverifiedPredictions(date: string, region: LotteryReg
   return data as PredictionRow[];
 }
 
-/** Đọc dự đoán đã lưu cho đúng date+region — dùng để tái sử dụng thay vì gọi lại AI trong cùng ngày. */
+/** Đọc dự đoán đã lưu cho đúng date+region — dùng để tái sử dụng thay vì tính lại trong cùng ngày. */
 export async function loadCachedPredictions(
   date: string,
   region: LotteryRegion,

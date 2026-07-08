@@ -18,7 +18,7 @@ Review lần 5 của [docs/tasks/09-stats-command.md](09-stats-command.md).
 - ✅ Gửi tin nhắn qua `sendTelegramMessage()` đã có sẵn (không tự viết `fetch()` riêng nữa) — còn được mở rộng thêm tham số `parseMode` với fallback tự động nếu Markdown parse lỗi (`can't parse entities` → gửi lại plain text) — cải tiến hợp lý, không phá vỡ hành vi cũ (tham số optional).
   - `handleStatsCommand()` không dùng workflow/GitHub Actions, xử lý trực tiếp trong Edge Function như quyết định thiết kế đã ghi trong task doc.
 - ✅ Không còn logic bảo mật trùng lặp — webhook secret/allowedChatId chỉ được check 1 lần duy nhất ở đầu handler, `/stats` nằm trong nhánh `update.message` đã qua các bước kiểm tra đó.
-- ✅ `src/shared/stats-report.ts` (`buildStatsReport`) có test riêng ([tests/shared/stats-report.test.ts](../../tests/shared/stats-report.test.ts)) cover đúng: đếm open positions, tổng hợp performance 7 ngày, tổng hợp AI usage theo ngày + theo provider.
+- ✅ `src/shared/stats-report.ts` (`buildStatsReport`) có test riêng ([tests/shared/stats-report.test.ts](../../tests/shared/stats-report.test.ts)) cover đúng: đếm open positions, tổng hợp performance 7 ngày, tổng hợp usage theo ngày + theo provider.
 - ✅ `npm test`: 13 files, 35 tests pass. `npx tsc --noEmit`: sạch.
 
 ## Việc dọn dẹp còn sót (nhỏ)

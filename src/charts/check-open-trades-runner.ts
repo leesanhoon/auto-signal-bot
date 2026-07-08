@@ -1,169 +1,44 @@
-import { captureVerificationChartScreenshot, fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
+import { fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
 import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository.js";
-import { decidePosition } from "./position-decision.js";
-import { buildPositionDecisionMessage, sendMessage, sendPhoto } from "../shared/telegram.js";
+import { buildPositionDecisionMessage, sendMessage } from "../shared/telegram.js";
 import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine.js";
-import type { CandleRangeStats } from "./chart-types.js";
+import { resolveOpenPositionDecision } from "./position-decision.js";
 
 const logger = createLogger("charts:check-open-trades");
-
-function parsePrice(value: string): number | null {
-  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatPrice(value: number): string {
-  const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
-  return value.toFixed(precision);
-}
-
-function resolvePositionByPrice(
-  position: Awaited<ReturnType<typeof loadOpenPositions>>[number],
-  stats: CandleRangeStats | null,
-): PositionDecisionOutcome | null {
-  if (stats === null) {
-    return null;
-  }
-
-  const stopLoss = parsePrice(position.stopLoss);
-  const takeProfit1 = parsePrice(position.takeProfit1);
-  const takeProfit2 = position.takeProfit2 ? parsePrice(position.takeProfit2) : null;
-  if (stopLoss === null || takeProfit1 === null) {
-    return null;
-  }
-
-  const tp1AlreadyClosed = (position.tp1ClosedPercent ?? 0) > 0 || position.tradeStage === "tp1_partial";
-
-  if (position.direction === "LONG") {
-    if (stats.low <= stopLoss) {
-      return {
-        decision: "STOP",
-        confidence: 99,
-        comment: `Giá thấp nhất ${formatPrice(stats.low)} đã xuống dưới stop loss ${formatPrice(stopLoss)}.`,
-        managementAction: "NONE",
-        partialClosePercent: 0,
-        newStopLoss: null,
-        tp1Reached: false,
-        tp2Reached: false,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
-    }
-
-    if (takeProfit2 !== null && stats.high >= takeProfit2) {
-      return {
-        decision: "CLOSE",
-        confidence: 99,
-        comment: `Giá cao nhất ${formatPrice(stats.high)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
-        managementAction: "TP2_CLOSE",
-        partialClosePercent: 0,
-        newStopLoss: null,
-        tp1Reached: true,
-        tp2Reached: true,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
-    }
-
-    if (!tp1AlreadyClosed && stats.high >= takeProfit1) {
-      return {
-        decision: "HOLD",
-        confidence: 96,
-        comment: `Giá cao nhất ${formatPrice(stats.high)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
-        managementAction: "PARTIAL_TP1",
-        partialClosePercent: 50,
-        newStopLoss: position.entry,
-        tp1Reached: true,
-        tp2Reached: false,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
-    }
-  } else {
-    if (stats.high >= stopLoss) {
-      return {
-        decision: "STOP",
-        confidence: 99,
-        comment: `Giá cao nhất ${formatPrice(stats.high)} đã vượt stop loss ${formatPrice(stopLoss)}.`,
-        managementAction: "NONE",
-        partialClosePercent: 0,
-        newStopLoss: null,
-        tp1Reached: false,
-        tp2Reached: false,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
-    }
-
-    if (takeProfit2 !== null && stats.low <= takeProfit2) {
-      return {
-        decision: "CLOSE",
-        confidence: 99,
-        comment: `Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP2 ${formatPrice(takeProfit2)}.`,
-        managementAction: "TP2_CLOSE",
-        partialClosePercent: 0,
-        newStopLoss: null,
-        tp1Reached: true,
-        tp2Reached: true,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
-    }
-
-    if (!tp1AlreadyClosed && stats.low <= takeProfit1) {
-      return {
-        decision: "HOLD",
-        confidence: 96,
-        comment: `Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP1 ${formatPrice(takeProfit1)}.`,
-        managementAction: "PARTIAL_TP1",
-        partialClosePercent: 50,
-        newStopLoss: position.entry,
-        tp1Reached: true,
-        tp2Reached: false,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
-    }
-  }
-
-  return null;
-}
 
 function formatCheckedAt(): string {
   return new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
-export async function processPosition(position: Awaited<ReturnType<typeof loadOpenPositions>>[number]): Promise<boolean> {
+async function evaluateOpenPosition(
+  position: Awaited<ReturnType<typeof loadOpenPositions>>[number],
+): Promise<PositionDecisionOutcome> {
   const chart = findChartForPair(position.pair, "H4");
   if (!chart) {
-    logger.warn("No chart configuration found", { pair: position.pair });
-    return false;
+    logger.warn("No chart configuration found; sending explicit warning", { pair: position.pair, id: position.id });
+    await sendMessage(
+      `⚠️ *Check Open Trades*\n\nKhông tìm thấy cấu hình chart cho vị thế #${position.id} ${position.pair}.\nBot tạm giữ vị thế nhưng không thể xác minh SL/TP trong lượt này. Vui lòng kiểm tra cấu hình chart / mapping pair.`,
+    );
+    return resolveOpenPositionDecision(position, null, "missing_chart_config");
   }
 
   const stats = await fetchCandleRangeStats(chart.symbol, new Date(position.openedAt).getTime());
-  const priceDecision = resolvePositionByPrice(position, stats);
-
-  let effectiveDecision: Awaited<ReturnType<typeof decidePosition>>;
-  if (priceDecision !== null) {
-    effectiveDecision = priceDecision;
-  } else {
-    const screenshot = await captureVerificationChartScreenshot(chart);
-    await sendPhoto(screenshot.buffer, `📊 ${position.pair} - kiểm tra vị thế (${chart.timeframe})`);
-    const decision = await decidePosition(position, screenshot);
-    effectiveDecision = decision;
+  if (stats === null) {
+    logger.warn("Failed to fetch OHLC for open position; sending explicit warning", { pair: position.pair, id: position.id });
+    await sendMessage(
+      `⚠️ *Check Open Trades*\n\nKhông lấy được OHLC để kiểm tra vị thế #${position.id} ${position.pair}.\nBot tạm giữ vị thế nhưng không thể xác minh SL/TP trong lượt này. Vui lòng kiểm tra dữ liệu thị trường / nguồn chart.`,
+    );
   }
+  return resolveOpenPositionDecision(position, stats);
+}
 
-  const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, effectiveDecision);
-  await updatePositionDecision(position.id, effectiveDecision, patch);
+export async function processPosition(position: Awaited<ReturnType<typeof loadOpenPositions>>[number]): Promise<boolean> {
+  const decision = await evaluateOpenPosition(position);
+  const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, decision);
+  await updatePositionDecision(position.id, decision, patch);
   if (shouldClose) {
-    await closePosition(position, effectiveDecision, patch);
+    await closePosition(position, decision, patch);
   }
 
   const message = buildPositionDecisionMessage(
@@ -185,7 +60,7 @@ export async function processPosition(position: Awaited<ReturnType<typeof loadOp
       tp1ClosedPercent: patch?.tp1ClosedPercent ?? position.tp1ClosedPercent,
       trailingStopLoss: patch?.trailingStopLoss ?? position.trailingStopLoss,
     },
-    effectiveDecision,
+    decision,
   );
 
   await sendMessage(`${message}\n\n*Cập nhật lúc:* ${formatCheckedAt()}`);

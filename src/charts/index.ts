@@ -1,6 +1,4 @@
 import "../shared/env.js";
-import { captureAllCharts } from "./screenshot.js";
-import { analyzeAllCharts } from "./analyzer.js";
 import { saveOpenPosition, savePendingOrder } from "./positions-repository.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner.js";
 import { runCheckPendingOrders } from "./check-pending-orders-runner.js";
@@ -34,7 +32,6 @@ import { CHARTS, getChartsForTimeframeMode } from "./charts.config.js";
 import { buildChartAnalysisCacheKey } from "./analyzer.js";
 
 const logger = createLogger("charts:index");
-const AI_VISION_MODEL = process.env.AI_VISION_MODEL?.trim() || "xiaomi/mimo-v2.5";
 const CANDLE_CLOSE_WINDOW_MS = 20 * 60 * 1000;
 
 type AnalysisOrigin =
@@ -49,158 +46,59 @@ function getPairs(): Array<{ pair: string; symbol: string }> {
   const seen = new Map<string, string>();
   for (const chart of CHARTS) {
     const pair = chart.name.replace(` ${chart.timeframe}`, "");
-    if (!seen.has(pair)) {
-      seen.set(pair, chart.symbol);
-    }
+    if (!seen.has(pair)) seen.set(pair, chart.symbol);
   }
   return Array.from(seen.entries()).map(([pair, symbol]) => ({ pair, symbol }));
 }
 
 async function analyzeCurrentWindow(
   candleKey: string,
-  engineMode: ReturnType<typeof getConfiguredChartEngineMode>,
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
 ): Promise<AnalysisResult> {
   const runtimeCharts = getChartsForTimeframeMode(timeframeMode, primaryTimeframe);
-  const runtimeIntervals = [...new Set(runtimeCharts.map((chart) => chart.timeframe))];
-  if (engineMode === "ai") {
-    logger.info("Capturing all forex charts", {
-      timeframeMode,
-      primaryTimeframe,
-      intervals: runtimeIntervals,
-      indicators: ["EMA 20", "volume"],
-    });
-    const screenshots = await captureAllCharts(timeframeMode, primaryTimeframe);
-    if (screenshots.length === 0) throw new Error("No charts captured.");
-    logger.info("Captured charts", { count: screenshots.length });
-
-    logger.info("Analyzing charts", { model: AI_VISION_MODEL });
-    const analysisResult = await analyzeAllCharts(screenshots);
-    logger.info("Analysis complete");
-
-    await saveChartAnalysisCache(candleKey, analysisResult);
-    return analysisResult;
-  }
-
-  if (engineMode === "deterministic") {
-    logger.info("Using deterministic engine (no AI vision)", {
-      timeframeMode,
-      primaryTimeframe,
-      intervals: runtimeIntervals,
-    });
-    const pairs = getPairs();
-    const detResult = await analyzeAllChartsDeterministic(pairs, {
-      timeframeMode,
-      primaryTimeframe,
-    });
-    logger.info("Deterministic analysis complete");
-
-    await saveChartAnalysisCache(candleKey, detResult);
-    return detResult;
-  }
-
-  logger.info("SHADOW mode: AI is primary, deterministic runs alongside");
-  logger.info("Capturing all forex charts", {
+  logger.info("Using deterministic engine (no AI vision)", {
     timeframeMode,
     primaryTimeframe,
-    intervals: runtimeIntervals,
-    indicators: ["EMA 20", "volume"],
+    intervals: Array.from(new Set(runtimeCharts.map((chart) => chart.timeframe))),
   });
-  const screenshots = await captureAllCharts(timeframeMode, primaryTimeframe);
-  if (screenshots.length === 0) throw new Error("No charts captured.");
-  logger.info("Captured charts", { count: screenshots.length });
-
-  logger.info("Analyzing charts (AI)", { model: AI_VISION_MODEL });
-  const aiResult = await analyzeAllCharts(screenshots);
-  logger.info("AI analysis complete");
-
-  await saveChartAnalysisCache(candleKey, aiResult);
-
-  try {
-    logger.info("SHADOW: Running deterministic engine for comparison...");
-    const pairs = getPairs();
-    const detResult = await analyzeAllChartsDeterministic(pairs, {
-      timeframeMode,
-      primaryTimeframe,
-    });
-    logger.info("SHADOW: Deterministic comparison results", {
-      aiSetups: aiResult.setups.length,
-      detSetups: detResult.setups.length,
-      aiPairs: aiResult.summaries.length,
-      detPairs: detResult.summaries.length,
-    });
-    for (const aiSetup of aiResult.setups) {
-      const match = detResult.setups.find(
-        (s) => s.pair === aiSetup.pair && s.direction === aiSetup.direction,
-      );
-      if (match) {
-        logger.info(`SHADOW: ${aiSetup.pair} — AI=${aiSetup.setup} vs DET=${match.setup}, conf=${aiSetup.confidence}/${match.confidence}`);
-      } else {
-        logger.info(`SHADOW: ${aiSetup.pair} — AI=${aiSetup.setup} (det=khong co)`);
-      }
-    }
-    for (const detSetup of detResult.setups) {
-      if (!aiResult.setups.find((s) => s.pair === detSetup.pair)) {
-        logger.info(`SHADOW: ${detSetup.pair} — AI=khong co, DET=${detSetup.setup}`);
-      }
-    }
-  } catch (detErr) {
-    logger.warn("SHADOW: Deterministic engine comparison failed", { error: detErr });
-    await notifyError("SHADOW: Deterministic engine", detErr).catch(() => {});
-  }
-
-  return aiResult;
+  const detResult = await analyzeAllChartsDeterministic(getPairs(), {
+    timeframeMode,
+    primaryTimeframe,
+  });
+  await saveChartAnalysisCache(candleKey, detResult);
+  return detResult;
 }
 
 async function loadAnalysisForRun(
   candleBaseKey: string,
-  engineMode: ReturnType<typeof getConfiguredChartEngineMode>,
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   runContext: ReturnType<typeof getConfiguredChartRunContext>,
 ): Promise<{ result: AnalysisResult | null; origin: AnalysisOrigin | null; heartbeatReason: "no-cache" | "no-event" | null }> {
-  const cacheKey = buildChartAnalysisCacheKey(candleBaseKey, engineMode, timeframeMode, primaryTimeframe);
+  const cacheKey = buildChartAnalysisCacheKey(candleBaseKey, "deterministic", timeframeMode, primaryTimeframe);
   const cached = await loadChartAnalysisCache(cacheKey);
-  if (cached) {
-    return { result: cached, origin: { source: "cached", candleKey: cacheKey }, heartbeatReason: null };
-  }
+  if (cached) return { result: cached, origin: { source: "cached", candleKey: cacheKey }, heartbeatReason: null };
 
   const withinCloseWindow = isWithinCandleCloseWindow(new Date(), CANDLE_CLOSE_WINDOW_MS);
   if (withinCloseWindow) {
-    const liveResult = await analyzeCurrentWindow(cacheKey, engineMode, timeframeMode, primaryTimeframe);
+    const liveResult = await analyzeCurrentWindow(cacheKey, timeframeMode, primaryTimeframe);
     return { result: liveResult, origin: { source: "live", candleKey: cacheKey }, heartbeatReason: null };
   }
 
   if (runContext === "manual" && shouldUseLatestCacheForManualRun()) {
-    const latest = await loadLatestChartAnalysisCache(engineMode, timeframeMode, primaryTimeframe);
+    const latest = await loadLatestChartAnalysisCache("deterministic", timeframeMode, primaryTimeframe);
     if (latest) {
-      return {
-        result: latest.result,
-        origin: { source: "cached", candleKey: latest.candleKey },
-        heartbeatReason: null,
-      };
+      return { result: latest.result, origin: { source: "cached", candleKey: latest.candleKey }, heartbeatReason: null };
     }
-    return {
-      result: null,
-      origin: null,
-      heartbeatReason: shouldSendHeartbeatOnManualRun() ? "no-cache" : null,
-    };
+    return { result: null, origin: null, heartbeatReason: shouldSendHeartbeatOnManualRun() ? "no-cache" : null };
   }
 
-  return {
-    result: null,
-    origin: null,
-    heartbeatReason: shouldSendHeartbeatOutsideCloseWindow() ? "no-event" : null,
-  };
+  return { result: null, origin: null, heartbeatReason: shouldSendHeartbeatOutsideCloseWindow() ? "no-event" : null };
 }
 
-async function handleAnalysisResult(
-  result: AnalysisResult,
-  origin: AnalysisOrigin,
-): Promise<void> {
+async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrigin): Promise<void> {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
-
   for (const setup of result.setups) {
     if (shouldAutoTrackAsOpen(setup, threshold)) {
       try {
@@ -223,16 +121,9 @@ async function handleAnalysisResult(
       try {
         const saved = await savePendingOrder(setup);
         if (saved) {
-          logger.info("Saved pending order", {
-            pair: setup.pair,
-            orderType: setup.orderType,
-            primaryTimeframe: setup.primaryTimeframe,
-          });
+          logger.info("Saved pending order", { pair: setup.pair, orderType: setup.orderType, primaryTimeframe: setup.primaryTimeframe });
         } else {
-          logger.info("Skipped duplicate pending order", {
-            pair: setup.pair,
-            orderType: setup.orderType,
-          });
+          logger.info("Skipped duplicate pending order", { pair: setup.pair, orderType: setup.orderType });
         }
       } catch (error) {
         logger.error("Failed to save pending order", { pair: setup.pair, error });
@@ -240,68 +131,44 @@ async function handleAnalysisResult(
     }
   }
 
-  logger.info("Sending results to Telegram", {
-    source: origin.source,
-    candleKey: origin.candleKey,
-  });
-  await sendAllAnalyses(result, undefined, {
-    source: origin.source,
-    candleKey: origin.candleKey,
-  });
+  logger.info("Sending results to Telegram", { source: origin.source, candleKey: origin.candleKey });
+  await sendAllAnalyses(result, undefined, { source: origin.source, candleKey: origin.candleKey });
 }
 
 async function maybeSendHeartbeat(
   runContext: ReturnType<typeof getConfiguredChartRunContext>,
-  engineMode: ReturnType<typeof getConfiguredChartEngineMode>,
   candleKey: string,
   heartbeatReason: "no-cache" | "no-event" | null,
   latestCacheCandleKey?: string | null,
 ): Promise<void> {
   if (!heartbeatReason) return;
-
-  await sendMessage(
-    buildHeartbeatMessage({
-      runContext,
-      engineMode,
-      reason: heartbeatReason,
-      candleKey,
-      latestCacheCandleKey: latestCacheCandleKey ?? null,
-    }),
-  );
+  await sendMessage(buildHeartbeatMessage({ runContext, engineMode: "deterministic", reason: heartbeatReason, candleKey, latestCacheCandleKey: latestCacheCandleKey ?? null }));
 }
 
 export async function main(): Promise<void> {
   const startTime = Date.now();
-  const engineMode = getConfiguredChartEngineMode();
   const runContext = getConfiguredChartRunContext();
   const timeframeMode = getConfiguredChartTimeframeMode();
   const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
-  logger.info("Bob Volman scanner starting", { engineMode, runContext, timeframeMode, primaryTimeframe });
+  logger.info("Bob Volman scanner starting", { engineMode: "deterministic", runContext, timeframeMode, primaryTimeframe });
 
   const candleBaseKey = getCurrentH4CandleCloseKey();
-  const candleKey = buildChartAnalysisCacheKey(
-    candleBaseKey,
-    engineMode,
-    timeframeMode,
-    primaryTimeframe,
-  );
+  const candleKey = buildChartAnalysisCacheKey(candleBaseKey, "deterministic", timeframeMode, primaryTimeframe);
   let latestCacheCandleKey: string | null = null;
   let result: AnalysisResult | null = null;
   let origin: AnalysisOrigin | null = null;
   let heartbeatReason: "no-cache" | "no-event" | null = null;
 
-  const analysisState = await loadAnalysisForRun(candleBaseKey, engineMode, timeframeMode, primaryTimeframe, runContext);
+  const analysisState = await loadAnalysisForRun(candleBaseKey, timeframeMode, primaryTimeframe, runContext);
   result = analysisState.result;
   origin = analysisState.origin;
   heartbeatReason = analysisState.heartbeatReason;
-  if (origin?.source === "cached") {
-    latestCacheCandleKey = origin.candleKey;
-  }
+  if (origin?.source === "cached") latestCacheCandleKey = origin.candleKey;
 
   if (result && origin) {
     await handleAnalysisResult(result, origin);
   } else {
-    logger.warn(`⏭ Bỏ qua capture+analyze — ngoài cửa sổ đóng nến H4 (${candleKey}), vẫn kiểm tra trade/pending`);
+    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ đóng nến H4 (${candleKey}), vẫn kiểm tra trade/pending`);
   }
 
   logger.info("Checking open positions");
@@ -310,14 +177,14 @@ export async function main(): Promise<void> {
   const pendingNotifications = await runCheckPendingOrders();
 
   if (!result && openTradeNotifications + pendingNotifications === 0) {
-    await maybeSendHeartbeat(runContext, engineMode, candleKey, heartbeatReason, latestCacheCandleKey);
+    await maybeSendHeartbeat(runContext, candleKey, heartbeatReason, latestCacheCandleKey);
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   logger.info("Run complete", {
     scannedPairs: result?.setups.length ?? 0,
     elapsedSeconds: Number(elapsed),
-    engineMode,
+    engineMode: "deterministic",
     runContext,
     timeframeMode,
     primaryTimeframe,

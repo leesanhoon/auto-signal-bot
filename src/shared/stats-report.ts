@@ -87,7 +87,7 @@ function aggregateStatsAiUsageByDay(records: StatsAiUsageRecord[]): Array<
     dayMap.set(record.usageDate, existing);
   }
 
-  return [...dayMap.entries()]
+  return Array.from(dayMap.entries())
     .sort(([left], [right]) => right.localeCompare(left))
     .map(([date, bucket]) => ({
       date,
@@ -95,7 +95,7 @@ function aggregateStatsAiUsageByDay(records: StatsAiUsageRecord[]): Array<
       inputTokens: bucket.inputTokens,
       outputTokens: bucket.outputTokens,
       estimatedCostUsd: bucket.estimatedCostUsd,
-      byProvider: [...bucket.byProvider.entries()]
+      byProvider: Array.from(bucket.byProvider.entries())
         .map(([provider, value]) => ({ provider, ...value }))
         .sort((a, b) => b.requests - a.requests || a.provider.localeCompare(b.provider)),
     }));

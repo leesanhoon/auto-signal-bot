@@ -5,7 +5,7 @@ export type ProvinceName = string;
 
 /**
  * Bộ giải đã rút gọn, chỉ giữ số — không giữ text mô tả ("Giải đặc biệt", ...)
- * để tiết kiệm token khi gửi cho AI đọc.
+ * để tiết kiệm token khi gửi cho bộ phân tích đọc.
  */
 export type CompactPrizes = {
   /** Giải đặc biệt. */

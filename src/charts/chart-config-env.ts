@@ -4,14 +4,10 @@ export type ChartTimeframeMode = "multi" | "single";
 
 /**
  * Đọc CHART_ENGINE_MODE từ env.
- * Mặc định: "shadow" — chạy song song AI + deterministic, chỉ dùng AI gửi Telegram.
+ * Mặc định: deterministic-only.
  */
 export function getConfiguredChartEngineMode(): ChartEngineMode {
-  const raw = process.env.CHART_ENGINE_MODE?.trim().toLowerCase() as ChartEngineMode | undefined;
-  if (raw === "ai" || raw === "deterministic" || raw === "shadow") {
-    return raw;
-  }
-  return "shadow";
+  return "deterministic";
 }
 
 export function getConfiguredChartSignalConfidenceThreshold(): number {

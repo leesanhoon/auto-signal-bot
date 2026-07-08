@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { buildStatsReport } from "../../src/shared/stats-report.js";
+import { buildStatsMessage } from "../../src/shared/stats.js";
 
 describe("shared/stats-report", () => {
-  test("builds a dashboard report from open positions, performance and AI usage data", () => {
+  test("builds a dashboard report from open positions, performance and usage data", () => {
     const report = buildStatsReport({
       openPositions: 4,
       closedPositions: [
@@ -10,6 +11,7 @@ describe("shared/stats-report", () => {
           id: 1,
           pair: "EUR/USD",
           direction: "LONG",
+          setup: null,
           entry: "1.1000",
           stopLoss: "1.0960",
           takeProfit1: "1.1080",
@@ -59,6 +61,7 @@ describe("shared/stats-report", () => {
     expect(report.performanceWindowLabel).toBe("7 ngày");
     expect(report.recentPerformance?.trades).toBe(1);
     expect(report.aiUsageToday?.requests).toBe(2);
+    expect(buildStatsMessage(report)).toContain("AI usage hôm nay");
     expect(report.aiUsageToday?.byProvider).toEqual([
       expect.objectContaining({ provider: "claude", requests: 1 }),
       expect.objectContaining({ provider: "gemini", requests: 1 }),

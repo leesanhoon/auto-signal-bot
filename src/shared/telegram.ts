@@ -191,7 +191,7 @@ export function buildHeartbeatMessage(options: {
       : "Không có event trade/pending nào phát sinh trong lượt chạy này.";
 
   const lines = [
-    "🫀 *Bob Volman Scanner heartbeat*",
+    "🫀 *Bob Volman Algorithm Scanner heartbeat*",
     `*Run:* ${runLabel}`,
     `*Engine:* ${options.engineMode}`,
     `*Candle:* ${options.candleKey}`,
@@ -547,18 +547,18 @@ export async function sendAllAnalyses(
   const summaries = result.summaries.filter((summary) => summary.confidence >= threshold);
   const setups = result.setups.filter((setup) => (setup.confidence ?? 0) >= threshold);
   const isCached = deliveryContext.source === "cached";
-  const sourceLabel = isCached ? " từ cache" : " từ AI";
+  const sourceLabel = isCached ? " từ cache" : " từ thuật toán";
   const cacheLine = isCached
     ? deliveryContext.candleKey
       ? `📦 Dữ liệu phân tích lấy từ cache candle *${deliveryContext.candleKey}*`
       : "📦 Dữ liệu phân tích lấy từ cache"
     : "";
-  const setupHeaderSuffix = isCached ? " từ cache" : " từ AI";
-  const footerLabel = isCached ? "từ cache" : "từ AI";
+  const setupHeaderSuffix = isCached ? " từ cache" : " từ thuật toán";
+  const footerLabel = isCached ? "từ cache" : "từ thuật toán";
 
   if (setups.length === 0) {
     await notifier.sendMessage(
-      `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)\n\n⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ AI"}\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
+      `🚀 *Bob Volman Multi-Timeframe Scanner${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)\n\n⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ thuật toán"}\n\n_"Không trade cũng là một quyết định đúng." — Bob Volman_`,
     );
     logger.info(
       `  → No setups above threshold (${threshold}%). Notification sent with ${summaries.length} eligible summaries (${footerLabel}).`,
@@ -595,6 +595,6 @@ export async function sendAllAnalyses(
   }
 
   await notifier.sendMessage(
-    `✅ *Scan hoàn tất* — ${summaries.length} cặp và ${setups.length} setup(s) đạt ngưỡng (≥${threshold}%)${isCached ? " từ cache" : " từ AI"}\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
+    `✅ *Scan hoàn tất* — ${summaries.length} cặp và ${setups.length} setup(s) đạt ngưỡng (≥${threshold}%)${isCached ? " từ cache" : " từ thuật toán"}\n\n⚠️ _Đây chỉ là phân tích tham khảo, không phải lời khuyên đầu tư._`,
   );
 }

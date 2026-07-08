@@ -1,25 +1,18 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   findChartForPair: vi.fn(),
-  captureVerificationChartScreenshot: vi.fn(),
   fetchCandleRangeStats: vi.fn(),
-  decidePosition: vi.fn(),
   buildPositionManagementPatch: vi.fn(),
   updatePositionDecision: vi.fn(),
   closePosition: vi.fn(),
   buildPositionDecisionMessage: vi.fn(),
   sendMessage: vi.fn(async () => undefined),
-  sendPhoto: vi.fn(async () => undefined),
 }));
 
 vi.mock("../../src/charts/screenshot.js", () => ({
   findChartForPair: state.findChartForPair,
-  captureVerificationChartScreenshot: state.captureVerificationChartScreenshot,
   fetchCandleRangeStats: state.fetchCandleRangeStats,
-}));
-vi.mock("../../src/charts/position-decision.js", () => ({
-  decidePosition: state.decidePosition,
 }));
 vi.mock("../../src/charts/positions-repository.js", () => ({
   buildPositionManagementPatch: state.buildPositionManagementPatch,
@@ -30,23 +23,23 @@ vi.mock("../../src/charts/positions-repository.js", () => ({
 vi.mock("../../src/shared/telegram.js", () => ({
   buildPositionDecisionMessage: state.buildPositionDecisionMessage,
   sendMessage: state.sendMessage,
-  sendPhoto: state.sendPhoto,
 }));
 
-const runner = await import("../../src/charts/check-open-trades-runner.js");
+let runner: any;
+
+beforeAll(async () => {
+  runner = await import("../../src/charts/check-open-trades-runner.js");
+});
 
 describe("charts/check-open-trades-runner", () => {
   beforeEach(() => {
     state.findChartForPair.mockReset();
-    state.captureVerificationChartScreenshot.mockReset();
     state.fetchCandleRangeStats.mockReset();
-    state.decidePosition.mockReset();
     state.buildPositionManagementPatch.mockReset();
     state.updatePositionDecision.mockReset();
     state.closePosition.mockReset();
     state.buildPositionDecisionMessage.mockReset();
     state.sendMessage.mockClear();
-    state.sendPhoto.mockClear();
 
     state.findChartForPair.mockReturnValue({
       symbol: "EURUSD",
@@ -55,15 +48,19 @@ describe("charts/check-open-trades-runner", () => {
       interval: "240",
       description: "",
     });
-    state.captureVerificationChartScreenshot.mockResolvedValue({
-      chart: { symbol: "EURUSD", name: "EUR/USD H4", timeframe: "H4", interval: "240", description: "" },
-      buffer: Buffer.from("chart"),
-      filepath: "/tmp/chart-h4.jpg",
-      lastPrice: 1.0995,
-    });
-    state.buildPositionManagementPatch.mockReturnValue({ patch: {}, closePosition: false });
-    state.updatePositionDecision.mockResolvedValue(true);
-    state.closePosition.mockResolvedValue(true);
+    state.buildPositionManagementPatch.mockImplementation((_position, decision) => ({
+      patch:
+        decision.managementAction === "PARTIAL_TP1"
+          ? { tradeStage: "tp1_partial", tp1ClosedPercent: 50, trailingStopLoss: "1.1000", stopLoss: "1.1000" }
+          : decision.managementAction === "MOVE_SL_TO_BE"
+            ? { tradeStage: "trailing", trailingStopLoss: "1.1000", stopLoss: "1.1000" }
+            : decision.decision === "STOP" || decision.decision === "CLOSE"
+              ? { tradeStage: "closed" }
+              : null,
+      closePosition: decision.decision === "STOP" || decision.decision === "CLOSE",
+    }));
+    state.updatePositionDecision.mockResolvedValue(undefined);
+    state.closePosition.mockResolvedValue(undefined);
     state.buildPositionDecisionMessage.mockReturnValue("Test message");
   });
 
@@ -86,105 +83,93 @@ describe("charts/check-open-trades-runner", () => {
       tp1ClosedPercent: 0,
       trailingStopLoss: null,
       ...overrides,
-    };
+    } as any;
   }
 
-  function priceDecision(overrides: Record<string, unknown> = {}) {
-    return {
-      decision: "HOLD" as const,
-      confidence: 99,
-      comment: "Price has reached TP1",
-      managementAction: "PARTIAL_TP1" as const,
-      partialClosePercent: 50,
-      newStopLoss: "1.1000",
-      tp1Reached: true,
-      tp2Reached: false,
-      riskReward: 2.0,
-      tp1RiskReward: 1.0,
-      tp2RiskReward: 2.0,
-      ...overrides,
-    };
-  }
-
-  function aiDecision(overrides: Record<string, unknown> = {}) {
-    return {
-      decision: "HOLD" as const,
-      confidence: 75,
-      comment: "AI decision based on chart",
-      managementAction: "NONE" as const,
-      partialClosePercent: 0,
-      newStopLoss: null,
-      tp1Reached: false,
-      tp2Reached: false,
-      riskReward: null,
-      tp1RiskReward: null,
-      tp2RiskReward: null,
-      ...overrides,
-    };
-  }
-
-  test("skips AI vision call when price data resolves position", async () => {
+  test("chạm TP1 lần đầu → HOLD + PARTIAL_TP1", async () => {
     const position = openPosition();
-    const stats = { high: 1.1040, low: 1.0995, lastClose: 1.1038 };
-
-    state.fetchCandleRangeStats.mockResolvedValue(stats);
-    state.decidePosition.mockResolvedValue(aiDecision());
+    state.fetchCandleRangeStats.mockResolvedValue({ high: 1.1040, low: 1.0995, lastClose: 1.1038 });
 
     await runner.processPosition(position);
 
     expect(state.fetchCandleRangeStats).toHaveBeenCalledWith("EURUSD", position.openedAt);
-    expect(state.captureVerificationChartScreenshot).not.toHaveBeenCalled();
-    expect(state.sendPhoto).not.toHaveBeenCalled();
-    expect(state.decidePosition).not.toHaveBeenCalled();
-    expect(state.updatePositionDecision).toHaveBeenCalled();
+    expect(state.updatePositionDecision).toHaveBeenCalledWith(
+      position.id,
+      expect.objectContaining({
+        decision: "HOLD",
+        managementAction: "PARTIAL_TP1",
+        comment: expect.stringContaining("TP1"),
+      }),
+      expect.objectContaining({ tradeStage: "tp1_partial" }),
+    );
+    expect(state.closePosition).not.toHaveBeenCalled();
     expect(state.sendMessage).toHaveBeenCalled();
   });
 
-  test("calls AI vision when price data is null", async () => {
+  test("không có OHLC → HOLD warning, không AI", async () => {
     const position = openPosition();
     state.fetchCandleRangeStats.mockResolvedValue(null);
-    state.decidePosition.mockResolvedValue(aiDecision());
 
     await runner.processPosition(position);
 
     expect(state.fetchCandleRangeStats).toHaveBeenCalledWith("EURUSD", position.openedAt);
-    expect(state.captureVerificationChartScreenshot).toHaveBeenCalledWith({
-      symbol: "EURUSD",
-      name: "EUR/USD H4",
-      timeframe: "H4",
-      interval: "240",
-      description: "",
-    });
-    expect(state.sendPhoto).toHaveBeenCalled();
-    expect(state.decidePosition).toHaveBeenCalledWith(position, expect.objectContaining({ buffer: expect.any(Buffer) }));
-    expect(state.updatePositionDecision).toHaveBeenCalled();
-    expect(state.sendMessage).toHaveBeenCalled();
+    expect(state.updatePositionDecision).toHaveBeenCalledWith(
+      position.id,
+      expect.objectContaining({
+        decision: "HOLD",
+        managementAction: "NONE",
+        comment: expect.stringContaining("Chưa lấy được OHLC"),
+      }),
+      null,
+    );
+    expect(state.closePosition).not.toHaveBeenCalled();
+    expect(state.sendMessage).toHaveBeenCalledWith(expect.stringContaining("Không lấy được OHLC"));
   });
 
-  test("uses price decision over AI decision when price resolves", async () => {
-    const position = openPosition();
-    const stats = { high: 1.1040, low: 1.0995, lastClose: 1.1038 };
-    const expectedDecision = priceDecision();
-
-    state.fetchCandleRangeStats.mockResolvedValue(stats);
-    state.decidePosition.mockResolvedValue(aiDecision());
+  test("đã partial rồi và còn dư địa theo OHLC → dời SL về entry", async () => {
+    const position = openPosition({ tradeStage: "tp1_partial", tp1ClosedPercent: 50, trailingStopLoss: null });
+    state.fetchCandleRangeStats.mockResolvedValue({ high: 1.1055, low: 1.1001, lastClose: 1.1050 });
 
     await runner.processPosition(position);
 
-    const updateCall = state.updatePositionDecision.mock.calls[0];
-    const usedDecision = updateCall[1];
-    expect(usedDecision.comment).toMatch(/chạm TP1/);
+    expect(state.updatePositionDecision).toHaveBeenCalledWith(
+      position.id,
+      expect.objectContaining({
+        decision: "HOLD",
+        managementAction: "MOVE_SL_TO_BE",
+        comment: expect.stringContaining("dời SL về entry"),
+      }),
+      expect.objectContaining({ tradeStage: "trailing", trailingStopLoss: "1.1000" }),
+    );
   });
 
-  test("handles missing chart gracefully", async () => {
+  test("không có chart config → HOLD + gửi Telegram warning cấu hình chart thiếu", async () => {
     const position = openPosition();
     state.findChartForPair.mockReturnValue(null);
 
     await runner.processPosition(position);
 
     expect(state.fetchCandleRangeStats).not.toHaveBeenCalled();
-    expect(state.captureVerificationChartScreenshot).not.toHaveBeenCalled();
-    expect(state.decidePosition).not.toHaveBeenCalled();
-    expect(state.updatePositionDecision).not.toHaveBeenCalled();
+    expect(state.updatePositionDecision).toHaveBeenCalledWith(
+      position.id,
+      expect.objectContaining({
+        decision: "HOLD",
+        comment: expect.stringContaining("Không tìm thấy cấu hình chart"),
+      }),
+      null,
+    );
+    expect(state.updatePositionDecision).toHaveBeenCalledWith(
+      position.id,
+      expect.objectContaining({
+        comment: expect.not.stringContaining("Chưa lấy được OHLC"),
+      }),
+      null,
+    );
+    expect(state.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("Không tìm thấy cấu hình chart"),
+    );
+    expect(state.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("không thể xác minh SL/TP"),
+    );
   });
 });
