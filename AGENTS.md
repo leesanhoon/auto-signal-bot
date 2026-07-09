@@ -1,101 +1,96 @@
 # Multi-Agent Task Queue Protocol
 
-Project này dùng **file-based task queue** để phối hợp giữa:
-- **Lead**: Claude Code Desktop (Sonnet 5 Medium) — lên plan, review code, quyết định final
-- **Worker**: Hermes Agent (Worker profile) — thực thi task chi tiết
+Project này dùng **file-based task queue** với workflow chính là **manual desktop orchestration**:
+
+- **Claude Desktop mode**
+  - **Lead**: Sonnet 5 — lên plan, break subtask, review, quyết định final
+  - **Worker**: Haiku — thực thi task literal, report lại cho Lead
+- **Codex Desktop mode**
+  - **Lead**: `gpt-5.4` + reasoning `medium`
+  - **Worker**: `gpt-5.4-mini` + reasoning `low`
+- **Hermes Worker profile**: chỉ là **fallback** khi cần chạy Worker ngoài Claude Desktop / Codex Desktop
 
 ## Directory Structure
 
-```
+```text
 tasks/
-├── <task-id>/                    # kebab-case, vd. "add-auth-middleware"
-│   ├── plan.md                   # [Lead] Kiến trúc + phân rã subtask
-│   ├── context.md                # [Lead] Shared background / references (optional)
-│   ├── review.md                 # [Lead] Final review sau khi tất cả subtask xong
-│   ├── done.md                   # [Lead] Final approval — viết khi OK hết
-│   ├── 01-<subtask-id>/          # Subtask giao cho worker
-│   │   ├── task.md               # [Lead] Task cụ thể, self-contained
-│   │   ├── result.md             # [Worker] Kết quả thực thi
-│   │   └── blocked.md            # [Worker] Bị chặn — cần clarification
+├── <task-id>/
+│   ├── plan.md
+│   ├── context.md                # optional
+│   ├── review.md
+│   ├── done.md
+│   ├── 01-<subtask-id>/
+│   │   ├── task.md
+│   │   ├── result.md
+│   │   └── blocked.md
 │   └── 02-<subtask-id>/
 │       └── ...
 reviews/
-├── <task-id>/                    # Review output khi có ISSUES
-│   ├── review-01-<subtask>.md    # Review từng subtask
-│   └── review-summary.md         # Tổng hợp issues cần fix
+├── <task-id>/
+│   ├── review-01-<subtask>.md
+│   └── review-summary.md
 ```
 
 ## Workflow
 
-```
-Claude Code Desktop (Lead — Sonnet 5 Medium)       Hermes Worker profile
-  │                                                    
-  ├── Viết plan.md + task.md                          
-  ├── Gọi Worker: hermes --profile worker             
-  │                                                     
-  │                                           ┌──── Worker đọc task.md
-  │                                           │     thực thi chính xác
-  │                                           ├──── Viết result.md
-  │                                           │
-  ├── Đọc result.md ◄─────────────────────────┘
+```text
+Lead Desktop (Sonnet 5 / GPT-5.4)          Worker Desktop (Haiku / GPT-5.4-mini)
+  │                                                │
+  ├── Viết plan.md + task.md                       │
+  ├── Break task thành các subtask độc lập         │
+  │                                                ├── Đọc task.md
+  │                                                ├── Thực thi chính xác
+  │                                                ├── Ghi result.md
+  │                                                └── Nếu blocked → ghi blocked.md
+  │
+  ├── Đọc result.md + code thực tế  ◄──────────────┘
   ├── Review against plan.md + task.md
   │
-  ├── Nếu ISSUES:
-  │     Viết review.md (trong tasks/<id>/review.md HOẶC reviews/<id>/review-summary.md)
-  │     → Gọi Worker fix → quay lại đọc result.md
+  ├── Nếu có issue:
+  │     ghi review.md hoặc reviews/<task-id>/review-*.md
+  │     rồi Worker fix đúng issue được nêu
   │
-  ├── Nếu OK:
-  │     Viết done.md
-  └── Done!
+  └── Nếu đạt:
+        ghi done.md
 ```
 
-## Roles
+## Runtime Rules
 
-| Role | Tool | Model | Effort | Behavior |
-|------|------|-------|--------|----------|
-| **Lead** | Claude Code Desktop | Sonnet 5 (medium) | high | Lên plan architecture, viết task.md, review result.md, quyết định APPROVED/CHANGES_REQUIRED, ghi done.md |
-| **Worker** | Hermes Agent (--profile worker) | Sonnet 4.5 Haiku (thấp) | low | Đọc task.md → thực thi chính xác → ghi result.md. Không deviation, không extras |
+1. **Lead luôn plan-first** — không implement ngay nếu chưa có plan.
+2. **Mỗi plan phải có `## Subtasks` table** trừ task rất nhỏ.
+3. **Worker chỉ execute** — không thêm feature, không deviation, không refactor ngoài scope.
+4. **Worker không bao giờ sửa `done.md`**.
+5. **Nếu không chắc → ghi `blocked.md`, không đoán**.
+6. **Lead review theo plan + task + code thật**, không chỉ dựa vào output.
+7. **Không auto-commit / auto-push**.
 
-## Launch Commands
+## Claude Desktop Usage
+
+- Nếu dùng Claude Code Desktop Pro và không có `/agents`, dùng **new chat cho từng phase**:
+  - Chat 1: Lead / Sonnet 5 → plan + task
+  - Chat 2: Worker / Haiku → execute + result
+  - Chat 3: Lead / Sonnet 5 → review
+  - Chat 4: Worker / Haiku → fix
+
+## Codex Desktop Usage
+
+- Dùng **new chat cho từng phase** giống Claude Desktop:
+  - Chat 1: Lead / `gpt-5.4` + reasoning `medium` → plan + task
+  - Chat 2: Worker / `gpt-5.4-mini` + reasoning `low` → execute + result
+  - Chat 3: Lead / `gpt-5.4` + reasoning `medium` → review
+  - Chat 4: Worker / `gpt-5.4-mini` + reasoning `low` → fix
+- Shortcut launcher local:
+  - `codex-lead-app`
+  - `codex-worker-app`
+- Lưu ý: với ChatGPT-auth hiện tại, `gpt-5.4-medium` không chạy được trong Codex. Mapping đã verify là `gpt-5.4` + effort `medium`.
+
+## Hermes Fallback Command
 
 ```bash
-# Terminal 1: Lead — Claude Code Desktop (mở từ GUI hoặc CLI)
-# Không cần chạy lệnh — dùng Claude Code Desktop UI
-
-# Khi cần gọi Worker từ Lead:
-# Trong Claude Code, gõ lệnh terminal:
-hermes --profile worker chat -q "Thực thi task tasks/<task-id>/01-<subtask>/task.md"
-
-# Hoặc chạy Worker interactive:
-# Terminal riêng:
-hermes --profile worker
-```
-
-## Cách Gọi Worker từ Claude Code
-
-Trong Claude Code Desktop, khi cần worker làm việc:
-
-```bash
-# 1. Gọi worker chạy 1 task cụ thể
 hermes --profile worker chat -q "
   Đọc file tasks/<task-id>/01-<subtask>/task.md
   Thực thi chính xác theo task
   Ghi kết quả vào tasks/<task-id>/01-<subtask>/result.md
-  Nếu bị chặn → ghi blocked.md
+  Nếu blocked → ghi blocked.md
 "
-
-# 2. Gọi worker interactive (nếu task phức tạp, cần nhiều bước)
-# Mở terminal riêng:
-hermes --profile worker
-# Trong worker session: đọc task.md và làm theo
 ```
-
-## Rules
-
-1. **Lead: mỗi plan phải có `## Subtasks` table + `task.md` cho mỗi subtask** (trừ single-task plan)
-2. **Không sửa files ngoài task directory** trừ khi task chỉ định
-3. **Worker: không bao giờ modify `done.md`** — chỉ Lead viết
-4. **Worker: nếu không chắc → viết `blocked.md`, không đoán**
-5. **Lead: review code theo plan.md + task.md — không chỉ "chạy được là OK"**
-6. **Commit messages: Lead quyết định khi nào và commit gì**
-7. **Nếu Lead phát hiện ISSUES sau review → ghi vào reviews/<task-id>/review-summary.md và quay lại gọi Worker fix**

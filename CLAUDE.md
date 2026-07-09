@@ -1,136 +1,154 @@
-# Auto Signal Bot — Multi-Agent Workflow
+# Auto Signal Bot — Claude Desktop / Codex Desktop Lead/Worker Workflow
 
-## Kiến trúc
+## Mục tiêu
 
-Dự án này phối hợp **Claude Code Desktop (Lead/Sonnet 5 Medium)** + **Worker (bất kỳ: Codex Desktop, Hermes Worker, Claude Code Haiku)** qua file-based task queue, **chạy hoàn toàn bằng tay**.
+Dự án này dùng **manual desktop orchestration** theo mô hình:
 
-```
-┌─ Lead (Claude Code Desktop, Sonnet 5) ─────────────────────┐
-│  Viết plan.md + task.md                                     │
-│  Đọc result.md → so với plan → viết review.md / done.md     │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼ (đọc/ghi file)
-┌─ Worker (Codex / Hermes / Claude Code Haiku) ──────────────┐
-│  Đọc task.md → thực thi chính xác → ghi result.md          │
-│  (hoặc đọc review → fix → cập nhật result.md)              │
-└─────────────────────────────────────────────────────────────┘
-```
+- **Claude Desktop flow**
+  - **Leader**: **Sonnet 5** — phân tích, viết `plan.md`, break thành subtask, review kết quả
+  - **Worker**: **Haiku** — đọc `task.md`, thực thi chính xác, ghi `result.md`, fix theo `review.md`
+- **Codex Desktop flow**
+  - **Leader**: **GPT-5.4** với `model_reasoning_effort = medium` — tương đương ý định “5.4 medium”
+  - **Worker**: **GPT-5.4-mini** với `model_reasoning_effort = low`
+
+> Nếu đang dùng Claude Code Desktop Pro và **không có `/agents` / `@worker`**, hãy dùng **new chat cho từng phase**. Đây là workflow mặc định.
+>
+> Nếu đang dùng **Codex Desktop**, cũng áp dụng đúng nguyên tắc: **new chat cho từng phase**, chỉ đổi model theo vai trò.
+
+## Runtime Rules
+
+1. **Plan-first**: Leader phải viết `plan.md` trước khi implement.
+2. **Mỗi plan phải có `## Subtasks` table** nếu task không quá nhỏ.
+3. **Worker không được deviation**: không thêm feature, không refactor ngoài scope.
+4. **Lead không approve chỉ vì build pass** — phải review đúng với `plan.md` + `task.md`.
+5. **Nếu Worker bị chặn** → ghi `blocked.md`, không đoán.
+6. **Không auto-commit / auto-push**.
 
 ## Directory Structure
 
-```
+```text
 tasks/<task-id>/
-├── plan.md           # [Lead] Plan + subtask breakdown
-├── context.md        # [Lead] Shared context (optional)
-├── review.md         # [Lead] Final review (tổng hợp)
-├── done.md           # [Lead] Final approval
-├── 01-<subtask>/     # Subtask directory
-│   ├── task.md       # [Lead] Task instructions
-│   ├── result.md     # [Worker] Execution result
-│   └── blocked.md    # [Worker] Blocked
+├── plan.md                    # [Lead] architecture + breakdown
+├── context.md                 # [Lead] shared context (optional)
+├── review.md                  # [Lead] final review tổng hợp
+├── done.md                    # [Lead] final approval
+├── 01-<subtask>/
+│   ├── task.md                # [Lead] executable instructions
+│   ├── result.md              # [Worker] execution result + evidence
+│   └── blocked.md             # [Worker] blocker report
 └── 02-<subtask>/
 
 reviews/<task-id>/
-├── review-01-<subtask>.md     # [Lead] Review từng subtask
-└── review-summary.md          # [Lead] Tổng hợp issues cần fix
+├── review-01-<subtask>.md     # [Lead] issue list cho từng subtask
+└── review-summary.md          # [Lead] tổng hợp issues
 ```
 
-## Workflow Chi Tiết (Manual)
+## Manual Workflow
 
-### Bước 1: Lead — Plan + Task
-Mở **Claude Code Desktop**, chat với nội dung như:
-> "Tạo plan cho tính năng X. Viết `tasks/<name>/plan.md` và task cho worker tại `tasks/<name>/01-*/task.md`"
+> Flow bên dưới áp dụng cho cả Claude Desktop và Codex Desktop. Chỉ thay model theo runtime đang dùng.
 
-### Bước 2: Gọi Worker (chọn 1 trong 3 cách)
+### Phase 1 — Lead / Sonnet 5
 
-**Option A — Codex Desktop (khuyến nghị, rẻ nhất):**
-```bash
-# Trong terminal của Codex Desktop:
-codex -p "
-  Đọc file tasks/<task-id>/01-<subtask>/task.md
-  Thực thi chính xác nội dung task
-  Ghi kết quả vào tasks/<task-id>/01-<subtask>/result.md
-  Nếu bị chặn → ghi blocked.md
-"
+New chat trong Claude Desktop:
+
+```text
+Acting as Lead.
+Phân tích yêu cầu, scan codebase cần thiết, rồi tạo:
+- tasks/<task-id>/plan.md
+- tasks/<task-id>/01-*/task.md, 02-*/task.md...
+
+Yêu cầu:
+- plan phải có ## Subtasks table
+- task.md phải self-contained để Worker chạy không cần hỏi lại
 ```
 
-**Option B — Hermes Desktop (profile worker):**
+### Phase 2 — Worker / Haiku
+
+New chat khác trong Claude Desktop, chuyển model sang **Haiku**:
+
+```text
+Acting as Worker.
+Đọc tasks/<task-id>/01-<subtask>/task.md
+Thực thi chính xác theo task
+Ghi kết quả vào tasks/<task-id>/01-<subtask>/result.md
+Nếu bị chặn thì ghi blocked.md
+Không deviation, không thêm feature
+```
+
+### Phase 3 — Lead Review / Sonnet 5
+
+New chat khác, quay lại **Sonnet 5**:
+
+```text
+Acting as Lead reviewer.
+Đọc plan.md + task.md + result.md + code thực tế.
+Nếu đạt: ghi done.md hoặc approve subtask.
+Nếu chưa đạt: ghi review.md hoặc reviews/<task-id>/review-01-<subtask>.md
+Yêu cầu ghi rõ file path, line reference, và action cần fix.
+```
+
+### Phase 4 — Fix Loop / Haiku
+
+New chat khác, model **Haiku**:
+
+```text
+Acting as Worker.
+Đọc review.md hoặc reviews/<task-id>/review-01-<subtask>.md
+Chỉ fix đúng các issue được liệt kê
+Cập nhật result.md với evidence verify mới
+```
+
+## Codex Desktop Mapping
+
+### Role mapping
+
+| Runtime | Lead | Worker |
+|---|---|---|
+| Claude Desktop | Sonnet 5 | Haiku |
+| Codex Desktop | `gpt-5.4` + `model_reasoning_effort=medium` | `gpt-5.4-mini` + `model_reasoning_effort=low` |
+
+### Codex Desktop usage
+
+1. **Lead chat**: mở Codex Desktop bằng shortcut Lead, tạo `plan.md` + `task.md`.
+2. **Worker chat**: mở chat mới bằng shortcut Worker, thực thi `task.md` và ghi `result.md`.
+3. **Lead review chat**: quay lại Lead để review against plan + code + result.
+4. **Worker fix chat**: nếu có `review.md`, mở chat Worker mới để fix đúng issue.
+
+### Codex launch shortcuts
+
 ```bash
-# Trong terminal bất kỳ:
+codex-lead-app
+codex-worker-app
+```
+
+### Important note for current Codex auth
+
+- Với ChatGPT-auth hiện tại, string model `gpt-5.4-medium` **không được support**.
+- Cấu hình tương đương thực tế đã verify là:
+  - **Lead**: `gpt-5.4` + `model_reasoning_effort=medium`
+  - **Worker**: `gpt-5.4-mini` + `model_reasoning_effort=low`
+
+## Nếu muốn dùng Hermes làm Worker fallback
+
+```bash
 hermes --profile worker chat -q "
   Đọc tasks/<task-id>/01-<subtask>/task.md
-  Thực thi chính xác nội dung task
+  Thực thi chính xác theo task
   Ghi kết quả vào tasks/<task-id>/01-<subtask>/result.md
   Nếu blocked → ghi blocked.md
 "
 ```
 
-**Option C — Claude Code Desktop (model Haiku):**
-```
-# Dùng sub-agent @worker:
-@worker đọc và thực thi tasks/<task-id>/01-<subtask>/task.md
-
-# Hoặc chat trực tiếp, copy nội dung task.md vào
-```
-
-### Bước 3: Lead — Review
-Mở `result.md` trong Claude Code Desktop:
-> "Review `tasks/<task-id>/01-<subtask>/result.md` so với `plan.md`"
-
-- Nếu **OK**: viết `done.md` (hoặc đánh dấu subtask hoàn thành)
-- Nếu **ISSUES**: viết `reviews/<task-id>/review-01-<subtask>.md` nêu rõ issues + line numbers
-
-### Bước 4: Fix Loop
-Gọi lại worker với review content:
-```bash
-# Codex:
-codex -p "
-  Đọc reviews/<task-id>/review-01-<subtask>.md
-  Fix các issues được liệt kê
-  Cập nhật tasks/<task-id>/01-<subtask>/result.md
-"
-
-# Hoặc Hermes:
-hermes --profile worker chat -q "(nội dung tương tự)"
-```
-
-### Bước 5: Lead — Done
-Khi tất cả subtask approved → viết `tasks/<task-id>/done.md`
-
----
-
-## Chọn Worker nào?
-
-| Worker | Chi phí | Cần cài đặt | Tool access | Ghi chú |
-|--------|---------|-------------|-------------|---------|
-| **Codex Desktop** (GPT-5.4-mini) | 🟢 Rẻ nhất (~$0.15/M) | ✅ Codex CLI | File + terminal | Khuyến nghị — rẻ, đủ mạnh |
-| **Hermes Worker** | 🟡 Trung bình | ✅ Hermes + profile worker | File + terminal + browser + ... | Mạnh nhất, nhiều tool |
-| **Claude Code Haiku** | 🟡 Trung bình (~$0.25/M) | ✅ Claude Code | File + terminal | Dễ vì cùng ecosystem |
-| **Claude Code Sonnet (Lead)** | 🔴 Đắt (~$3/M) | ✅ Claude Code | File + terminal | Chỉ làm Lead, không làm Worker |
-
----
-
-## Sub-agents (Claude Code Internal)
-
-Chỉ dùng khi không có Codex/Hermes:
-
-| Agent | Model | Effort | Role |
-|-------|-------|--------|------|
-| `@leader` | Sonnet 5 | medium | Planner: tạo plan + task, review code |
-| `@worker` | Haiku | low | Executor: chạy task nhanh, không deviation |
-
-## Key Commands
+## Verification Commands
 
 ```bash
-npm run build            # TypeScript compile check
-npm run test             # Chạy toàn bộ test suite
-npm run test -- --run    # Chạy test 1 lần (không watch)
+npm run build
+npm run test
 ```
 
 ## Code Standards
 
-- TypeScript, strict mode
+- TypeScript strict mode
 - Prefer arrow functions
-- Error handling: return Error objects, không throw (catch ở top level)
-- Tests: Vitest, trong `tests/` mirror `src/` structure
+- Error handling: return Error objects where project convention expects it
+- Test files mirror `src/` structure under `tests/`
