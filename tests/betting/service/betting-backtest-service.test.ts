@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { runBettingBacktest } from "../../src/betting/betting-backtest.js";
+import { runBettingBacktest } from "../../../src/betting/service/betting-backtest-service.js";
 
 describe("betting/betting-backtest", () => {
   test("computes exact-score hit rate from snapshots and results", () => {

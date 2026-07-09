@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { compactOdds } from "../../src/betting/odds-compact.js";
-import type { ApiFootballBet } from "../../src/betting/betting-api.js";
+import { compactOdds } from "../../../src/betting/service/odds-compact-service.js";
+import type { ApiFootballBet } from "../../../src/betting/client/betting-api-client.js";
 
 describe("odds-compact.ts", () => {
   const mockMatch = {

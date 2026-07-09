@@ -13,6 +13,7 @@ import type { PerformanceReport } from "../charts/performance-tracking.js";
 import { getConfiguredChartSignalConfidenceThreshold } from "../charts/chart-config-env.js";
 
 const logger = createLogger("shared:telegram");
+
 export type InlineKeyboardMarkup = {
   inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
 };
@@ -650,7 +651,7 @@ export function findScreenshotForSetup(
   };
 }
 
-export const telegramNotifier: Notifier = { sendMessage, sendPhoto };
+export const telegramNotifier: Notifier = { sendMessage, sendPhoto, sendDocument };
 
 export async function sendAllAnalyses(
   result: AnalysisResult,

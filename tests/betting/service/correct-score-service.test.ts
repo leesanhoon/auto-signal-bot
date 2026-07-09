@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { extractCorrectScore } from "../../src/betting/correct-score-api.js";
-import type { ApiFootballBet } from "../../src/betting/betting-api.js";
+import { extractCorrectScore } from "../../../src/betting/service/correct-score-service.js";
+import type { ApiFootballBet } from "../../../src/betting/client/betting-api-client.js";
 
 describe("extractCorrectScore", () => {
   test("returns empty array when no 'exact score' market found", () => {

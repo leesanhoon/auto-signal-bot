@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { resetRateLimitStateForTests } from "../../src/shared/rate-limit.js";
+import { resetRateLimitStateForTests } from "../../../src/shared/rate-limit.js";
 
 const state = vi.hoisted(() => ({ retry: vi.fn(async (request: () => Promise<unknown>) => request()) }));
-vi.mock("../../src/shared/retry.js", () => ({
+vi.mock("../../../src/shared/retry.js", () => ({
   withRetry: state.retry,
   isRetryableError: vi.fn(() => false),
 }));
-const bettingApi = await import("../../src/betting/betting-api.js");
+const bettingApi = await import("../../../src/betting/client/betting-api-client.js");
 
 describe("rate limiting", () => {
   beforeEach(() => {
