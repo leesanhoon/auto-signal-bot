@@ -126,6 +126,15 @@ export function detectStructureBreak(
 
   if (direction === null || level === null) return null;
 
+  // Chỉ nhận break tại nến ĐẦU TIÊN đóng cửa vượt level — nến trước đó
+  // còn đóng trong range thì đây mới là break mới, không phải break cũ kéo dài.
+  if (breakIndex > 0) {
+    const prevClose = candles[breakIndex - 1].close;
+    const prevAlreadyBroken =
+      direction === "LONG" ? prevClose > level : prevClose < level;
+    if (prevAlreadyBroken) return null;
+  }
+
   // Phân loại BOS vs CHOCH
   let kind: "BOS" | "CHOCH" = "BOS";
   if (previousBias && previousBias !== direction) {

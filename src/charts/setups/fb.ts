@@ -138,23 +138,27 @@ export function detectFb(
     ? entry + 1.5 * risk
     : entry - 1.5 * risk;
 
-  // TP2: nearest swing high/low against trend
-  // Scan back from trendStartIndex to find the nearest swing extreme
-  let tp2: number;
+  // TP2: hướng về swing extreme trước khi trend hình thành; fallback 2.5R.
+  const defaultTp2 = direction === "LONG" ? entry + 2.5 * risk : entry - 2.5 * risk;
+  let tp2 = defaultTp2;
   if (direction === "LONG") {
-    // Nearest swing high above before trend formed
     let swingHigh = -Infinity;
     for (let i = Math.max(0, trendStartIndex - 15); i < trendStartIndex; i++) {
       if (candles[i].high > swingHigh) swingHigh = candles[i].high;
     }
-    tp2 = swingHigh > -Infinity ? entry + Math.abs(entry - swingHigh) * 0.5 : takeProfit1 * 1.5;
+    if (swingHigh > entry) {
+      const candidate = entry + (swingHigh - entry) * 0.5;
+      if (candidate > takeProfit1) tp2 = candidate;
+    }
   } else {
-    // Nearest swing low below before trend formed
     let swingLow = Infinity;
     for (let i = Math.max(0, trendStartIndex - 15); i < trendStartIndex; i++) {
       if (candles[i].low < swingLow) swingLow = candles[i].low;
     }
-    tp2 = swingLow < Infinity ? entry - Math.abs(entry - swingLow) * 0.5 : takeProfit1 * 1.5;
+    if (swingLow < entry) {
+      const candidate = entry - (entry - swingLow) * 0.5;
+      if (candidate < takeProfit1) tp2 = candidate;
+    }
   }
 
   trace.push(`Entry ${direction} tai ${entry.toFixed(5)}, Stop=${stopLoss.toFixed(5)}`);

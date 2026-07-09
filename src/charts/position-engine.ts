@@ -146,6 +146,14 @@ export function getConfiguredTp1ClosePercent(): number {
   return clampPercent(parsed);
 }
 
+export type SignalSystem = "volman" | "smc";
+
+export function deriveSignalSystem(
+  setup: Pick<TradeSetup, "detectionSource">,
+): SignalSystem {
+  return setup.detectionSource === "smc" ? "smc" : "volman";
+}
+
 export function calculateRiskRewardPlan(
   setup: Pick<
     TradeSetup,
@@ -262,6 +270,7 @@ export function buildOpenPositionInsertRow(
     | "takeProfit1"
     | "takeProfit2"
     | "reasons"
+    | "detectionSource"
   >,
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
 ): Record<string, unknown> | null {
@@ -279,6 +288,7 @@ export function buildOpenPositionInsertRow(
     take_profit_1: setup.takeProfit1,
     take_profit_2: setup.takeProfit2,
     reasons: setup.reasons,
+    system: deriveSignalSystem(setup),
     status: "open",
     trade_stage: "open",
     tp1_close_percent: validation.plan.partialClosePercent,

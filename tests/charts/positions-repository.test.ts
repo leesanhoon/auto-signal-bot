@@ -111,6 +111,32 @@ describe("charts/positions-repository", () => {
     expect(repoState.from).not.toHaveBeenCalled();
   });
 
+  test("saveOpenPosition dedup filters by (pair, system) not just pair", async () => {
+    repoState.selectResult = { data: [], error: null };
+    repoState.insertResult = { error: null };
+
+    const chain = repoState.from().select as any;
+    const savedWithSmc = await positionsRepository.saveOpenPosition({
+      pair: "EUR/USD",
+      direction: "LONG",
+      setup: "Breakout",
+      emaTouch: true,
+      reasons: ["EMA touch"],
+      risks: ["False breakout"],
+      confidence: 82,
+      entry: "1.1000",
+      stopLoss: "1.0960",
+      takeProfit1: "1.1080",
+      takeProfit2: "1.1120",
+      riskReward: "1:2",
+      summary: "Valid long",
+      detectionSource: "smc",
+    });
+
+    expect(savedWithSmc).toBe(true);
+    expect(chain.mock.results[0].value.eq).toHaveBeenCalledWith("system", "smc");
+  });
+
   test("updatePositionDecision persists TP1 partial-close state", async () => {
     repoState.updateResult = { error: null };
 

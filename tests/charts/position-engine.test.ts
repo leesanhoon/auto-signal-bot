@@ -2,6 +2,7 @@ import { describe, expect, test, it, beforeEach, vi } from "vitest";
 import {
   buildOpenPositionInsertRow,
   deriveManagementPatch,
+  deriveSignalSystem,
   validateTradeSetupForOpen,
   calculateRiskRewardPlan,
   getConfiguredMinRiskRewardRatio,
@@ -388,5 +389,60 @@ describe("charts/position-engine", () => {
     const rbResult = validateTradeSetupForOpen(rbSetup);
     expect(rbResult.accepted).toBe(true);
     expect(rbResult.plan).not.toBeNull();
+  });
+
+  describe("deriveSignalSystem", () => {
+    test("returns 'smc' when detectionSource is 'smc'", () => {
+      expect(deriveSignalSystem({ detectionSource: "smc" })).toBe("smc");
+    });
+
+    test("returns 'volman' when detectionSource is 'deterministic'", () => {
+      expect(deriveSignalSystem({ detectionSource: "deterministic" })).toBe("volman");
+    });
+
+    test("returns 'volman' when detectionSource is 'ai'", () => {
+      expect(deriveSignalSystem({ detectionSource: "ai" })).toBe("volman");
+    });
+
+    test("returns 'volman' when detectionSource is undefined", () => {
+      expect(deriveSignalSystem({})).toBe("volman");
+    });
+  });
+
+  test("buildOpenPositionInsertRow includes system field derived from detectionSource", () => {
+    const rowWithSmc = buildOpenPositionInsertRow({
+      pair: "EUR/USD",
+      direction: "LONG",
+      setup: "Breakout",
+      entry: "1.1000",
+      stopLoss: "1.0960",
+      takeProfit1: "1.1120",
+      takeProfit2: "1.1160",
+      reasons: ["EMA touch"],
+      detectionSource: "smc",
+    });
+
+    expect(rowWithSmc).toMatchObject({
+      pair: "EUR/USD",
+      system: "smc",
+      trade_stage: "open",
+    });
+
+    const rowWithVolman = buildOpenPositionInsertRow({
+      pair: "GBP/USD",
+      direction: "SHORT",
+      setup: "Support",
+      entry: "1.2500",
+      stopLoss: "1.2550",
+      takeProfit1: "1.2400",
+      takeProfit2: "1.2300",
+      reasons: ["Structure break"],
+      detectionSource: "deterministic",
+    });
+
+    expect(rowWithVolman).toMatchObject({
+      pair: "GBP/USD",
+      system: "volman",
+    });
   });
 });

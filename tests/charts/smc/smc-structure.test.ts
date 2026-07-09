@@ -80,6 +80,78 @@ describe("detectStructureBreak", () => {
       previousBias: "LONG",
     });
   });
+
+  test("returns event only on first close above swing high, not on subsequent candles", () => {
+    const candles = [
+      candle(1, 100, 101, 99, 100),
+      candle(2, 100, 105, 99, 104),
+      candle(3, 104, 103, 98, 99),
+      candle(4, 99, 106, 97, 105),
+      candle(5, 105, 107, 103, 106), // First close above 105
+      candle(6, 106, 108, 104, 107), // Second close above 105 — should return null
+      candle(7, 107, 110, 106, 109), // Third close above 105 — should return null
+    ];
+    const swings = findSwingPoints(candles, { left: 1, right: 1 });
+
+    // Index 4 closes above swing high at 105 for the first time
+    const event4 = detectStructureBreak(candles, swings, 4);
+    expect(event4).not.toBeNull();
+    expect(event4?.breakIndex).toBe(4);
+    expect(event4?.direction).toBe("LONG");
+
+    // Index 5 close is already above 105 (previous close 106 > 105)
+    const event5 = detectStructureBreak(candles, swings, 5);
+    expect(event5).toBeNull();
+
+    // Index 6 close is already above 105 (previous close 107 > 105)
+    const event6 = detectStructureBreak(candles, swings, 6);
+    expect(event6).toBeNull();
+  });
+
+  test("returns null on second consecutive close below swing low (SHORT)", () => {
+    const candles = [
+      candle(1, 100, 101, 99, 100),
+      candle(2, 100, 102, 97, 98),
+      candle(3, 98, 103, 99, 102),
+      candle(4, 102, 104, 96, 101),
+      candle(5, 101, 105, 94, 95), // First close below 96
+      candle(6, 95, 100, 92, 94),  // Second close below 96 — should return null
+    ];
+    const swings = findSwingPoints(candles, { left: 1, right: 1 });
+
+    // Index 4 closes below swing low at 96 for the first time
+    const event4 = detectStructureBreak(candles, swings, 4);
+    expect(event4).not.toBeNull();
+    expect(event4?.breakIndex).toBe(4);
+    expect(event4?.direction).toBe("SHORT");
+
+    // Index 5 close is already below 96 (previous close 95 < 96)
+    const event5 = detectStructureBreak(candles, swings, 5);
+    expect(event5).toBeNull();
+  });
+
+  test("tests first-close-through behavior: prev close must NOT already be beyond level", () => {
+    // Direct test: for a given level, only the first close that breaks it triggers an event
+    const candles = [
+      candle(1, 100, 101, 99, 100),
+      candle(2, 100, 105, 99, 104),
+      candle(3, 104, 103, 98, 99),
+      candle(4, 99, 106, 97, 105),
+      candle(5, 105, 107, 103, 106),
+    ];
+    const swings = findSwingPoints(candles, { left: 1, right: 1 });
+
+    // Index 4 closes at 105, breaking above swing
+    // This should trigger because prev close (99) is not > level
+    const event4 = detectStructureBreak(candles, swings, 4);
+    expect(event4).not.toBeNull();
+    expect(event4?.breakIndex).toBe(4);
+
+    // Index 5 closes at 106, continuing above the same level
+    // This should return null because prev close (105) is already > level
+    const event5 = detectStructureBreak(candles, swings, 5);
+    expect(event5).toBeNull();
+  });
 });
 
 describe("detectLiquiditySweep", () => {

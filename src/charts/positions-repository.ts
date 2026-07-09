@@ -5,6 +5,7 @@ import { getConfiguredPendingOrderExpiryRuns } from "./chart-config-env.js";
 import {
   buildOpenPositionInsertRow,
   deriveManagementPatch,
+  deriveSignalSystem,
   type OpenPositionManagementPatch,
   type PositionDecisionOutcome,
 } from "./position-engine.js";
@@ -66,6 +67,7 @@ export async function saveOpenPosition(setup: TradeSetup): Promise<boolean> {
     .select("id")
     .eq("status", "open")
     .eq("pair", setup.pair)
+    .eq("system", deriveSignalSystem(setup))
     .limit(1);
 
   if (existingError) throw new Error(`saveOpenPosition lookup failed: ${existingError.message}`);
@@ -98,6 +100,7 @@ function buildPendingOrderInsertRow(setup: TradeSetup): Record<string, unknown> 
     risks: setup.risks,
     primary_timeframe: primaryTimeframe,
     source_chart_filepath: sourceChartFilepath,
+    system: deriveSignalSystem(setup),
     status: "PENDING",
     run_count: 0,
     expiry_runs: getConfiguredPendingOrderExpiryRuns(),
@@ -113,6 +116,7 @@ export async function savePendingOrder(setup: TradeSetup): Promise<boolean> {
     .select("id")
     .eq("status", "PENDING")
     .eq("pair", setup.pair)
+    .eq("system", deriveSignalSystem(setup))
     .limit(1);
 
   if (existingError) throw new Error(`savePendingOrder lookup failed: ${existingError.message}`);

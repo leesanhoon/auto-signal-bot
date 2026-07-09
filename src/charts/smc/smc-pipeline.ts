@@ -2,7 +2,7 @@ import type { AnalysisResult, ChartTimeframe, PairSummary, TradeSetup } from "..
 import { fetchOhlcHistory } from "../ohlc-provider.js";
 import { createLogger } from "../../shared/logger.js";
 import { buildSmcPairSummary, buildTradeSetupFromSmcSignal, gradeFromScore } from "./smc-signal-assembly.js";
-import { checkMultiTimeframeConfluence } from "./smc-confluence.js";
+import { checkMultiTimeframeConfluence, detectTimeframeBias } from "./smc-confluence.js";
 import {
   calculatePremiumDiscountZone,
   calculatePriorPeriodLevels,
@@ -172,7 +172,9 @@ function buildSmcCandidatesAtIndex(
   const swings = findSwingPoints(scopedCandles, { left: 2, right: 2 });
   const candidates: CandidateSource[] = [];
 
-  const structure = detectStructureBreak(scopedCandles, swings, index);
+  const priorCandles = scopedCandles.slice(0, index);
+  const previousBias = detectTimeframeBias(priorCandles) ?? undefined;
+  const structure = detectStructureBreak(scopedCandles, swings, index, previousBias);
   if (structure) {
     const ob = findRecentOrderBlock(scopedCandles, index, structure.direction, 12);
     if (ob) {
