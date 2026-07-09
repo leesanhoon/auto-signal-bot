@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Candle } from "../../src/charts/ohlc-provider.js";
 import { resetRateLimitStateForTests } from "../../src/shared/rate-limit.js";
 
+vi.mock("../../src/charts/ohlc-cache-repository.js", () => ({
+  loadOhlcCandleCache: vi.fn(),
+  saveOhlcCandleCache: vi.fn(),
+}));
+
 const ohlc = await import("../../src/charts/ohlc-provider.js");
+const ohlcCacheRepo = await import("../../src/charts/ohlc-cache-repository.js");
 
 describe("toTwelveDataSymbol", () => {
   test("maps EUR/USD correctly", () => {
@@ -34,6 +40,8 @@ describe("fetchOhlcHistory", () => {
     ohlc.clearOhlcCache();
     resetRateLimitStateForTests();
     vi.restoreAllMocks();
+    vi.mocked(ohlcCacheRepo.loadOhlcCandleCache).mockReset();
+    vi.mocked(ohlcCacheRepo.saveOhlcCandleCache).mockReset();
   });
 
   test("returns a clear config error when TWELVEDATA_API_KEY is missing", async () => {
@@ -210,5 +218,87 @@ describe("fetchOhlcHistory", () => {
     expect((result as Error).message).toContain("ECONNRESET");
     expect((result as Error).message).toContain("api.twelvedata.com");
     expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  test("loads from Supabase cache on in-memory miss and skips TwelveData fetch", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+
+    const mockCandles: Candle[] = [
+      { time: 1704067200000, open: 1.1, high: 1.11, low: 1.09, close: 1.105, volume: 100 },
+      { time: 1704070800000, open: 1.105, high: 1.12, low: 1.1, close: 1.115, volume: 120 },
+    ];
+    const expiresAtMs = Date.now() + 60_000;
+
+    vi.mocked(ohlcCacheRepo.loadOhlcCandleCache).mockResolvedValue({
+      candles: mockCandles,
+      expiresAtMs,
+    });
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result).toEqual(mockCandles);
+    expect(ohlcCacheRepo.loadOhlcCandleCache).toHaveBeenCalledWith("OANDA:EURUSD:H4");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("fetches from TwelveData on Supabase cache miss and saves to cache", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+
+    const tdResponse = {
+      status: "ok",
+      values: [
+        { datetime: "2024-01-02 00:00:00", open: "1.101", high: "1.102", low: "1.100", close: "1.1015", volume: "500" },
+        { datetime: "2024-01-01 00:00:00", open: "1.099", high: "1.100", low: "1.098", close: "1.0995", volume: "400" },
+      ],
+    };
+
+    vi.mocked(ohlcCacheRepo.loadOhlcCandleCache).mockResolvedValue(null);
+    vi.mocked(ohlcCacheRepo.saveOhlcCandleCache).mockResolvedValue(undefined);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(tdResponse), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "H4", 100);
+
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result).toHaveLength(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(ohlcCacheRepo.loadOhlcCandleCache).toHaveBeenCalledWith("OANDA:EURUSD:H4");
+    expect(ohlcCacheRepo.saveOhlcCandleCache).toHaveBeenCalledTimes(1);
+    expect(ohlcCacheRepo.saveOhlcCandleCache).toHaveBeenCalledWith(
+      "OANDA:EURUSD:H4",
+      expect.any(Array),
+      expect.any(Number),
+    );
+  });
+
+  test("D1 never touches Supabase cache (loadOhlcCandleCache and saveOhlcCandleCache not called)", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+
+    const tdResponse = {
+      status: "ok",
+      values: [
+        { datetime: "2023-12-31", open: "1.1", high: "2.110", low: "2.090", close: "2.105", volume: "100" },
+      ],
+    };
+
+    vi.mocked(ohlcCacheRepo.loadOhlcCandleCache).mockResolvedValue(null);
+    vi.mocked(ohlcCacheRepo.saveOhlcCandleCache).mockResolvedValue(undefined);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(tdResponse), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchOhlcHistory("OANDA:EURUSD", "D1", 100);
+
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result).toHaveLength(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(ohlcCacheRepo.loadOhlcCandleCache).not.toHaveBeenCalled();
+    expect(ohlcCacheRepo.saveOhlcCandleCache).not.toHaveBeenCalled();
   });
 });

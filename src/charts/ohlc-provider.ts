@@ -3,6 +3,7 @@ import { withRetry } from "../shared/retry.js";
 import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 import { createLogger } from "../shared/logger.js";
 import { formatFetchErrorDetails } from "../shared/fetch-diagnostics.js";
+import { loadOhlcCandleCache, saveOhlcCandleCache } from "./ohlc-cache-repository.js";
 
 const logger = createLogger("charts:ohlc-provider");
 
@@ -384,6 +385,14 @@ export async function fetchOhlcHistory(
     return cached.candles.slice();
   }
 
+  if (isCacheEnabled(timeframe)) {
+    const persisted = await loadOhlcCandleCache(key);
+    if (persisted) {
+      cache.set(key, { candles: persisted.candles.slice(), expiresAt: persisted.expiresAtMs });
+      return persisted.candles.slice();
+    }
+  }
+
   const result = await fetchFromTwelveData(
     symbol,
     timeframe,
@@ -394,10 +403,12 @@ export async function fetchOhlcHistory(
   if (isCacheEnabled(timeframe)) {
     const latestCandleTime =
       result.length > 0 ? result[result.length - 1].time : null;
+    const expiresAt = getCacheExpiryMs(timeframe, Date.now(), latestCandleTime);
     cache.set(key, {
       candles: result.slice(),
-      expiresAt: getCacheExpiryMs(timeframe, Date.now(), latestCandleTime),
+      expiresAt,
     });
+    await saveOhlcCandleCache(key, result, expiresAt);
   }
   return result;
 }
