@@ -1,14 +1,14 @@
-name: SMC Chart Analysis (Parallel)
+name: SMC Chart Analysis (Standalone)
 
 on:
   schedule:
-    - cron: "15 0,4,8,12,16,20 * * 1-5"
+    - cron: "*/15 * * * 1-5"
   workflow_dispatch:
 
 jobs:
   analyze-smc:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     environment: production
 
     steps:
@@ -21,25 +21,10 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS deps
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-
-      - name: Run analysis
+      - name: Run SMC analysis
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -48,8 +33,6 @@ jobs:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           CHART_SIGNAL_CONFIDENCE_THRESHOLD: ${{ vars.CHART_SIGNAL_CONFIDENCE_THRESHOLD }}
           PENDING_ORDER_EXPIRY_RUNS: ${{ vars.PENDING_ORDER_EXPIRY_RUNS }}
-          CHART_ENGINE_MODE: ${{ vars.CHART_ENGINE_MODE }}
           CHART_TIMEFRAME_MODE: ${{ vars.CHART_TIMEFRAME_MODE }}
           CHART_PRIMARY_TIMEFRAME: ${{ vars.CHART_PRIMARY_TIMEFRAME }}
-          CHART_TRADING_SYSTEM: smc
-        run: npm run analyze
+        run: npm run analyze:smc
