@@ -1,7 +1,22 @@
 name: Lottery Predictor
 
 on:
+  schedule:
+    - cron: "45 9 * * *"
+    - cron: "45 10 * * *"
+    - cron: "45 11 * * *"
   workflow_dispatch:
+    inputs:
+      region:
+        description: "Miền cần dự đoán (chọn 'all' để chạy cả 3 miền)"
+        required: true
+        type: choice
+        options:
+          - all
+          - mien-bac
+          - mien-trung
+          - mien-nam
+        default: all
 
 jobs:
   lottery-predict:
@@ -22,8 +37,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Determine region from cron schedule
+        id: region
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.region }}" = "all" ]; then
+              echo "value=" >> "$GITHUB_OUTPUT"
+            else
+              echo "value=${{ inputs.region }}" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "${{ github.event.schedule }}" = "45 9 * * *" ]; then
+            echo "value=mien-nam" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "45 10 * * *" ]; then
+            echo "value=mien-trung" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "45 11 * * *" ]; then
+            echo "value=mien-bac" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run lottery predictor
         env:
+          LOTTERY_PREDICT_REGION: ${{ steps.region.outputs.value }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

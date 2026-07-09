@@ -12,7 +12,10 @@ function maskKey(value: string): string {
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
-async function runCheck(name: string, fn: () => Promise<string>): Promise<CheckResult> {
+async function runCheck(
+  name: string,
+  fn: () => Promise<string>,
+): Promise<CheckResult> {
   try {
     return { name, ok: true, detail: await fn() };
   } catch (error) {
@@ -20,7 +23,10 @@ async function runCheck(name: string, fn: () => Promise<string>): Promise<CheckR
   }
 }
 
-async function fetchJsonWithSnippet(url: string, init: RequestInit): Promise<string> {
+async function fetchJsonWithSnippet(
+  url: string,
+  init: RequestInit,
+): Promise<string> {
   const startedAt = Date.now();
   const response = await fetch(url, init);
   const elapsedMs = Date.now() - startedAt;
@@ -28,7 +34,9 @@ async function fetchJsonWithSnippet(url: string, init: RequestInit): Promise<str
   const snippet = bodyText.replace(/\s+/g, " ").trim().slice(0, 240);
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} ${response.statusText}${snippet ? ` | ${snippet}` : ""}`);
+    throw new Error(
+      `HTTP ${response.status} ${response.statusText}${snippet ? ` | ${snippet}` : ""}`,
+    );
   }
 
   return `HTTP ${response.status} ${response.statusText} in ${elapsedMs}ms${snippet ? ` | ${snippet}` : ""}`;
@@ -41,40 +49,48 @@ async function main(): Promise<void> {
   const supabaseKey = process.env.SUPABASE_KEY?.trim();
 
   if (!tdKey) {
-    checks.push(Promise.resolve({
-      name: "Twelve Data",
-      ok: false,
-      detail: "TWELVEDATA_API_KEY chua cau hinh",
-    }));
+    checks.push(
+      Promise.resolve({
+        name: "Twelve Data",
+        ok: false,
+        detail: "TWELVEDATA_API_KEY chua cau hinh",
+      }),
+    );
   } else {
     const tdUrl = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent("XAU/USD")}&interval=15min&outputsize=1&apikey=${encodeURIComponent(tdKey)}&timezone=UTC`;
-    checks.push(runCheck("Twelve Data", async () => {
-      const result = await fetchJsonWithSnippet(tdUrl, {
-        headers: { Accept: "application/json" },
-      });
-      return `${result} | key=${maskKey(tdKey)}`;
-    }));
+    checks.push(
+      runCheck("Twelve Data", async () => {
+        const result = await fetchJsonWithSnippet(tdUrl, {
+          headers: { Accept: "application/json" },
+        });
+        return `${result} | key=${maskKey(tdKey)}`;
+      }),
+    );
   }
 
   if (!supabaseUrl || !supabaseKey) {
-    checks.push(Promise.resolve({
-      name: "Supabase",
-      ok: false,
-      detail: "SUPABASE_URL hoac SUPABASE_KEY chua cau hinh",
-    }));
+    checks.push(
+      Promise.resolve({
+        name: "Supabase",
+        ok: false,
+        detail: "SUPABASE_URL hoac SUPABASE_KEY chua cau hinh",
+      }),
+    );
   } else {
     const normalizedBaseUrl = supabaseUrl.replace(/\/+$/, "");
     const restUrl = `${normalizedBaseUrl}/rest/v1/`;
-    checks.push(runCheck("Supabase", async () => {
-      const result = await fetchJsonWithSnippet(restUrl, {
-        headers: {
-          Accept: "application/json",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      });
-      return `${result} | url=${normalizedBaseUrl}`;
-    }));
+    checks.push(
+      runCheck("Supabase", async () => {
+        const result = await fetchJsonWithSnippet(restUrl, {
+          headers: {
+            Accept: "application/json",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        });
+        return `${result} | url=${normalizedBaseUrl}`;
+      }),
+    );
   }
 
   const results = await Promise.all(checks);
