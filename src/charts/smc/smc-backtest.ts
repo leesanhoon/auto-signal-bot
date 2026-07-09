@@ -2,6 +2,7 @@ import type { ChartTimeframe } from "../chart-types.js";
 import type { Candle } from "../ohlc-provider.js";
 import { analyzeSmcSignalsAtIndex } from "./smc-pipeline.js";
 import type { SmcGrade, SmcSetupName, SmcSignal } from "./smc-types.js";
+import type { HtfContext } from "./smc-htf-context.js";
 
 const loggerName = "charts:smc-backtest";
 
@@ -204,7 +205,7 @@ function fillSignal(candles: Candle[], signal: SmcSignal, maxLookahead = 5): Fil
   return null;
 }
 
-export function runSmcBacktest(candles: Candle[], pair: string, timeframe: ChartTimeframe): SmcBacktestReport {
+export function runSmcBacktest(candles: Candle[], pair: string, timeframe: ChartTimeframe, htfContexts?: (HtfContext | null)[]): SmcBacktestReport {
   if (candles.length < 30) {
     return {
       signals: 0,
@@ -219,6 +220,7 @@ export function runSmcBacktest(candles: Candle[], pair: string, timeframe: Chart
         "Chỉ dùng candle đóng.",
         "Limit entry được xem là fill nếu giá chạm entry zone trong 5 candle sau tín hiệu.",
         "TP1/TP2/TP3 được tính theo ưu tiên TP3 > TP2 > TP1; nếu không fill thì trade open_at_end.",
+        "HTF context (bias/dealing-range) được tính lại theo từng thời điểm lịch sử (rolling), chỉ dùng nến HTF đã đóng tính đến thời điểm đó — không look-ahead.",
       ],
     };
   }
@@ -232,7 +234,7 @@ export function runSmcBacktest(candles: Candle[], pair: string, timeframe: Chart
   const lastTakenFingerprintBySetup = new Map<string, string>();
 
   for (let index = 30; index < candles.length; index += 1) {
-    const windowSignals = analyzeSmcSignalsAtIndex(candles, pair, timeframe, index);
+    const windowSignals = analyzeSmcSignalsAtIndex(candles, pair, timeframe, index, htfContexts?.[index] ?? null);
     if (windowSignals.length === 0) continue;
 
     signalsCount += windowSignals.length;
@@ -380,6 +382,7 @@ function computeReport(
       "Chỉ dùng candle đóng và không mô phỏng order book.",
       "Limit entry fill nếu giá chạm entry zone trong 5 candle sau tín hiệu.",
       "SL/TP được kiểm tra theo high/low của candle và ưu tiên TP3 > TP2 > TP1.",
+      "HTF context (bias/dealing-range) được tính lại theo từng thời điểm lịch sử (rolling), chỉ dùng nến HTF đã đóng tính đến thời điểm đó — không look-ahead.",
     ],
   };
 }

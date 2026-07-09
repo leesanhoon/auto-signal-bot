@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Candle } from "../../../src/charts/ohlc-provider.js";
+import type { ChartTimeframe } from "../../../src/charts/chart-types.js";
 import type { SmcSignal } from "../../../src/charts/smc/smc-types.js";
+import type { HtfContext } from "../../../src/charts/smc/smc-htf-context.js";
 
 const mocks = vi.hoisted(() => ({
   analyzeSmcSignalsAtIndex: vi.fn(),
@@ -99,8 +101,8 @@ describe("runSmcBacktest", () => {
 
     const result = runSmcBacktest(candles, "XAUTUSDT", "M15");
 
-    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 31);
-    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 45);
+    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 31, null);
+    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 45, null);
     expect(result.signals).toBe(2);
     expect(result.overall.trades).toBe(2);
     expect(result.trades.map((trade) => trade.entryIndex)).toEqual([31, 45]);
@@ -171,8 +173,8 @@ describe("runSmcBacktest", () => {
 
     const result = runSmcBacktest(candles, "XAUTUSDT", "M15");
 
-    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 31);
-    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 35);
+    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 31, null);
+    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", 35, null);
     expect(result.signals).toBe(3);
     expect(result.overall.trades).toBe(0);
     expect(result.trades).toHaveLength(1);
@@ -404,5 +406,102 @@ describe("runSmcBacktest", () => {
     expect(result.byPairStats["XAUTUSDT"].outcomes.expired).toBe(1);
     expect(result.byPairStats["XAUTUSDT"].attemptedTrades).toBe(1);
     expect(result.overall.trades).toBe(0);
+  });
+
+  test("runSmcBacktest passes htfContext to analyzeSmcSignalsAtIndex from array by index", () => {
+    const candles = Array.from({ length: 40 }, (_, i) =>
+      candle(i + 1, 100, 100.1, 99.9, 100),
+    );
+
+    mocks.analyzeSmcSignalsAtIndex.mockReturnValue([]);
+
+    const htfContextWithShortBias: HtfContext = {
+      timeframe: "H4",
+      bias: "SHORT",
+      swings: [],
+      candlesLength: 100,
+    };
+
+    const htfContexts = candles.map(() => htfContextWithShortBias);
+
+    runSmcBacktest(candles, "XAUTUSDT", "M15", htfContexts);
+
+    // Verify that analyzeSmcSignalsAtIndex was called with correct context at each index
+    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalled();
+    const calls = mocks.analyzeSmcSignalsAtIndex.mock.calls;
+    for (const call of calls) {
+      const index = call[3];
+      expect(call[4]).toBe(htfContexts[index]);
+    }
+  });
+
+  test("runSmcBacktest backward compatibility: works without htfContexts parameter", () => {
+    const candles = Array.from({ length: 40 }, (_, i) =>
+      candle(i + 1, 100, 100.1, 99.9, 100),
+    );
+
+    mocks.analyzeSmcSignalsAtIndex.mockReturnValue([]);
+
+    // Call without htfContexts - should not throw, analyzeSmcSignalsAtIndex gets null at each index
+    const result1 = runSmcBacktest(candles, "XAUTUSDT", "M15");
+    expect(result1).toBeDefined();
+    expect(result1.signals).toBe(0);
+    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", expect.any(Number), null);
+
+    vi.clearAllMocks();
+    mocks.analyzeSmcSignalsAtIndex.mockReturnValue([]);
+
+    // Call with undefined htfContexts - should not throw
+    const result2 = runSmcBacktest(candles, "XAUTUSDT", "M15", undefined);
+    expect(result2).toBeDefined();
+    expect(result2.signals).toBe(0);
+    expect(mocks.analyzeSmcSignalsAtIndex).toHaveBeenCalledWith(candles, "XAUTUSDT", "M15", expect.any(Number), null);
+  });
+
+  test("runSmcBacktest includes HTF context assumption in report", () => {
+    const candles = Array.from({ length: 40 }, (_, i) =>
+      candle(i + 1, 100, 100.1, 99.9, 100),
+    );
+
+    mocks.analyzeSmcSignalsAtIndex.mockReturnValue([]);
+
+    const result = runSmcBacktest(candles, "XAUTUSDT", "M15");
+
+    const htfAssumption = result.assumptions.find(
+      (assumption) =>
+        assumption.includes("HTF context") && assumption.includes("rolling"),
+    );
+    expect(htfAssumption).toBeDefined();
+  });
+
+  test("runSmcBacktest handles htfContexts array shorter than candles", () => {
+    const candles = Array.from({ length: 40 }, (_, i) =>
+      candle(i + 1, 100, 100.1, 99.9, 100),
+    );
+
+    mocks.analyzeSmcSignalsAtIndex.mockReturnValue([]);
+
+    const htfContext1: HtfContext = {
+      timeframe: "H4",
+      bias: "LONG",
+      swings: [],
+      candlesLength: 50,
+    };
+
+    const htfContexts = Array(20).fill(htfContext1);
+
+    const result = runSmcBacktest(candles, "XAUTUSDT", "M15", htfContexts);
+    expect(result).toBeDefined();
+    expect(result.signals).toBe(0);
+
+    const calls = mocks.analyzeSmcSignalsAtIndex.mock.calls;
+    for (const call of calls) {
+      const index = call[3];
+      if (index < htfContexts.length) {
+        expect(call[4]).toBe(htfContext1);
+      } else {
+        expect(call[4]).toBeNull();
+      }
+    }
   });
 });

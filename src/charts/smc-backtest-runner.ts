@@ -2,6 +2,7 @@ import "../shared/env.js";
 import { createLogger } from "../shared/logger.js";
 import { CHARTS } from "./charts.config.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
+import { buildRollingHtfContexts, getHtfTimeframeFor } from "./smc/smc-htf-context.js";
 import { runSmcBacktest } from "./smc/smc-backtest.js";
 import type { Candle } from "./ohlc-provider.js";
 import type { ChartTimeframe } from "./chart-types.js";
@@ -112,7 +113,15 @@ async function main(): Promise<void> {
       continue;
     }
     const candles = candlesOrError as Candle[];
-    const report = runSmcBacktest(candles, pair, timeframe);
+    const htfTimeframe = getHtfTimeframeFor(timeframe);
+    let htfContexts: ReturnType<typeof buildRollingHtfContexts> | undefined;
+    if (htfTimeframe) {
+      const htfCandlesOrError = await fetchOhlcHistory(symbol, htfTimeframe, 300);
+      if (!(htfCandlesOrError instanceof Error)) {
+        htfContexts = buildRollingHtfContexts(htfTimeframe, htfCandlesOrError as Candle[], candles);
+      }
+    }
+    const report = runSmcBacktest(candles, pair, timeframe, htfContexts);
     reports.push(report);
     pairSummaries.push(formatPairSummary(pair, report));
     logger.info("SMC backtest pair complete", { pair, signals: report.signals, trades: report.overall.trades });

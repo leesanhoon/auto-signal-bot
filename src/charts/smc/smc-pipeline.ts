@@ -13,12 +13,13 @@ import {
 import { detectSession } from "./smc-session.js";
 import {
   detectFairValueGap,
-  detectLiquiditySweep,
   detectStructureBreak,
   findRecentOrderBlock,
   findSwingPoints,
 } from "./smc-structure.js";
 import type { SmcSignal, SmcSetupName, SmcDirection } from "./smc-types.js";
+import { buildHtfContext } from "./smc-htf-context.js";
+import type { HtfContext } from "./smc-htf-context.js";
 import type { Candle } from "../ohlc-provider.js";
 
 const logger = createLogger("charts:smc-pipeline");
@@ -63,9 +64,25 @@ function calculateLocalAtr(candles: Candle[], endIndex: number, lookback = 14): 
   return count > 0 ? sum / count : 0;
 }
 
-function createEntryZone(entry: number, atr: number): { low: number; high: number } {
-  const padding = Math.max(atr * 0.12, Math.abs(entry) * 0.00002, 0.0001);
-  return { low: entry - padding, high: entry + padding };
+function isValidLiquidityTarget(
+  direction: SmcDirection,
+  entry: number,
+  risk: number,
+  targetPrice: number,
+): boolean {
+  const isCorrectSide = direction === "LONG" ? targetPrice > entry : targetPrice < entry;
+  const reward = Math.abs(targetPrice - entry);
+  return isCorrectSide && reward > risk;
+}
+
+function sessionConfidencePenalty(session: string): number {
+  if (session === "ASIA") return -5;
+  if (session === "OFF_HOURS") return -10;
+  return 0;
+}
+
+function isAgainstHtfBias(htfContext: HtfContext | null | undefined, direction: SmcDirection): boolean {
+  return htfContext?.bias !== null && htfContext?.bias !== undefined && htfContext.bias !== direction;
 }
 
 function buildSignal(
@@ -119,11 +136,35 @@ function buildSignal(
   };
 }
 
+function applySessionPenalty(
+  sessionInfo: { session: string; sessionLabel: string },
+  confidence: number,
+  score: number,
+  ruleTrace: string[],
+): Pick<SmcSignal, "confidence" | "score" | "grade" | "ruleTrace" | "session" | "sessionLabel"> {
+  const penalty = sessionConfidencePenalty(sessionInfo.session);
+  const adjustedConfidence = Math.max(0, confidence + penalty);
+  const adjustedScore = Math.max(0, score + penalty);
+  const adjustedRuleTrace = penalty === 0
+    ? ruleTrace
+    : [...ruleTrace, `Session ${sessionInfo.sessionLabel}: thanh khoan thap, da ha diem ${Math.abs(penalty)}.`];
+
+  return {
+    confidence: adjustedConfidence,
+    score: adjustedScore,
+    grade: gradeFromScore(adjustedScore),
+    ruleTrace: adjustedRuleTrace,
+    session: sessionInfo.session,
+    sessionLabel: sessionInfo.sessionLabel,
+  };
+}
+
 function buildSmcCandidatesAtIndex(
   candles: Awaited<ReturnType<typeof fetchOhlcHistory>> extends infer T ? T extends Error ? never : T : never,
   pair: string,
   timeframe: ChartTimeframe,
   index: number,
+  htfContext?: HtfContext | null,
 ): CandidateSource[] {
   if (index < 4 || index >= candles.length) return [];
 
@@ -135,138 +176,162 @@ function buildSmcCandidatesAtIndex(
   if (structure) {
     const ob = findRecentOrderBlock(scopedCandles, index, structure.direction, 12);
     if (ob) {
-      const entry = ob.midpoint;
-      const pdZone = calculatePremiumDiscountZone(entry, swings, index);
-      const priorLevels = calculatePriorPeriodLevels(scopedCandles, index);
-      const equalLevels = findEqualLevels(swings, index);
-      const rvol = calculateRvol(scopedCandles, index);
-      const rejection = detectRejectionWick(scopedCandles[index], structure.direction);
-      const stopLoss = structure.direction === "LONG" ? ob.low : ob.high;
+      if (!isAgainstHtfBias(htfContext, structure.direction)) {
+        const entry = ob.midpoint;
+        const pdZone = htfContext
+          ? calculatePremiumDiscountZone(entry, htfContext.swings, htfContext.candlesLength)
+          : calculatePremiumDiscountZone(entry, swings, index);
+        const isWrongPremiumDiscountZone = pdZone !== null && (
+          (structure.direction === "LONG" && pdZone.zone === "PREMIUM")
+          || (structure.direction === "SHORT" && pdZone.zone === "DISCOUNT")
+        );
+        const baseConfidence = structure.kind === "CHOCH" ? 72 : 80;
+        const confidence = isWrongPremiumDiscountZone ? baseConfidence - 15 : baseConfidence;
+        const score = isWrongPremiumDiscountZone ? baseConfidence - 15 : baseConfidence;
+        const premiumDiscountTrace = pdZone
+          ? isWrongPremiumDiscountZone
+            ? `Canh bao: vao lenh ${structure.direction} tai vung ${pdZone.zone} - nguoc nguyen tac premium/discount, da ha diem.`
+            : `Premium/Discount: ${pdZone.zone} (${pdZone.percentInRange.toFixed(0)}% range).`
+          : "Premium/Discount: khong xac dinh dealing range.";
+        const priorLevels = calculatePriorPeriodLevels(scopedCandles, index);
+        const equalLevels = findEqualLevels(swings, index);
+        const rvol = calculateRvol(scopedCandles, index);
+        const rejection = detectRejectionWick(scopedCandles[index], structure.direction);
+        const atrProxy = calculateLocalAtr(scopedCandles, index);
+        const stopBuffer = Math.max(atrProxy * 0.2, Math.abs(entry) * 0.00002, 0.0001);
+        const stopLoss = structure.direction === "LONG" ? ob.low - stopBuffer : ob.high + stopBuffer;
+        const risk = Math.abs(entry - stopLoss) || 0.0001;
+        const takeProfit1 = structure.direction === "LONG" ? entry + risk * 2 : entry - risk * 2;
+        const defaultTakeProfit2 = structure.direction === "LONG" ? entry + risk * 3 : entry - risk * 3;
+        const wantedEqualKind = structure.direction === "SHORT" ? "EQL" : "EQH";
+        const matchingEqualLevel = equalLevels.find((lvl) => lvl.kind === wantedEqualKind);
+        const liquidityTargets: SmcSignal["liquidityTargets"] = [];
+        if (matchingEqualLevel) {
+          liquidityTargets.push({
+            label: matchingEqualLevel.kind,
+            price: matchingEqualLevel.price,
+            target: "TP2",
+          });
+        }
+        const priorWeekLevel =
+          structure.direction === "SHORT" ? priorLevels.priorWeekLow : priorLevels.priorWeekHigh;
+        if (priorWeekLevel !== null) {
+          liquidityTargets.push({
+            label: structure.direction === "SHORT" ? "PWL" : "PWH",
+            price: priorWeekLevel,
+            target: "TP3",
+          });
+        }
+        const tp2LiquidityTarget = liquidityTargets.find((target) => target.target === "TP2");
+        const takeProfit2 = tp2LiquidityTarget && isValidLiquidityTarget(structure.direction, entry, risk, tp2LiquidityTarget.price)
+          ? tp2LiquidityTarget.price
+          : defaultTakeProfit2;
+        const tp3LiquidityTarget = liquidityTargets.find((target) => target.target === "TP3");
+        const takeProfit3 = tp3LiquidityTarget && isValidLiquidityTarget(structure.direction, entry, risk, tp3LiquidityTarget.price)
+          ? tp3LiquidityTarget.price
+          : undefined;
+        const liquidityTargetTrace: string[] = [];
+        if (tp2LiquidityTarget && takeProfit2 === tp2LiquidityTarget.price) {
+          liquidityTargetTrace.push(
+            `TP2 dieu chinh theo equal high/low tai ${tp2LiquidityTarget.price.toFixed(2)} (thay vi 3R mac dinh).`,
+          );
+        }
+        if (tp3LiquidityTarget && takeProfit3 === tp3LiquidityTarget.price) {
+          liquidityTargetTrace.push(
+            `TP3 dieu chinh theo prior week level tai ${tp3LiquidityTarget.price.toFixed(2)}.`,
+          );
+        }
+        const sessionAdjusted = applySessionPenalty(
+          detectSession(scopedCandles[index].time),
+          confidence,
+          score,
+          [
+            `${structure.kind} ${structure.direction} tại ${structure.level.toFixed(2)}`,
+            "Order block trùng vùng cấu trúc.",
+            premiumDiscountTrace,
+            ...liquidityTargetTrace,
+          ],
+        );
+        const signal = buildSignal(
+          pair,
+          timeframe,
+          structure.kind === "BOS" ? "SMC_BOS_OB" : "SMC_CHOCH_OB",
+          structure.direction,
+          index,
+          entry,
+          stopLoss,
+          takeProfit1,
+          takeProfit2,
+          {
+            confidence: sessionAdjusted.confidence,
+            grade: sessionAdjusted.grade,
+            score: sessionAdjusted.score,
+            ruleTrace: sessionAdjusted.ruleTrace,
+            takeProfit3,
+            structureEvent: structure,
+            orderBlock: ob,
+            premiumDiscountZone: pdZone ?? undefined,
+            priorPeriodLevels: priorLevels,
+            rvol: rvol ?? undefined,
+            hasRejectionWick: rejection.hasRejectionWick,
+            liquidityTargets: liquidityTargets.length > 0 ? liquidityTargets : undefined,
+            entryZone: { low: Math.min(entry, ob.low), high: Math.max(entry, ob.high) },
+            session: sessionAdjusted.session,
+            sessionLabel: sessionAdjusted.sessionLabel,
+          },
+        );
+        candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
+      }
+    }
+  }
+
+  const fvg = detectFairValueGap(scopedCandles, index);
+  if (fvg) {
+    const dir = fvg.direction;
+    if (!isAgainstHtfBias(htfContext, dir)) {
+      const structure = detectStructureBreak(scopedCandles, swings, index, dir);
+      const hasConfirmingStructure = structure !== null && structure.direction === dir;
+      const baseConfidence = hasConfirmingStructure ? 74 : 60;
+      const sessionAdjusted = applySessionPenalty(
+        detectSession(scopedCandles[index].time),
+        baseConfidence,
+        baseConfidence,
+        hasConfirmingStructure
+          ? ["FVG cùng hướng cấu trúc đang mở rộng."]
+          : ["FVG xuất hiện nhưng chưa có xác nhận cấu trúc cùng hướng."],
+      );
+      const entry = fvg.midpoint;
+      const atrProxy = calculateLocalAtr(scopedCandles, index);
+      const gapSize = Math.max(fvg.high - fvg.low, 0);
+      const stopBuffer = Math.max(atrProxy * 0.2, gapSize * 0.25, Math.abs(entry) * 0.00002, 0.0001);
+      const stopLoss = dir === "LONG" ? fvg.low - stopBuffer : fvg.high + stopBuffer;
       const risk = Math.abs(entry - stopLoss) || 0.0001;
-      const takeProfit1 = structure.direction === "LONG" ? entry + risk * 2 : entry - risk * 2;
-      const takeProfit2 = structure.direction === "LONG" ? entry + risk * 3 : entry - risk * 3;
-      const wantedEqualKind = structure.direction === "SHORT" ? "EQL" : "EQH";
-      const matchingEqualLevel = equalLevels.find((lvl) => lvl.kind === wantedEqualKind);
-      const liquidityTargets: SmcSignal["liquidityTargets"] = [];
-      if (matchingEqualLevel) {
-        liquidityTargets.push({
-          label: matchingEqualLevel.kind,
-          price: matchingEqualLevel.price,
-          target: "TP2",
-        });
-      }
-      const priorWeekLevel =
-        structure.direction === "SHORT" ? priorLevels.priorWeekLow : priorLevels.priorWeekHigh;
-      if (priorWeekLevel !== null) {
-        liquidityTargets.push({
-          label: structure.direction === "SHORT" ? "PWL" : "PWH",
-          price: priorWeekLevel,
-          target: "TP3",
-        });
-      }
+      const takeProfit1 = dir === "LONG" ? entry + risk * 2 : entry - risk * 2;
+      const takeProfit2 = dir === "LONG" ? entry + risk * 3 : entry - risk * 3;
       const signal = buildSignal(
         pair,
         timeframe,
-        structure.kind === "BOS" ? "SMC_BOS_OB" : "SMC_CHOCH_OB",
-        structure.direction,
+        "SMC_FVG_CONTINUATION",
+        dir,
         index,
         entry,
         stopLoss,
         takeProfit1,
         takeProfit2,
         {
-          confidence: structure.kind === "CHOCH" ? 72 : 80,
-          grade: structure.kind === "CHOCH" ? "B" : "A",
-          score: structure.kind === "CHOCH" ? 72 : 84,
-          ruleTrace: [
-            `${structure.kind} ${structure.direction} tại ${structure.level.toFixed(2)}`,
-            "Order block trùng vùng cấu trúc.",
-          ],
-          structureEvent: structure,
-          orderBlock: ob,
-          premiumDiscountZone: pdZone ?? undefined,
-          priorPeriodLevels: priorLevels,
-          rvol: rvol ?? undefined,
-          hasRejectionWick: rejection.hasRejectionWick,
-          liquidityTargets: liquidityTargets.length > 0 ? liquidityTargets : undefined,
-          entryZone: { low: Math.min(entry, ob.low), high: Math.max(entry, ob.high) },
-          ...detectSession(scopedCandles[index].time),
+          confidence: sessionAdjusted.confidence,
+          grade: sessionAdjusted.grade,
+          score: sessionAdjusted.score,
+          ruleTrace: sessionAdjusted.ruleTrace,
+          structureEvent: structure ?? undefined,
+          fairValueGap: fvg,
+          entryZone: { low: fvg.low, high: fvg.high },
+          session: sessionAdjusted.session,
+          sessionLabel: sessionAdjusted.sessionLabel,
         },
       );
       candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
     }
-  }
-
-  const sweep = detectLiquiditySweep(scopedCandles, swings, index);
-  if (sweep) {
-    const direction = sweep.direction;
-    const entry = scopedCandles[index].close;
-    const atrProxy = calculateLocalAtr(scopedCandles, index);
-    const stopBuffer = Math.max(atrProxy * 0.25, Math.abs(entry) * 0.00002, 0.0001);
-    const entryZone = createEntryZone(entry, atrProxy);
-    const stopLoss = direction === "LONG"
-      ? Math.min(sweep.sweptLevel - stopBuffer, entryZone.low - stopBuffer * 0.5)
-      : Math.max(sweep.sweptLevel + stopBuffer, entryZone.high + stopBuffer * 0.5);
-    const risk = Math.abs(entry - stopLoss) || 0.0001;
-    const takeProfit1 = direction === "LONG" ? entry + risk * 2 : entry - risk * 2;
-    const takeProfit2 = direction === "LONG" ? entry + risk * 3 : entry - risk * 3;
-    const signal = buildSignal(
-      pair,
-      timeframe,
-      "SMC_LIQUIDITY_SWEEP",
-      direction,
-      index,
-      entry,
-      stopLoss,
-      takeProfit1,
-      takeProfit2,
-      {
-        confidence: 68,
-        grade: "B",
-        score: 68,
-        ruleTrace: ["Liquidity sweep và reclaim xác nhận hướng giao dịch."],
-        liquiditySweep: sweep,
-        entryZone,
-        ...detectSession(scopedCandles[index].time),
-      },
-    );
-    candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
-  }
-
-  const fvg = detectFairValueGap(scopedCandles, index);
-  if (fvg) {
-    const dir = fvg.direction;
-    const structure = detectStructureBreak(scopedCandles, swings, index, dir);
-    const entry = fvg.midpoint;
-    const atrProxy = calculateLocalAtr(scopedCandles, index);
-    const gapSize = Math.max(fvg.high - fvg.low, 0);
-    const stopBuffer = Math.max(atrProxy * 0.2, gapSize * 0.25, Math.abs(entry) * 0.00002, 0.0001);
-    const stopLoss = dir === "LONG" ? fvg.low - stopBuffer : fvg.high + stopBuffer;
-    const risk = Math.abs(entry - stopLoss) || 0.0001;
-    const takeProfit1 = dir === "LONG" ? entry + risk * 2 : entry - risk * 2;
-    const takeProfit2 = dir === "LONG" ? entry + risk * 3 : entry - risk * 3;
-    const signal = buildSignal(
-      pair,
-      timeframe,
-      "SMC_FVG_CONTINUATION",
-      dir,
-      index,
-      entry,
-      stopLoss,
-      takeProfit1,
-      takeProfit2,
-      {
-        confidence: structure ? 74 : 60,
-        grade: structure ? "B" : "C",
-        score: structure ? 74 : 60,
-        ruleTrace: ["FVG cùng hướng cấu trúc đang mở rộng."],
-        structureEvent: structure ?? undefined,
-        fairValueGap: fvg,
-        entryZone: { low: fvg.low, high: fvg.high },
-        ...detectSession(scopedCandles[index].time),
-      },
-    );
-    candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
   }
 
   return candidates;
@@ -278,13 +343,14 @@ function collectSmcCandidatesInRange(
   timeframe: ChartTimeframe,
   startIndex: number,
   endIndex: number,
+  htfContext?: HtfContext | null,
 ): CandidateSource[] {
   const candidates: CandidateSource[] = [];
   const safeStart = Math.max(4, startIndex);
   const safeEnd = Math.min(endIndex, candles.length - 1);
 
   for (let index = safeStart; index <= safeEnd; index += 1) {
-    candidates.push(...buildSmcCandidatesAtIndex(candles, pair, timeframe, index));
+    candidates.push(...buildSmcCandidatesAtIndex(candles, pair, timeframe, index, htfContext));
   }
 
   return candidates;
@@ -295,8 +361,9 @@ export function analyzeSmcSignalsAtIndex(
   pair: string,
   timeframe: ChartTimeframe,
   index: number,
+  htfContext?: HtfContext | null,
 ): SmcSignal[] {
-  const candidates = buildSmcCandidatesAtIndex(candles, pair, timeframe, index);
+  const candidates = buildSmcCandidatesAtIndex(candles, pair, timeframe, index, htfContext);
   if (candidates.length === 0) return [];
   candidates.sort((a, b) => b.confidence - a.confidence || b.triggerIndex - a.triggerIndex);
   return candidates.map((candidate) => candidate.signal);
@@ -306,9 +373,10 @@ export function analyzeSmcWindow(
   candles: Awaited<ReturnType<typeof fetchOhlcHistory>> extends infer T ? T extends Error ? never : T : never,
   pair: string,
   timeframe: ChartTimeframe,
+  htfContext?: HtfContext | null,
 ): SmcSignal[] {
   const startIndex = Math.max(4, candles.length - 20);
-  const candidates = collectSmcCandidatesInRange(candles, pair, timeframe, startIndex, candles.length - 1);
+  const candidates = collectSmcCandidatesInRange(candles, pair, timeframe, startIndex, candles.length - 1, htfContext);
 
   if (candidates.length === 0) return [];
 
@@ -339,7 +407,8 @@ export async function analyzeAllChartsSmc(
     if (fetched.length === 0) {
       return { kind: "skip" as const, pair, error: "Khong co closed candle hop le" };
     }
-    const signals = analyzeSmcWindow(fetched, pair, timeframe);
+    const htfContext = await buildHtfContext(symbol, timeframe);
+    const signals = analyzeSmcWindow(fetched, pair, timeframe, htfContext);
     if (signals.length === 0) {
       return {
         kind: "no_setup" as const,
