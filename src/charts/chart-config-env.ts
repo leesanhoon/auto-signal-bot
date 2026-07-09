@@ -80,6 +80,20 @@ export function getConfiguredChartRunContext(): ChartRunContext {
   return "manual";
 }
 
+export function getConfiguredSmcSignalFreshnessCandles(): number {
+  const raw = process.env.SMC_SIGNAL_FRESHNESS_CANDLES?.trim();
+  if (!raw) return 1;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 20 ? parsed : 1;
+}
+
+export function getConfiguredSmcMinSignalConfidence(): number {
+  const raw = process.env.SMC_MIN_SIGNAL_CONFIDENCE?.trim();
+  if (!raw) return 65;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : 65;
+}
+
 function readBooleanEnv(key: string, defaultValue: boolean): boolean {
   const raw = process.env[key]?.trim().toLowerCase();
   if (!raw) return defaultValue;

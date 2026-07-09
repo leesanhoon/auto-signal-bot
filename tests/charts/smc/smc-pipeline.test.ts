@@ -12,10 +12,18 @@ const mocks = vi.hoisted(() => ({
   calculatePriorPeriodLevels: vi.fn(),
   detectRejectionWick: vi.fn(),
   calculateRvol: vi.fn(),
+  getConfiguredSmcSignalFreshnessCandles: vi.fn(() => 1),
+  getConfiguredSmcMinSignalConfidence: vi.fn(() => 0),
+  checkMultiTimeframeConfluence: vi.fn(),
 }));
 
 vi.mock("../../../src/charts/ohlc-provider.js", () => ({
   fetchOhlcHistory: mocks.fetchOhlcHistory,
+}));
+
+vi.mock("../../../src/charts/chart-config-env.js", () => ({
+  getConfiguredSmcSignalFreshnessCandles: mocks.getConfiguredSmcSignalFreshnessCandles,
+  getConfiguredSmcMinSignalConfidence: mocks.getConfiguredSmcMinSignalConfidence,
 }));
 
 vi.mock("../../../src/charts/smc/smc-structure.js", async () => {
@@ -29,6 +37,17 @@ vi.mock("../../../src/charts/smc/smc-structure.js", async () => {
     detectStructureBreak: mocks.detectStructureBreak,
     findSwingPoints: mocks.findSwingPoints,
     findRecentOrderBlock: mocks.findRecentOrderBlock,
+  };
+});
+
+vi.mock("../../../src/charts/smc/smc-confluence.js", async () => {
+  const actual = await vi.importActual<typeof import("../../../src/charts/smc/smc-confluence.js")>(
+    "../../../src/charts/smc/smc-confluence.js",
+  );
+
+  return {
+    ...actual,
+    checkMultiTimeframeConfluence: mocks.checkMultiTimeframeConfluence,
   };
 });
 
@@ -47,7 +66,7 @@ vi.mock("../../../src/charts/smc/smc-liquidity-context.js", async () => {
   };
 });
 
-import { analyzeAllChartsSmc, analyzeSmcSignalsAtIndex } from "../../../src/charts/smc/smc-pipeline.js";
+import { analyzeAllChartsSmc, analyzeSmcSignalsAtIndex, analyzeSmcWindow } from "../../../src/charts/smc/smc-pipeline.js";
 import type { Candle } from "../../../src/charts/ohlc-provider.js";
 import type { HtfContext } from "../../../src/charts/smc/smc-htf-context.js";
 import { gradeFromScore } from "../../../src/charts/smc/smc-signal-assembly.js";
@@ -118,6 +137,12 @@ describe("analyzeAllChartsSmc", () => {
       priorWeekLow: null,
       priorWeekHigh: null,
     });
+    mocks.getConfiguredSmcSignalFreshnessCandles.mockReturnValue(20);
+    mocks.getConfiguredSmcMinSignalConfidence.mockReturnValue(0);
+    mocks.checkMultiTimeframeConfluence.mockResolvedValue({
+      agreementCount: 0,
+      agreeingTimeframes: [],
+    });
     mocks.detectFairValueGap.mockImplementation((series: Candle[], index: number) => {
       if (index < 2) return null;
       const prev2 = series[index - 2];
@@ -142,7 +167,18 @@ describe("analyzeAllChartsSmc", () => {
       }
       return null;
     });
-    mocks.detectStructureBreak.mockReturnValue(null);
+    mocks.detectStructureBreak.mockImplementation((series: Candle[], swings: unknown[], index: number, direction?: string) => {
+      const fvg = mocks.detectFairValueGap(series, index);
+      if (fvg && direction === fvg.direction) {
+        return {
+          kind: "BOS" as const,
+          direction: fvg.direction,
+          breakIndex: index,
+          level: fvg.midpoint,
+        };
+      }
+      return null;
+    });
     mocks.detectRejectionWick.mockReturnValue({ hasRejectionWick: false, wickRatio: 0.3 });
     mocks.calculateRvol.mockReturnValue(null);
   });
@@ -187,7 +223,7 @@ describe("analyzeAllChartsSmc", () => {
     expect(buildSmcSignalMessage(result.setups[0])).toContain("Timeframe: M15");
   });
 
-  test("FVG continuation stays at confidence 60 when structure confirmation is opposite direction", () => {
+  test("FVG continuation is not generated when structure confirmation is opposite direction", () => {
     mocks.detectFairValueGap.mockReturnValue({
       direction: "LONG",
       index: 4,
@@ -206,16 +242,7 @@ describe("analyzeAllChartsSmc", () => {
     const signals = analyzeSmcSignalsAtIndex(candles, "XAUTUSDT", "M15", 4);
     const fvgSignal = signals.find((signal) => signal.setup === "SMC_FVG_CONTINUATION");
 
-    expect(fvgSignal).toMatchObject({
-      confidence: 60,
-      grade: gradeFromScore(60),
-      score: 60,
-      direction: "LONG",
-      structureEvent: {
-        direction: "SHORT",
-      },
-    });
-    expect(fvgSignal?.ruleTrace).toEqual(["FVG xuất hiện nhưng chưa có xác nhận cấu trúc cùng hướng."]);
+    expect(fvgSignal).toBeUndefined();
   });
 
   test("FVG continuation keeps confidence 74 when structure confirmation matches direction", () => {
@@ -247,6 +274,22 @@ describe("analyzeAllChartsSmc", () => {
       },
     });
     expect(fvgSignal?.ruleTrace).toEqual(["FVG cùng hướng cấu trúc đang mở rộng."]);
+  });
+
+  test("FVG continuation is not generated when no structure is detected", () => {
+    mocks.detectFairValueGap.mockReturnValue({
+      direction: "LONG",
+      index: 4,
+      high: 110,
+      low: 108,
+      midpoint: 109,
+    });
+    mocks.detectStructureBreak.mockReturnValue(null);
+
+    const signals = analyzeSmcSignalsAtIndex(candles, "XAUTUSDT", "M15", 4);
+    const fvgSignal = signals.find((signal) => signal.setup === "SMC_FVG_CONTINUATION");
+
+    expect(fvgSignal).toBeUndefined();
   });
 
   test("BOS order block long stop loss uses ATR buffer and recalculates 2R/3R targets", () => {
@@ -983,6 +1026,238 @@ test("HTF context with wide dealing range results in EQUILIBRIUM zone (vs PREMIU
 
     expect(bosSignals.length).toBeGreaterThanOrEqual(0);
     expect(chochSignals.length).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("analyzeSmcWindow with freshness filter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findSwingPoints.mockReturnValue([]);
+    mocks.findRecentOrderBlock.mockReturnValue(null);
+    mocks.calculatePremiumDiscountZone.mockReturnValue(null);
+    mocks.findEqualLevels.mockReturnValue([]);
+    mocks.calculatePriorPeriodLevels.mockReturnValue({
+      priorDayLow: null,
+      priorDayHigh: null,
+      priorWeekLow: null,
+      priorWeekHigh: null,
+    });
+    mocks.detectStructureBreak.mockReturnValue(null);
+    mocks.detectRejectionWick.mockReturnValue({ hasRejectionWick: false, wickRatio: 0.3 });
+    mocks.calculateRvol.mockReturnValue(null);
+  });
+
+  test("returns no signal when best candidate is outside freshness window with freshnessCandles=1", () => {
+    mocks.detectFairValueGap.mockImplementation((series: Candle[], index: number) => {
+      if (index === 10) {
+        return {
+          direction: "LONG" as const,
+          index: 10,
+          high: 110,
+          low: 108,
+          midpoint: 109,
+        };
+      }
+      return null;
+    });
+
+    const extendedCandles = [...candles, candle(utcTime(12, 20), 137, 140, 136, 139)];
+    const signals = analyzeSmcWindow(extendedCandles, "XAUTUSDT", "M15");
+    expect(signals).toHaveLength(0);
+  });
+
+  test("returns signal when best candidate is within freshness window (latest candle)", () => {
+    mocks.detectFairValueGap.mockImplementation((series: Candle[], index: number) => {
+      if (index === series.length - 1) {
+        return {
+          direction: "LONG" as const,
+          index: series.length - 1,
+          high: 140,
+          low: 138,
+          midpoint: 139,
+        };
+      }
+      return null;
+    });
+    mocks.detectStructureBreak.mockImplementation((series: Candle[], swings: unknown[], index: number, direction?: string) => {
+      if (index === series.length - 1 && direction === "LONG") {
+        return {
+          kind: "BOS" as const,
+          direction: "LONG" as const,
+          breakIndex: series.length - 1,
+          level: 139,
+        };
+      }
+      return null;
+    });
+
+    const extendedCandles = [...candles, candle(utcTime(12, 20), 137, 140, 136, 139)];
+    const signals = analyzeSmcWindow(extendedCandles, "XAUTUSDT", "M15");
+    expect(signals).toHaveLength(1);
+    expect(signals[0].triggerIndex).toBe(extendedCandles.length - 1);
+  });
+
+  test("respects freshnessCandles=2 to include triggers within last 2 candles", () => {
+    mocks.detectFairValueGap.mockImplementation((series: Candle[], index: number) => {
+      if (index === 20) {
+        return {
+          direction: "LONG" as const,
+          index: 20,
+          high: 138,
+          low: 136,
+          midpoint: 137,
+        };
+      }
+      return null;
+    });
+    mocks.detectStructureBreak.mockImplementation((series: Candle[], swings: unknown[], index: number, direction?: string) => {
+      if (index === 20 && direction === "LONG") {
+        return {
+          kind: "BOS" as const,
+          direction: "LONG" as const,
+          breakIndex: 20,
+          level: 137,
+        };
+      }
+      return null;
+    });
+
+    const extendedCandles = [...candles, candle(utcTime(12, 20), 137, 140, 136, 139), candle(utcTime(12, 21), 139, 142, 138, 141)];
+    const signals = analyzeSmcWindow(extendedCandles, "XAUTUSDT", "M15", undefined, { freshnessCandles: 2 });
+    expect(signals).toHaveLength(1);
+    expect(signals[0].triggerIndex).toBe(20);
+  });
+
+  test("filters out signals outside freshness window even if they have high confidence", () => {
+    mocks.detectFairValueGap.mockImplementation((series: Candle[], index: number) => {
+      if (index === 5) {
+        return {
+          direction: "LONG" as const,
+          index: 5,
+          high: 110,
+          low: 108,
+          midpoint: 109,
+        };
+      }
+      if (index === series.length - 1) {
+        return {
+          direction: "SHORT" as const,
+          index: series.length - 1,
+          high: 142,
+          low: 140,
+          midpoint: 141,
+        };
+      }
+      return null;
+    });
+    mocks.detectStructureBreak.mockImplementation((series: Candle[], swings: unknown[], index: number, direction?: string) => {
+      if (index === 5 && direction === "LONG") {
+        return {
+          kind: "BOS" as const,
+          direction: "LONG" as const,
+          breakIndex: 5,
+          level: 108,
+        };
+      }
+      if (index === series.length - 1 && direction === "SHORT") {
+        return {
+          kind: "BOS" as const,
+          direction: "SHORT" as const,
+          breakIndex: series.length - 1,
+          level: 140,
+        };
+      }
+      return null;
+    });
+
+    const extendedCandles = [...candles, candle(utcTime(12, 20), 137, 140, 136, 139)];
+    const signals = analyzeSmcWindow(extendedCandles, "XAUTUSDT", "M15");
+    expect(signals).toHaveLength(1);
+    expect(signals[0].triggerIndex).toBe(extendedCandles.length - 1);
+  });
+
+  test("returns empty array when no candidates exist in freshness window", () => {
+    mocks.detectFairValueGap.mockReturnValue(null);
+    mocks.detectStructureBreak.mockReturnValue(null);
+    const signals = analyzeSmcWindow(candles, "XAUTUSDT", "M15");
+    expect(signals).toHaveLength(0);
+  });
+});
+
+describe("analyzeAllChartsSmc with minimum confidence threshold", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.fetchOhlcHistory.mockResolvedValue(candles);
+    mocks.findSwingPoints.mockReturnValue([]);
+    mocks.findRecentOrderBlock.mockReturnValue({
+      direction: "LONG",
+      startIndex: 4,
+      endIndex: 4,
+      high: 106,
+      low: 96,
+      midpoint: 101,
+    });
+    mocks.calculatePremiumDiscountZone.mockReturnValue(null);
+    mocks.findEqualLevels.mockReturnValue([]);
+    mocks.calculatePriorPeriodLevels.mockReturnValue({
+      priorDayLow: null,
+      priorDayHigh: null,
+      priorWeekLow: null,
+      priorWeekHigh: null,
+    });
+    mocks.getConfiguredSmcSignalFreshnessCandles.mockReturnValue(20);
+    mocks.getConfiguredSmcMinSignalConfidence.mockReturnValue(0);
+    mocks.detectStructureBreak.mockReturnValue({
+      kind: "BOS" as const,
+      direction: "LONG" as const,
+      breakIndex: 6,
+      level: 108,
+    });
+    mocks.detectRejectionWick.mockReturnValue({ hasRejectionWick: false, wickRatio: 0.3 });
+    mocks.calculateRvol.mockReturnValue(null);
+    mocks.detectFairValueGap.mockReturnValue(null);
+    mocks.checkMultiTimeframeConfluence.mockResolvedValue({
+      agreementCount: 0,
+      agreeingTimeframes: [],
+    });
+  });
+
+  test("filters out signal with confidence below minSignalConfidence threshold", async () => {
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }], {
+      minSignalConfidence: 100,
+    });
+    expect(result.setups).toHaveLength(0);
+    expect(result.noSetupReason).toContain("bi loai");
+  });
+
+  test("includes signal with confidence at or above minSignalConfidence threshold", async () => {
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }], {
+      minSignalConfidence: 50,
+    });
+    expect(result.setups.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("respects custom minSignalConfidence option passed to analyzeAllChartsSmc", async () => {
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }], {
+      minSignalConfidence: 100,
+    });
+    expect(result.setups).toHaveLength(0);
+    expect(result.noSetupReason).toContain("< nguong 100");
+  });
+
+  test("uses option minSignalConfidence when provided", async () => {
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }], {
+      minSignalConfidence: 60,
+    });
+    expect(result.setups.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("includes reason in no_setup when signal below threshold", async () => {
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }], {
+      minSignalConfidence: 100,
+    });
+    expect(result.setups).toHaveLength(0);
+    expect(result.noSetupReason).toMatch(/confidence \d+ < nguong 100/);
   });
 });
 

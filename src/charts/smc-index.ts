@@ -10,6 +10,7 @@ import {
   getConfiguredChartRunContext,
   getConfiguredChartSignalConfidenceThreshold,
   getConfiguredChartTimeframeMode,
+  getConfiguredSmcMinSignalConfidence,
   shouldSendHeartbeatOnManualRun,
   shouldSendHeartbeatOutsideCloseWindow,
   shouldUseLatestCacheForManualRun,
@@ -70,7 +71,8 @@ async function analyzeCurrentWindow(
     primaryTimeframe,
     intervals: Array.from(new Set(runtimeCharts.map((chart) => chart.timeframe))),
   });
-  const result = await analyzeAllChartsSmc(getPairs(), { timeframeMode, primaryTimeframe });
+  const minSignalConfidence = getConfiguredSmcMinSignalConfidence();
+  const result = await analyzeAllChartsSmc(getPairs(), { timeframeMode, primaryTimeframe, minSignalConfidence });
   await saveChartAnalysisCache(candleKey, result);
   return result;
 }

@@ -3,6 +3,7 @@ import { fetchOhlcHistory } from "../ohlc-provider.js";
 import { createLogger } from "../../shared/logger.js";
 import { buildSmcPairSummary, buildTradeSetupFromSmcSignal, gradeFromScore } from "./smc-signal-assembly.js";
 import { checkMultiTimeframeConfluence, detectTimeframeBias } from "./smc-confluence.js";
+import { getConfiguredSmcSignalFreshnessCandles } from "../chart-config-env.js";
 import {
   calculatePremiumDiscountZone,
   calculatePriorPeriodLevels,
@@ -293,46 +294,45 @@ function buildSmcCandidatesAtIndex(
     if (!isAgainstHtfBias(htfContext, dir)) {
       const structure = detectStructureBreak(scopedCandles, swings, index, dir);
       const hasConfirmingStructure = structure !== null && structure.direction === dir;
-      const baseConfidence = hasConfirmingStructure ? 74 : 60;
-      const sessionAdjusted = applySessionPenalty(
-        detectSession(scopedCandles[index].time),
-        baseConfidence,
-        baseConfidence,
-        hasConfirmingStructure
-          ? ["FVG cùng hướng cấu trúc đang mở rộng."]
-          : ["FVG xuất hiện nhưng chưa có xác nhận cấu trúc cùng hướng."],
-      );
-      const entry = fvg.midpoint;
-      const atrProxy = calculateLocalAtr(scopedCandles, index);
-      const gapSize = Math.max(fvg.high - fvg.low, 0);
-      const stopBuffer = Math.max(atrProxy * 0.2, gapSize * 0.25, Math.abs(entry) * 0.00002, 0.0001);
-      const stopLoss = dir === "LONG" ? fvg.low - stopBuffer : fvg.high + stopBuffer;
-      const risk = Math.abs(entry - stopLoss) || 0.0001;
-      const takeProfit1 = dir === "LONG" ? entry + risk * 2 : entry - risk * 2;
-      const takeProfit2 = dir === "LONG" ? entry + risk * 3 : entry - risk * 3;
-      const signal = buildSignal(
-        pair,
-        timeframe,
-        "SMC_FVG_CONTINUATION",
-        dir,
-        index,
-        entry,
-        stopLoss,
-        takeProfit1,
-        takeProfit2,
-        {
-          confidence: sessionAdjusted.confidence,
-          grade: sessionAdjusted.grade,
-          score: sessionAdjusted.score,
-          ruleTrace: sessionAdjusted.ruleTrace,
-          structureEvent: structure ?? undefined,
-          fairValueGap: fvg,
-          entryZone: { low: fvg.low, high: fvg.high },
-          session: sessionAdjusted.session,
-          sessionLabel: sessionAdjusted.sessionLabel,
-        },
-      );
-      candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
+      if (hasConfirmingStructure) {
+        const sessionAdjusted = applySessionPenalty(
+          detectSession(scopedCandles[index].time),
+          74,
+          74,
+          ["FVG cùng hướng cấu trúc đang mở rộng."],
+        );
+        const entry = fvg.midpoint;
+        const atrProxy = calculateLocalAtr(scopedCandles, index);
+        const gapSize = Math.max(fvg.high - fvg.low, 0);
+        const stopBuffer = Math.max(atrProxy * 0.2, gapSize * 0.25, Math.abs(entry) * 0.00002, 0.0001);
+        const stopLoss = dir === "LONG" ? fvg.low - stopBuffer : fvg.high + stopBuffer;
+        const risk = Math.abs(entry - stopLoss) || 0.0001;
+        const takeProfit1 = dir === "LONG" ? entry + risk * 2 : entry - risk * 2;
+        const takeProfit2 = dir === "LONG" ? entry + risk * 3 : entry - risk * 3;
+        const signal = buildSignal(
+          pair,
+          timeframe,
+          "SMC_FVG_CONTINUATION",
+          dir,
+          index,
+          entry,
+          stopLoss,
+          takeProfit1,
+          takeProfit2,
+          {
+            confidence: sessionAdjusted.confidence,
+            grade: sessionAdjusted.grade,
+            score: sessionAdjusted.score,
+            ruleTrace: sessionAdjusted.ruleTrace,
+            structureEvent: structure,
+            fairValueGap: fvg,
+            entryZone: { low: fvg.low, high: fvg.high },
+            session: sessionAdjusted.session,
+            sessionLabel: sessionAdjusted.sessionLabel,
+          },
+        );
+        candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
+      }
     }
   }
 
@@ -376,14 +376,21 @@ export function analyzeSmcWindow(
   pair: string,
   timeframe: ChartTimeframe,
   htfContext?: HtfContext | null,
+  options?: { freshnessCandles?: number },
 ): SmcSignal[] {
   const startIndex = Math.max(4, candles.length - 20);
   const candidates = collectSmcCandidatesInRange(candles, pair, timeframe, startIndex, candles.length - 1, htfContext);
 
   if (candidates.length === 0) return [];
 
-  candidates.sort((a, b) => b.confidence - a.confidence || b.triggerIndex - a.triggerIndex);
-  return [candidates[0].signal];
+  const freshnessCandles = options?.freshnessCandles ?? 1;
+  const freshnessThreshold = candles.length - freshnessCandles;
+  const freshCandidates = candidates.filter((candidate) => candidate.triggerIndex >= freshnessThreshold);
+
+  if (freshCandidates.length === 0) return [];
+
+  freshCandidates.sort((a, b) => b.confidence - a.confidence || b.triggerIndex - a.triggerIndex);
+  return [freshCandidates[0].signal];
 }
 
 export async function analyzeAllChartsSmc(
@@ -391,9 +398,11 @@ export async function analyzeAllChartsSmc(
   options: {
     timeframeMode?: "multi" | "single";
     primaryTimeframe?: ChartTimeframe;
+    minSignalConfidence?: number;
   } = {},
 ): Promise<AnalysisResult> {
   const timeframe = analysisTimeframe(options);
+  const minSignalConfidence = options.minSignalConfidence ?? 0;
   const summaries: PairSummary[] = [];
   const setups: TradeSetup[] = [];
   const noSetupReasons: string[] = [];
@@ -410,12 +419,21 @@ export async function analyzeAllChartsSmc(
       return { kind: "skip" as const, pair, error: "Khong co closed candle hop le" };
     }
     const htfContext = await buildHtfContext(symbol, timeframe);
-    const signals = analyzeSmcWindow(fetched, pair, timeframe, htfContext);
+    const freshnessCandles = getConfiguredSmcSignalFreshnessCandles();
+    const signals = analyzeSmcWindow(fetched, pair, timeframe, htfContext, { freshnessCandles });
     if (signals.length === 0) {
       return {
         kind: "no_setup" as const,
         pair,
         summaries: [buildSmcPairSummary(pair, gradeToTrend("LONG"), 0, false)],
+      };
+    }
+    if (minSignalConfidence > 0 && signals[0].confidence < minSignalConfidence) {
+      return {
+        kind: "no_setup" as const,
+        pair,
+        reason: `Setup SMC bi loai do confidence ${signals[0].confidence} < nguong ${minSignalConfidence}`,
+        summaries: [buildSmcPairSummary(pair, gradeToTrend(signals[0].direction), 0, false)],
       };
     }
     const confluence = await checkMultiTimeframeConfluence(symbol, signals[0].direction);
@@ -455,7 +473,8 @@ export async function analyzeAllChartsSmc(
     } else if (result.kind === "no_setup") {
       noSetupPairs += 1;
       summaries.push(...result.summaries);
-      noSetupReasons.push(`[${result.pair}] Khong phat hien setup SMC nao`);
+      const reason = result.reason || "Khong phat hien setup SMC nao";
+      noSetupReasons.push(`[${result.pair}] ${reason}`);
     } else {
       skippedPairs += 1;
       noSetupReasons.push(`[${result.pair}] ${result.error}`);
