@@ -345,7 +345,7 @@ export async function main(): Promise<void> {
     primaryTimeframe,
     analysisTimeframe,
     openTradeNotifications,
-    pendingNotifications,
+    // pendingNotifications,
   });
 }
 
