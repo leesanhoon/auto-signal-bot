@@ -1,5 +1,5 @@
 import { getDb } from "../shared/db.js";
-import type { LotteryDrawRecord } from "./lottery-types.js";
+import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
 
 /** Giữ lịch sử 3 năm để đủ mẫu cho thống kê, không quá phình theo thời gian. */
 const HISTORY_RETENTION_DAYS = 1095;
@@ -8,6 +8,16 @@ const HISTORY_RETENTION_DAYS = 1095;
 export async function loadWeekdayHistory(weekday: number): Promise<LotteryDrawRecord[]> {
   const { data, error } = await (getDb().from("lottery_draws") as any).select("date, weekday, region, province, prizes").eq("weekday", weekday);
   if (error) throw new Error(`loadWeekdayHistory failed for weekday ${weekday}: ${error.message}`);
+  if (!data) return [];
+  return data as LotteryDrawRecord[];
+}
+
+/** Đọc toàn bộ lịch sử của 1 miền (mọi weekday) — dùng cho backtest, không giới hạn theo thứ. */
+export async function loadRegionHistory(region: LotteryRegion): Promise<LotteryDrawRecord[]> {
+  const { data, error } = await (getDb().from("lottery_draws") as any)
+    .select("date, weekday, region, province, prizes")
+    .eq("region", region);
+  if (error) throw new Error(`loadRegionHistory failed for region ${region}: ${error.message}`);
   if (!data) return [];
   return data as LotteryDrawRecord[];
 }

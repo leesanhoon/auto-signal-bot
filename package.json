@@ -27,7 +27,9 @@
         "lottery-predict:mien-trung": "LOTTERY_PREDICT_REGION=mien-trung tsx src/lottery/lottery-predict-index.ts",
         "lottery-predict:mien-bac": "LOTTERY_PREDICT_REGION=mien-bac tsx src/lottery/lottery-predict-index.ts",
         "lottery-predict-resync": "tsx src/lottery/lottery-predict-resync-index.ts",
-        "lottery-verify": "tsx src/lottery/lottery-verify-index.ts"
+        "lottery-verify": "tsx src/lottery/lottery-verify-index.ts",
+        "lottery-backtest": "tsx src/lottery/lottery-backtest-index.ts",
+        "lottery-hit-rate-report": "tsx src/lottery/lottery-hit-rate-report-index.ts"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.108.2",

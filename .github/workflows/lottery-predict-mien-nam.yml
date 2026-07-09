@@ -27,9 +27,6 @@ jobs:
       - name: Run lottery predictor — Miền Nam
         env:
           LOTTERY_PREDICT_REGION: mien-nam
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          AI_TEXT_MODEL: ${{ vars.AI_TEXT_MODEL }}
-          AI_TEXT_FALLBACK_MODEL: ${{ vars.AI_TEXT_FALLBACK_MODEL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

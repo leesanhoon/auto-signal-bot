@@ -230,16 +230,15 @@ export async function runLotteryPredict(
       lines.push(
         `${RANK_MEDAL[i] ?? "▫️"} \`${p.number}\` — ${(p.confidence * 100).toFixed(0)}% tin cậy _(${formatReason(p.reason)})_`,
       );
-      const parts: string[] = [];
-      if (p.breakdown.stats !== undefined) {
-        parts.push(`Thống kê ${(p.breakdown.stats * 100).toFixed(0)}%`);
-      }
-      if (p.breakdown.regression !== undefined) {
-        parts.push(`Hồi quy ${(p.breakdown.regression * 100).toFixed(0)}%`);
-      }
-      if (parts.length > 0) {
-        lines.push(`_   ↳ ${parts.join(" · ")}_`);
-      }
+      const statsPart =
+        p.breakdown.stats !== undefined
+          ? `Thống kê ${(p.breakdown.stats * 100).toFixed(0)}%`
+          : "Thống kê —";
+      const regressionPart =
+        p.breakdown.regression !== undefined
+          ? `Hồi quy ${(p.breakdown.regression * 100).toFixed(0)}%`
+          : "Hồi quy —";
+      lines.push(`_   ↳ ${statsPart} · ${regressionPart}_`);
     });
     lines.push("");
   }
