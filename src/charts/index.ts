@@ -1,7 +1,7 @@
 import "../shared/env.js";
-import { saveOpenPosition, savePendingOrder } from "./positions-repository.js";
+import { saveOpenPosition /*, savePendingOrder */ } from "./positions-repository.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner.js";
-import { runCheckPendingOrders } from "./check-pending-orders-runner.js";
+// import { runCheckPendingOrders } from "./check-pending-orders-runner.js"; // DISABLED: signals-only mode, xem tasks/disable-pending-orders/plan.md
 import {
   buildHeartbeatMessage,
   sendAllAnalyses,
@@ -207,26 +207,27 @@ async function handleAnalysisResult(
       (setup.confidence ?? 0) >= threshold &&
       setup.orderType !== "MARKET_NOW"
     ) {
-      try {
-        const saved = await savePendingOrder(setup);
-        if (saved) {
-          logger.info("Saved pending order", {
-            pair: setup.pair,
-            orderType: setup.orderType,
-            primaryTimeframe: setup.primaryTimeframe,
-          });
-        } else {
-          logger.info("Skipped duplicate pending order", {
-            pair: setup.pair,
-            orderType: setup.orderType,
-          });
-        }
-      } catch (error) {
-        logger.error("Failed to save pending order", {
-          pair: setup.pair,
-          error,
-        });
-      }
+      // DISABLED: signals-only mode, không tạo pending order nữa. Xem tasks/disable-pending-orders/plan.md
+      // try {
+      //   const saved = await savePendingOrder(setup);
+      //   if (saved) {
+      //     logger.info("Saved pending order", {
+      //       pair: setup.pair,
+      //       orderType: setup.orderType,
+      //       primaryTimeframe: setup.primaryTimeframe,
+      //     });
+      //   } else {
+      //     logger.info("Skipped duplicate pending order", {
+      //       pair: setup.pair,
+      //       orderType: setup.orderType,
+      //     });
+      //   }
+      // } catch (error) {
+      //   logger.error("Failed to save pending order", {
+      //     pair: setup.pair,
+      //     error,
+      //   });
+      // }
     }
   }
 
@@ -312,9 +313,8 @@ export async function main(): Promise<void> {
 
   logger.info("Checking open positions");
   const openTradeNotifications = await runCheckOpenTrades();
-  logger.info("Checking pending orders");
+  // DISABLED: signals-only mode, không check/resolve pending order nữa. Xem tasks/disable-pending-orders/plan.md
   // const pendingNotifications = await runCheckPendingOrders();
-  // + pendingNotifications == 0
 
   if (!result && openTradeNotifications === 0) {
     await maybeSendHeartbeat(

@@ -249,30 +249,30 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
     });
   });
 
-  test("4. runCheckPendingOrders được gọi và giá trị trả về ảnh hưởng heartbeat", async () => {
+  test("4. runCheckPendingOrders KHÔNG được gọi (signals-only mode)", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(0);
     mocks.runCheckPendingOrders.mockResolvedValue(2);
 
     await main();
 
-    // runCheckPendingOrders phải được gọi
-    expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    // runCheckPendingOrders KHÔNG được gọi (disabled)
+    expect(mocks.runCheckPendingOrders).not.toHaveBeenCalled();
 
-    // Vì pendingNotifications > 0, không gửi heartbeat
-    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    // Vì chỉ kiểm tra openTrades === 0, gửi heartbeat "no-event"
+    expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  test("4b. runCheckPendingOrders trả 0 → có thể gửi heartbeat", async () => {
+  test("4b. heartbeat chỉ phụ thuộc vào openTrades (không có pending check)", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(0);
-    mocks.runCheckPendingOrders.mockResolvedValue(0);
+    mocks.runCheckPendingOrders.mockResolvedValue(999); // giá trị này bị bỏ qua
 
     await main();
 
-    expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    expect(mocks.runCheckPendingOrders).not.toHaveBeenCalled();
 
-    // Vì cả openTrades và pendingOrders đều 0, gửi heartbeat "no-event"
+    // Gửi heartbeat vì openTrades === 0 (không phụ thuộc pendingNotifications)
     expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
     const heartbeatMessage = mocks.sendMessage.mock.calls[0][0];
     expect(typeof heartbeatMessage).toBe("string");
@@ -353,16 +353,16 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
     expect(mocks.notifyError).toBeDefined();
   });
 
-  test("ngoài window + không cache → bỏ qua analyze, vẫn check trade/pending", async () => {
+  test("ngoài window + không cache → bỏ qua analyze, check open trades (không check pending)", async () => {
     await main();
 
     // Analyze không được gọi
     expect(mocks.analyzeAllChartsSmc).not.toHaveBeenCalled();
     expect(mocks.saveChartAnalysisCache).not.toHaveBeenCalled();
 
-    // Trade + pending runner vẫn được gọi
+    // Chỉ check open trades (pending order check bị disable)
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    expect(mocks.runCheckPendingOrders).not.toHaveBeenCalled();
 
     // sendAllAnalyses không được gọi vì result=null
     expect(mocks.sendAllAnalyses).not.toHaveBeenCalled();
@@ -411,14 +411,15 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
     expect(message).toContain("no-cache");
   });
 
-  test("ngoài window + auto run + không có event khác → gửi heartbeat no-event", async () => {
+  test("ngoài window + auto run + không có event trade → gửi heartbeat no-event", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(0);
-    mocks.runCheckPendingOrders.mockResolvedValue(0);
+    mocks.runCheckPendingOrders.mockResolvedValue(0); // bị bỏ qua
 
     await main();
 
     expect(mocks.loadLatestChartAnalysisCache).not.toHaveBeenCalled();
+    expect(mocks.runCheckPendingOrders).not.toHaveBeenCalled();
     expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
 
     const message = mocks.sendMessage.mock.calls[0][0];
@@ -426,13 +427,14 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
     expect(message).toContain("no-event");
   });
 
-  test("ngoài window + auto run + có event trade/pending → không gửi heartbeat", async () => {
+  test("ngoài window + auto run + có event trade → không gửi heartbeat", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(1);
-    mocks.runCheckPendingOrders.mockResolvedValue(0);
+    mocks.runCheckPendingOrders.mockResolvedValue(0); // bị bỏ qua
 
     await main();
 
+    expect(mocks.runCheckPendingOrders).not.toHaveBeenCalled();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -463,7 +465,7 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
     expect(mocks.saveOpenPosition).toHaveBeenCalledTimes(1);
   });
 
-  test("lưu pending order khi không phải MARKET_NOW nhưng confidence >= threshold", async () => {
+  test("KHÔNG lưu pending order khi không phải MARKET_NOW (signals-only mode)", async () => {
     mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
     const setupWithPending = {
       ...MOCK_RESULT.setups[0],
@@ -477,6 +479,7 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
 
     await main();
 
-    expect(mocks.savePendingOrder).toHaveBeenCalledTimes(1);
+    // savePendingOrder KHÔNG được gọi (disabled)
+    expect(mocks.savePendingOrder).not.toHaveBeenCalled();
   });
 });

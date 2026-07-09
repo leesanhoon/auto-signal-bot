@@ -186,12 +186,10 @@ describe("charts/index main() — H4 close guard", () => {
       reason: "",
     });
     mocks.saveOpenPosition.mockResolvedValue(true);
-    mocks.savePendingOrder.mockResolvedValue(true);
     mocks.captureAllCharts.mockResolvedValue([{ filepath: "/tmp/chart.png" }]);
     mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
     mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
-    // mocks.runCheckPendingOrders.mockResolvedValue(0);
     mocks.sendMessage.mockResolvedValue(undefined);
     mocks.sendAllAnalyses.mockResolvedValue(undefined);
     mocks.buildHeartbeatMessage.mockReturnValue("HEARTBEAT");
@@ -202,16 +200,16 @@ describe("charts/index main() — H4 close guard", () => {
     main = mod.main;
   });
 
-  test("không trong window + không cache → bỏ qua capture+analyze, vẫn check trade/pending", async () => {
+  test("không trong window + không cache → bỏ qua capture+analyze, check trade (không check pending)", async () => {
     await main();
 
     // Capture + analyze không được gọi
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
     expect(mocks.saveChartAnalysisCache).not.toHaveBeenCalled();
 
-    // Trade + pending runner vẫn được gọi
+    // Chỉ check open trades (pending order check bị disable)
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    expect(mocks.savePendingOrder).not.toHaveBeenCalled();
 
     // sendAllAnalyses không được gọi vì result=null
     expect(mocks.sendAllAnalyses).not.toHaveBeenCalled();
@@ -236,7 +234,6 @@ describe("charts/index main() — H4 close guard", () => {
       }),
     );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
 
   test("không cache + trong window → capture+analyze + check trade/pending", async () => {
@@ -262,7 +259,6 @@ describe("charts/index main() — H4 close guard", () => {
       }),
     );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
 
   test("có cache + trong window → ưu tiên cache, không capture+analyze", async () => {
@@ -285,7 +281,6 @@ describe("charts/index main() — H4 close guard", () => {
       }),
     );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
 
   test("ngoài window + manual run + không có cache hiện tại nhưng có latest cache → dùng latest cache", async () => {
@@ -335,7 +330,6 @@ describe("charts/index main() — H4 close guard", () => {
   test("ngoài window + auto run + không có event khác → gửi heartbeat no-event", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(0);
-    // mocks.runCheckPendingOrders.mockResolvedValue(0);
 
     await main();
 
@@ -353,7 +347,6 @@ describe("charts/index main() — H4 close guard", () => {
   test("ngoài window + auto run + có event trade/pending → không gửi heartbeat", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(1);
-    // mocks.runCheckPendingOrders.mockResolvedValue(0);
 
     await main();
 
