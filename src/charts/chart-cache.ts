@@ -2,6 +2,8 @@ import type { ChartTimeframe } from "./chart-types.js";
 
 const TIMEFRAME_INTERVAL_MS: Record<ChartTimeframe, number> = {
   M15: 15 * 60 * 1000,
+  M30: 30 * 60 * 1000,
+  H1: 60 * 60 * 1000,
   H4: 4 * 60 * 60 * 1000,
   D1: 24 * 60 * 60 * 1000,
 };
@@ -22,7 +24,7 @@ function formatBoundaryKey(timeframe: ChartTimeframe, boundaryMs: number): strin
   const d = String(boundary.getUTCDate()).padStart(2, "0");
   const hh = String(boundary.getUTCHours()).padStart(2, "0");
 
-  if (timeframe === "M15") {
+  if (timeframe === "M15" || timeframe === "M30") {
     const mm = String(boundary.getUTCMinutes()).padStart(2, "0");
     return `${y}-${m}-${d}T${hh}:${mm}`;
   }

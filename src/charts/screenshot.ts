@@ -22,8 +22,12 @@ function getTimeframeRank(timeframe: ChartTimeframe): number {
       return 0;
     case "H4":
       return 1;
-    case "M15":
+    case "H1":
       return 2;
+    case "M30":
+      return 3;
+    case "M15":
+      return 4;
   }
 }
 

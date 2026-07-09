@@ -121,6 +121,46 @@ describe("buildTradeSetupFromSmcSignal", () => {
     expect(buildTradeSetupFromSmcSignal(longSignal, { lastPrice: 4100 })).toBeNull();
     expect(buildTradeSetupFromSmcSignal(shortSignal, { lastPrice: 1.107 })).toBeNull();
   });
+
+  test("renders enriched Vietnamese reasons with proper diacritics", () => {
+    const enrichedSignal: SmcSignal = {
+      ...shortSignal,
+      pair: "XAUTUSDT",
+      timeframe: "M15",
+      entry: 4130.5,
+      stopLoss: 4132,
+      takeProfit1: 4126,
+      takeProfit2: 4122,
+      score: 82,
+      grade: "A",
+      session: "LONDON",
+      sessionLabel: "LONDON (Khung giờ vàng)",
+      confluence: { agreementCount: 2, agreeingTimeframes: ["H1", "M30"] },
+      premiumDiscountZone: {
+        rangeLow: 4100,
+        rangeHigh: 4158,
+        percentInRange: 53,
+        zone: "PREMIUM",
+      },
+      priorPeriodLevels: {
+        priorDayLow: 4128,
+        priorDayHigh: 4145,
+        priorWeekLow: 4090,
+        priorWeekHigh: 4168,
+      },
+      rvol: 0.86,
+      hasRejectionWick: true,
+    };
+
+    const setup = buildTradeSetupFromSmcSignal(enrichedSignal, { lastPrice: 4130.2 });
+    expect(setup).not.toBeNull();
+    expect(setup?.grade).toBe("A");
+    expect(setup?.score).toBe(82);
+    expect(setup?.reasons).toContain("Đa khung đồng thuận: H1 & M30 đều bearish, hỗ trợ xu hướng giảm.");
+    expect(setup?.reasons).toContain("Tại vùng premium (53% range).");
+    expect(setup?.reasons).toContain("Lưu ý: PDL 4128.00 nằm trước TP1, có thể gây nhiễu.");
+    expect(setup?.reasons).toContain("Xác nhận rejection_wick (RVOL 0.86) cho thấy áp lực bán mạnh.");
+  });
 });
 
 describe("buildSmcPairSummary", () => {

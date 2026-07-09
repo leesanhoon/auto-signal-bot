@@ -11,6 +11,7 @@ vi.mock("../../../src/charts/ohlc-provider.js", () => ({
 
 import { analyzeAllChartsSmc } from "../../../src/charts/smc/smc-pipeline.js";
 import type { Candle } from "../../../src/charts/ohlc-provider.js";
+import { buildSmcSignalMessage } from "../../../src/shared/telegram.js";
 
 function candle(time: number, open: number, high: number, low: number, close: number): Candle {
   return { time, open, high, low, close, volume: 100 };
@@ -75,5 +76,13 @@ describe("analyzeAllChartsSmc", () => {
       skippedPairs: 0,
       setupCount: result.setups.length,
     });
+  });
+
+  test("analyzeAllChartsSmc uses M15 by default and message shows Timeframe: M15", async () => {
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }]);
+    expect(mocks.fetchOhlcHistory).toHaveBeenCalledWith("OANDA:XAUUSD", "M15", 200);
+    expect(result.setups.length).toBeGreaterThanOrEqual(1);
+    expect(result.setups[0].primaryTimeframe).toBe("M15");
+    expect(buildSmcSignalMessage(result.setups[0])).toContain("Timeframe: M15");
   });
 });

@@ -11,7 +11,7 @@ function formatMoney(value: number): string {
   return `$${formatPrice(value)}`;
 }
 
-function gradeFromScore(score: number): SmcGrade {
+export function gradeFromScore(score: number): SmcGrade {
   if (score >= 80) return "A";
   if (score >= 50) return "B";
   if (score >= 35) return "C";
@@ -33,6 +33,14 @@ function buildReasons(signal: SmcSignal): string[] {
     `SMC setup ${signal.setup} cho ${signal.pair}.`,
     ...signal.ruleTrace.slice(0, 4).map((line) => `Luận điểm: ${line}`),
   ];
+  if (signal.confluence && signal.confluence.agreementCount > 0) {
+    const trendWord = signal.direction === "SHORT" ? "bearish" : "bullish";
+    const trendLabelVi = signal.direction === "SHORT" ? "giảm" : "tăng";
+    const tfList = signal.confluence.agreeingTimeframes.join(" & ");
+    reasons.unshift(
+      `Đa khung đồng thuận: ${tfList} đều ${trendWord}, hỗ trợ xu hướng ${trendLabelVi}.`,
+    );
+  }
   if (signal.structureEvent) {
     reasons.push(
       `${signal.structureEvent.kind} ${signal.structureEvent.direction === "LONG" ? "tăng" : "giảm"} tại mức ${formatPrice(signal.structureEvent.level)}.`,
@@ -46,6 +54,37 @@ function buildReasons(signal: SmcSignal): string[] {
   if (signal.orderBlock) {
     reasons.push(
       `Order block ${signal.orderBlock.direction} quanh ${formatPrice(signal.orderBlock.midpoint)}.`,
+    );
+  }
+  if (signal.premiumDiscountZone) {
+    const zoneLabel = signal.premiumDiscountZone.zone === "PREMIUM"
+      ? "vùng premium"
+      : signal.premiumDiscountZone.zone === "DISCOUNT"
+        ? "vùng discount"
+        : "vùng equilibrium";
+    reasons.push(
+      `Tại ${zoneLabel} (${signal.premiumDiscountZone.percentInRange.toFixed(0)}% range).`,
+    );
+  }
+  if (signal.priorPeriodLevels) {
+    const { priorDayLow, priorDayHigh } = signal.priorPeriodLevels;
+    const relevantLevel = signal.direction === "SHORT" ? priorDayLow : priorDayHigh;
+    if (relevantLevel !== null && relevantLevel !== undefined) {
+      const entry = signal.entry;
+      const tp1 = signal.takeProfit1;
+      const between = signal.direction === "SHORT"
+        ? relevantLevel < entry && relevantLevel > tp1
+        : relevantLevel > entry && relevantLevel < tp1;
+      if (between) {
+        const label = signal.direction === "SHORT" ? "PDL" : "PDH";
+        reasons.push(`Lưu ý: ${label} ${formatPrice(relevantLevel)} nằm trước TP1, có thể gây nhiễu.`);
+      }
+    }
+  }
+  if (signal.hasRejectionWick && signal.rvol !== undefined) {
+    const pressureLabel = signal.direction === "SHORT" ? "áp lực bán mạnh" : "áp lực mua mạnh";
+    reasons.push(
+      `Xác nhận rejection_wick (RVOL ${signal.rvol.toFixed(2)}) cho thấy ${pressureLabel}.`,
     );
   }
   if (signal.fairValueGap) {

@@ -112,6 +112,11 @@ export type SmcSignal = {
   structureEvent?: SmcStructureEvent;
   liquiditySweep?: SmcLiquiditySweep;
   orderBlock?: SmcOrderBlock;
+  premiumDiscountZone?: import("./smc-liquidity-context.js").DealingRangeZone;
+  priorPeriodLevels?: import("./smc-liquidity-context.js").PriorPeriodLevels;
+  rvol?: number;
+  hasRejectionWick?: boolean;
+  confluence?: { agreementCount: number; agreeingTimeframes: string[] };
   fairValueGap?: SmcFairValueGap;
   ruleTrace: string[];
   market?: string;

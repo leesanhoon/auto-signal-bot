@@ -1,7 +1,16 @@
 import type { AnalysisResult, ChartTimeframe, PairSummary, TradeSetup } from "../chart-types.js";
 import { fetchOhlcHistory } from "../ohlc-provider.js";
 import { createLogger } from "../../shared/logger.js";
-import { buildSmcPairSummary, buildTradeSetupFromSmcSignal } from "./smc-signal-assembly.js";
+import { buildSmcPairSummary, buildTradeSetupFromSmcSignal, gradeFromScore } from "./smc-signal-assembly.js";
+import { checkMultiTimeframeConfluence } from "./smc-confluence.js";
+import {
+  calculatePremiumDiscountZone,
+  calculatePriorPeriodLevels,
+  calculateRvol,
+  detectRejectionWick,
+  findEqualLevels,
+} from "./smc-liquidity-context.js";
+import { detectSession } from "./smc-session.js";
 import {
   detectFairValueGap,
   detectLiquiditySweep,
@@ -25,7 +34,7 @@ type CandidateSource = {
 function analysisTimeframe(
   options: { timeframeMode?: "multi" | "single"; primaryTimeframe?: ChartTimeframe } = {},
 ): ChartTimeframe {
-  return options.timeframeMode === "single" ? (options.primaryTimeframe ?? "H4") : "H4";
+  return options.timeframeMode === "single" ? (options.primaryTimeframe ?? "M15") : "M15";
 }
 
 function gradeToTrend(direction: SmcDirection): string {
@@ -69,7 +78,7 @@ function buildSignal(
   stopLoss: number,
   takeProfit1: number,
   takeProfit2: number,
-  opts: Partial<Pick<SmcSignal, "takeProfit3" | "entryZone" | "liquidityTargets" | "structureEvent" | "liquiditySweep" | "orderBlock" | "fairValueGap">> & {
+  opts: Partial<Pick<SmcSignal, "takeProfit3" | "entryZone" | "liquidityTargets" | "structureEvent" | "liquiditySweep" | "orderBlock" | "premiumDiscountZone" | "priorPeriodLevels" | "rvol" | "hasRejectionWick" | "fairValueGap">> & {
     confidence: number;
     grade: SmcSignal["grade"];
     score: number;
@@ -99,6 +108,10 @@ function buildSignal(
     structureEvent: opts.structureEvent,
     liquiditySweep: opts.liquiditySweep,
     orderBlock: opts.orderBlock,
+    premiumDiscountZone: opts.premiumDiscountZone,
+    priorPeriodLevels: opts.priorPeriodLevels,
+    rvol: opts.rvol,
+    hasRejectionWick: opts.hasRejectionWick,
     fairValueGap: opts.fairValueGap,
     market: opts.market,
     session: opts.session,
@@ -123,10 +136,34 @@ function buildSmcCandidatesAtIndex(
     const ob = findRecentOrderBlock(scopedCandles, index, structure.direction, 12);
     if (ob) {
       const entry = ob.midpoint;
+      const pdZone = calculatePremiumDiscountZone(entry, swings, index);
+      const priorLevels = calculatePriorPeriodLevels(scopedCandles, index);
+      const equalLevels = findEqualLevels(swings, index);
+      const rvol = calculateRvol(scopedCandles, index);
+      const rejection = detectRejectionWick(scopedCandles[index], structure.direction);
       const stopLoss = structure.direction === "LONG" ? ob.low : ob.high;
       const risk = Math.abs(entry - stopLoss) || 0.0001;
       const takeProfit1 = structure.direction === "LONG" ? entry + risk * 2 : entry - risk * 2;
       const takeProfit2 = structure.direction === "LONG" ? entry + risk * 3 : entry - risk * 3;
+      const wantedEqualKind = structure.direction === "SHORT" ? "EQL" : "EQH";
+      const matchingEqualLevel = equalLevels.find((lvl) => lvl.kind === wantedEqualKind);
+      const liquidityTargets: SmcSignal["liquidityTargets"] = [];
+      if (matchingEqualLevel) {
+        liquidityTargets.push({
+          label: matchingEqualLevel.kind,
+          price: matchingEqualLevel.price,
+          target: "TP2",
+        });
+      }
+      const priorWeekLevel =
+        structure.direction === "SHORT" ? priorLevels.priorWeekLow : priorLevels.priorWeekHigh;
+      if (priorWeekLevel !== null) {
+        liquidityTargets.push({
+          label: structure.direction === "SHORT" ? "PWL" : "PWH",
+          price: priorWeekLevel,
+          target: "TP3",
+        });
+      }
       const signal = buildSignal(
         pair,
         timeframe,
@@ -147,7 +184,13 @@ function buildSmcCandidatesAtIndex(
           ],
           structureEvent: structure,
           orderBlock: ob,
+          premiumDiscountZone: pdZone ?? undefined,
+          priorPeriodLevels: priorLevels,
+          rvol: rvol ?? undefined,
+          hasRejectionWick: rejection.hasRejectionWick,
+          liquidityTargets: liquidityTargets.length > 0 ? liquidityTargets : undefined,
           entryZone: { low: Math.min(entry, ob.low), high: Math.max(entry, ob.high) },
+          ...detectSession(scopedCandles[index].time),
         },
       );
       candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
@@ -184,6 +227,7 @@ function buildSmcCandidatesAtIndex(
         ruleTrace: ["Liquidity sweep và reclaim xác nhận hướng giao dịch."],
         liquiditySweep: sweep,
         entryZone,
+        ...detectSession(scopedCandles[index].time),
       },
     );
     candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
@@ -219,6 +263,7 @@ function buildSmcCandidatesAtIndex(
         structureEvent: structure ?? undefined,
         fairValueGap: fvg,
         entryZone: { low: fvg.low, high: fvg.high },
+        ...detectSession(scopedCandles[index].time),
       },
     );
     candidates.push({ signal, confidence: signal.confidence, triggerIndex: index });
@@ -302,6 +347,18 @@ export async function analyzeAllChartsSmc(
         summaries: [buildSmcPairSummary(pair, gradeToTrend("LONG"), 0, false)],
       };
     }
+    const confluence = await checkMultiTimeframeConfluence(symbol, signals[0].direction);
+    signals[0].confluence = {
+      agreementCount: confluence.agreementCount,
+      agreeingTimeframes: confluence.agreeingTimeframes,
+    };
+    if (confluence.agreementCount === 2) {
+      signals[0].score = Math.min(100, signals[0].score + 10);
+    } else if (confluence.agreementCount === 0) {
+      signals[0].score = Math.max(0, signals[0].score - 5);
+    }
+    signals[0].grade = gradeFromScore(signals[0].score);
+
     const lastPrice = fetched[fetched.length - 1]?.close ?? null;
     const setup = buildTradeSetupFromSmcSignal(signals[0], { lastPrice });
     if (!setup) {

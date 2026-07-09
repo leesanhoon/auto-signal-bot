@@ -64,6 +64,14 @@ const TIMEFRAME_CONFIG: Record<ChartTimeframe, TimeframeConfig> = {
     intervalMs: 15 * 60 * 1000,
     twelveDataCode: "15min",
   },
+  M30: {
+    intervalMs: 30 * 60 * 1000,
+    twelveDataCode: "30min",
+  },
+  H1: {
+    intervalMs: 60 * 60 * 1000,
+    twelveDataCode: "1h",
+  },
   H4: {
     intervalMs: 4 * 60 * 60 * 1000,
     twelveDataCode: "4h",

@@ -381,6 +381,34 @@ describe("shared/telegram", () => {
     expect(message).toContain("THẬN TRỌNG:");
   });
 
+  test("buildSmcSignalMessage computes independent R:R per TP when liquidityTargets missing", () => {
+    const message = buildSmcSignalMessage({
+      pair: "XAUTUSDT",
+      direction: "SHORT",
+      setup: "SMC_CHOCH_OB",
+      primaryTimeframe: "M15",
+      reasons: [],
+      risks: [],
+      confidence: 51,
+      entry: "4128.37",
+      stopLoss: "4142.51",
+      takeProfit1: "4085.95",
+      takeProfit2: "4056.61",
+      takeProfit3: "3945.50",
+      riskReward: "3.0:1",
+      summary: "SMC summary",
+      grade: "B",
+      score: 51,
+      takeProfitAllocations: { tp1: 50, tp2: 30, tp3: 20 },
+      ruleTrace: [],
+      detectionSource: "smc",
+    } as TradeSetup);
+
+    expect(message).toContain("[TP1] 4085.95 | R:R 3.0:1");
+    expect(message).toContain("[TP2] 4056.61 | R:R 5.1:1");
+    expect(message).toContain("[TP3] 3945.50 | R:R 12.9:1");
+  });
+
   test("sendAllAnalyses routes SMC setup to SMC formatter", async () => {
     const sends: string[] = [];
     const notifier = {

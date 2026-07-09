@@ -4,7 +4,7 @@ export type CandleRangeStats = {
   lastClose: number | null;
 };
 
-export type ChartTimeframe = "M15" | "H4" | "D1";
+export type ChartTimeframe = "M15" | "M30" | "H1" | "H4" | "D1";
 
 export type ChartOrderType =
   | "MARKET_NOW"

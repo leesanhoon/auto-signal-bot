@@ -51,6 +51,21 @@ function formatRiskRewardValue(value: unknown): string {
   return "N/A";
 }
 
+function calculateRiskRewardFromPrices(
+  entry: unknown,
+  stopLoss: unknown,
+  target: unknown,
+): string {
+  const entryNum = parseNumericLike(entry);
+  const slNum = parseNumericLike(stopLoss);
+  const targetNum = parseNumericLike(target);
+  if (entryNum === null || slNum === null || targetNum === null) return "N/A";
+  const risk = Math.abs(entryNum - slNum);
+  if (risk <= 0) return "N/A";
+  const reward = Math.abs(targetNum - entryNum);
+  return `${(reward / risk).toFixed(1)}:1`;
+}
+
 export function buildSmcSignalMessage(setup: TradeSetup): string {
   const grade = setup.grade ?? "N/A";
   const score = setup.score ?? setup.confidence ?? 0;
@@ -80,7 +95,11 @@ export function buildSmcSignalMessage(setup: TradeSetup): string {
   ];
   for (const tp of tpEntries) {
     const liq = liquidityByTarget.get(tp.key as "TP1" | "TP2" | "TP3");
-    const rr = formatRiskRewardValue(liq?.riskReward ?? setup.riskReward);
+    const rr = liq?.riskReward !== undefined
+      ? formatRiskRewardValue(liq.riskReward)
+      : tp.key === "TP1"
+        ? formatRiskRewardValue(setup.riskReward)
+        : calculateRiskRewardFromPrices(setup.entry, setup.stopLoss, tp.price);
     const allocText = typeof tp.alloc === "number" ? ` | Chốt ${tp.alloc}%` : "";
     const liqText = liq ? ` | ${liq.label} ${liq.price}` : "";
     lines.push("", `[${tp.key}] ${tp.price} | R:R ${rr}${allocText}${liqText}`);
