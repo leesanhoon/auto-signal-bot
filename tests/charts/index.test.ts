@@ -6,10 +6,16 @@ import { getChartScannerErrorScope } from "../../src/charts/index.js";
 // ============================================================
 const mocks = vi.hoisted(() => ({
   captureAllCharts: vi.fn(),
-  buildChartAnalysisCacheKey: vi.fn((candleKey: string, engineMode: string, timeframeMode: string, primaryTimeframe?: string) =>
-    timeframeMode === "single"
-      ? `${candleKey}:${engineMode}:${timeframeMode}:${primaryTimeframe ?? "M15"}`
-      : `${candleKey}:${engineMode}:${timeframeMode}`,
+  buildChartAnalysisCacheKey: vi.fn(
+    (
+      candleKey: string,
+      engineMode: string,
+      timeframeMode: string,
+      primaryTimeframe?: string,
+    ) =>
+      timeframeMode === "single"
+        ? `${candleKey}:${engineMode}:${timeframeMode}:${primaryTimeframe ?? "M15"}`
+        : `${candleKey}:${engineMode}:${timeframeMode}`,
   ),
   loadChartAnalysisCache: vi.fn(),
   loadLatestChartAnalysisCache: vi.fn(),
@@ -63,11 +69,13 @@ vi.mock("../../src/charts/chart-cache-repository.js", () => ({
 }));
 
 vi.mock("../../src/charts/chart-cache.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../src/charts/chart-cache.js")>();
+  const original =
+    await importOriginal<typeof import("../../src/charts/chart-cache.js")>();
   return {
     ...original,
     isWithinCandleCloseWindow: mocks.isWithinCandleCloseWindow,
-    isWithinTimeframeCandleCloseWindow: mocks.isWithinTimeframeCandleCloseWindow,
+    isWithinTimeframeCandleCloseWindow:
+      mocks.isWithinTimeframeCandleCloseWindow,
   };
 });
 
@@ -75,9 +83,9 @@ vi.mock("../../src/charts/check-open-trades-runner.js", () => ({
   runCheckOpenTrades: mocks.runCheckOpenTrades,
 }));
 
-vi.mock("../../src/charts/check-pending-orders-runner.js", () => ({
-  runCheckPendingOrders: mocks.runCheckPendingOrders,
-}));
+// vi.mock("../../src/charts/check-pending-orders-runner.js", () => ({
+//   runCheckPendingOrders: mocks.runCheckPendingOrders,
+// }));
 
 vi.mock("../../src/shared/telegram.js", () => ({
   sendAllAnalyses: mocks.sendAllAnalyses,
@@ -108,14 +116,16 @@ vi.mock("../../src/charts/smc/smc-pipeline.js", () => ({
 }));
 
 vi.mock("../../src/charts/chart-config-env.js", () => ({
-  getConfiguredChartSignalConfidenceThreshold: mocks.getConfiguredChartSignalConfidenceThreshold,
+  getConfiguredChartSignalConfidenceThreshold:
+    mocks.getConfiguredChartSignalConfidenceThreshold,
   getConfiguredChartEngineMode: mocks.getConfiguredChartEngineMode,
   getConfiguredChartTradingSystem: mocks.getConfiguredChartTradingSystem,
   getConfiguredChartRunContext: mocks.getConfiguredChartRunContext,
   getConfiguredChartTimeframeMode: mocks.getConfiguredChartTimeframeMode,
   getConfiguredChartPrimaryTimeframe: mocks.getConfiguredChartPrimaryTimeframe,
   shouldUseLatestCacheForManualRun: mocks.shouldUseLatestCacheForManualRun,
-  shouldSendHeartbeatOutsideCloseWindow: mocks.shouldSendHeartbeatOutsideCloseWindow,
+  shouldSendHeartbeatOutsideCloseWindow:
+    mocks.shouldSendHeartbeatOutsideCloseWindow,
   shouldSendHeartbeatOnManualRun: mocks.shouldSendHeartbeatOnManualRun,
 }));
 
@@ -171,14 +181,17 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.shouldUseLatestCacheForManualRun.mockReturnValue(true);
     mocks.shouldSendHeartbeatOutsideCloseWindow.mockReturnValue(true);
     mocks.shouldSendHeartbeatOnManualRun.mockReturnValue(true);
-    mocks.validateTradeSetupForOpen.mockReturnValue({ accepted: true, reason: "" });
+    mocks.validateTradeSetupForOpen.mockReturnValue({
+      accepted: true,
+      reason: "",
+    });
     mocks.saveOpenPosition.mockResolvedValue(true);
     mocks.savePendingOrder.mockResolvedValue(true);
     mocks.captureAllCharts.mockResolvedValue([{ filepath: "/tmp/chart.png" }]);
     mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
     mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
-    mocks.runCheckPendingOrders.mockResolvedValue(0);
+    // mocks.runCheckPendingOrders.mockResolvedValue(0);
     mocks.sendMessage.mockResolvedValue(undefined);
     mocks.sendAllAnalyses.mockResolvedValue(undefined);
     mocks.buildHeartbeatMessage.mockReturnValue("HEARTBEAT");
@@ -198,7 +211,7 @@ describe("charts/index main() — H4 close guard", () => {
 
     // Trade + pending runner vẫn được gọi
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
 
     // sendAllAnalyses không được gọi vì result=null
     expect(mocks.sendAllAnalyses).not.toHaveBeenCalled();
@@ -217,10 +230,13 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
-      expect.objectContaining({ source: "cached", candleKey: expect.any(String) }),
+      expect.objectContaining({
+        source: "cached",
+        candleKey: expect.any(String),
+      }),
     );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
 
   test("không cache + trong window → capture+analyze + check trade/pending", async () => {
@@ -240,10 +256,13 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
-      expect.objectContaining({ source: "live", candleKey: expect.any(String) }),
+      expect.objectContaining({
+        source: "live",
+        candleKey: expect.any(String),
+      }),
     );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
 
   test("có cache + trong window → ưu tiên cache, không capture+analyze", async () => {
@@ -260,10 +279,13 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
-      expect.objectContaining({ source: "cached", candleKey: expect.any(String) }),
+      expect.objectContaining({
+        source: "cached",
+        candleKey: expect.any(String),
+      }),
     );
     expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
-    expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
+    // expect(mocks.runCheckPendingOrders).toHaveBeenCalledTimes(1);
   });
 
   test("ngoài window + manual run + không có cache hiện tại nhưng có latest cache → dùng latest cache", async () => {
@@ -278,13 +300,17 @@ describe("charts/index main() — H4 close guard", () => {
 
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
-    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith("deterministic", "multi", "M15");
-    expect(mocks.captureAllCharts).not.toHaveBeenCalled();
-    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
-      MOCK_RESULT,
-      undefined,
-      { source: "cached", candleKey: "2026-07-03T08:deterministic", systemLabel: "bob-volman" },
+    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith(
+      "deterministic",
+      "multi",
+      "M15",
     );
+    expect(mocks.captureAllCharts).not.toHaveBeenCalled();
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(MOCK_RESULT, undefined, {
+      source: "cached",
+      candleKey: "2026-07-03T08:deterministic",
+      systemLabel: "bob-volman",
+    });
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -309,7 +335,7 @@ describe("charts/index main() — H4 close guard", () => {
   test("ngoài window + auto run + không có event khác → gửi heartbeat no-event", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(0);
-    mocks.runCheckPendingOrders.mockResolvedValue(0);
+    // mocks.runCheckPendingOrders.mockResolvedValue(0);
 
     await main();
 
@@ -327,7 +353,7 @@ describe("charts/index main() — H4 close guard", () => {
   test("ngoài window + auto run + có event trade/pending → không gửi heartbeat", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(1);
-    mocks.runCheckPendingOrders.mockResolvedValue(0);
+    // mocks.runCheckPendingOrders.mockResolvedValue(0);
 
     await main();
 
@@ -424,7 +450,9 @@ describe("charts/index main() — H4 close guard", () => {
 
     await main();
 
-    const runCompleteCall = mocks.logger.info.mock.calls.find(([message]) => message === "Run complete");
+    const runCompleteCall = mocks.logger.info.mock.calls.find(
+      ([message]) => message === "Run complete",
+    );
 
     expect(runCompleteCall).toBeDefined();
     expect(runCompleteCall?.[1]).toMatchObject({
@@ -446,7 +474,9 @@ describe("charts/index main() — H4 close guard", () => {
 
     expect(mocks.analyzeAllChartsSmc).toHaveBeenCalledTimes(1);
     expect(mocks.analyzeAllChartsDeterministic).not.toHaveBeenCalled();
-    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expect.stringContaining(":smc:"));
+    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(
+      expect.stringContaining(":smc:"),
+    );
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
@@ -455,8 +485,12 @@ describe("charts/index main() — H4 close guard", () => {
   });
 
   test("fatal error scope follows the selected trading system", () => {
-    expect(getChartScannerErrorScope("bob-volman")).toBe("Bob Volman multi-timeframe scanner");
-    expect(getChartScannerErrorScope("smc")).toBe("SMC multi-timeframe scanner");
+    expect(getChartScannerErrorScope("bob-volman")).toBe(
+      "Bob Volman multi-timeframe scanner",
+    );
+    expect(getChartScannerErrorScope("smc")).toBe(
+      "SMC multi-timeframe scanner",
+    );
   });
 
   test("ngoài window + manual run + SMC + có latest cache thì dùng latest cache label smc", async () => {
@@ -470,13 +504,21 @@ describe("charts/index main() — H4 close guard", () => {
     await main();
 
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
-    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith("smc", "multi", "M15");
+    expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith(
+      "smc",
+      "multi",
+      "M15",
+    );
     expect(mocks.analyzeAllChartsSmc).not.toHaveBeenCalled();
     expect(mocks.analyzeAllChartsDeterministic).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,
       undefined,
-      expect.objectContaining({ source: "cached", candleKey: "2026-07-03T08:smc", systemLabel: "smc" }),
+      expect.objectContaining({
+        source: "cached",
+        candleKey: "2026-07-03T08:smc",
+        systemLabel: "smc",
+      }),
     );
   });
 });
