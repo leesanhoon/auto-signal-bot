@@ -20,6 +20,7 @@ function aggregateBacktestSummaries(summaries: BacktestSummary[], topN: number):
 
   const periods = summaries.flatMap((summary) => summary.periods);
   const totalHits = summaries.reduce((sum, summary) => sum + summary.totalHits, 0);
+  const totalHits2 = summaries.reduce((sum, summary) => sum + summary.totalHits2, 0);
   const periodsEvaluated = summaries.reduce((sum, summary) => sum + summary.periodsEvaluated, 0);
   const totalPredictions = periodsEvaluated * topN;
 
@@ -30,6 +31,8 @@ function aggregateBacktestSummaries(summaries: BacktestSummary[], topN: number):
     totalPredictions,
     totalHits,
     hitRate: totalPredictions > 0 ? totalHits / totalPredictions : 0,
+    totalHits2,
+    hitRate2: totalPredictions > 0 ? totalHits2 / totalPredictions : 0,
     periods,
   };
 }

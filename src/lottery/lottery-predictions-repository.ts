@@ -122,6 +122,9 @@ export async function markPredictionVerified(
   hit: boolean,
   matchedProvince?: string,
   matchedPrize?: string,
+  hit2?: boolean,
+  matchedProvince2?: string,
+  matchedPrize2?: string,
 ): Promise<void> {
   const { error } = await (getDb().from("lottery_predictions") as any)
     .update({
@@ -129,6 +132,9 @@ export async function markPredictionVerified(
       hit,
       matched_province: matchedProvince ?? null,
       matched_prize: matchedPrize ?? null,
+      hit2: hit2 ?? null,
+      matched_province_2: matchedProvince2 ?? null,
+      matched_prize_2: matchedPrize2 ?? null,
     })
     .eq("date", date)
     .eq("region", region)

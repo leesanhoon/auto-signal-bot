@@ -129,6 +129,46 @@ export function matchPrizeLabel(prizes: CompactPrizes, number: string): string |
   return undefined;
 }
 
+const PRIZE_LABELS_2DIGIT: [string, (p: CompactPrizes) => string[]][] = [
+  ["Giải đặc biệt", (p) => [p.db]],
+  ["Giải nhất", (p) => [p.g1]],
+  ["Giải nhì", (p) => p.g2],
+  ["Giải ba", (p) => p.g3],
+  ["Giải tư", (p) => p.g4],
+  ["Giải năm", (p) => p.g5],
+  ["Giải sáu", (p) => p.g6],
+  ["Giải bảy", (p) => p.g7],
+  ["Giải tám", (p) => p.g8],
+];
+
+/** Rút mỗi số về 2 chữ số cuối (đầu đuôi), có tính cả giải tám (2 chữ số), loại trùng. */
+export function extractNums2(prizes: CompactPrizes): string[] {
+  const seen = new Set<string>();
+  const push = (raw: string) => {
+    if (raw.length < 2) return;
+    seen.add(raw.slice(-2));
+  };
+
+  push(prizes.db);
+  push(prizes.g1);
+  for (const group of [prizes.g2, prizes.g3, prizes.g4, prizes.g5, prizes.g6, prizes.g7, prizes.g8]) {
+    group.forEach(push);
+  }
+
+  return [...seen];
+}
+
+/** Tìm tên giải mà 2 chữ số cuối của `number` khớp với 2 chữ số cuối của 1 giải bất kỳ trong `prizes` (bao gồm giải tám). */
+export function matchPrizeLabelLast2(prizes: CompactPrizes, number: string): string | undefined {
+  const last2 = number.slice(-2);
+  for (const [label, getValues] of PRIZE_LABELS_2DIGIT) {
+    for (const raw of getValues(prizes)) {
+      if (raw.length >= 2 && raw.slice(-2) === last2) return label;
+    }
+  }
+  return undefined;
+}
+
 export type OptimizedLotteryStation = {
   /** Mã viết tắt tỉnh/đài. */
   p: string;

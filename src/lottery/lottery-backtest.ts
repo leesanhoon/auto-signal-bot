@@ -1,5 +1,5 @@
 import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
-import { extractNums } from "./lottery-format.js";
+import { extractNums, extractNums2 } from "./lottery-format.js";
 import { predictTopNumbersRegression } from "./lottery-regression-predict.js";
 import { predictTopNumbersStats } from "./lottery-stats-predict.js";
 import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
@@ -13,6 +13,8 @@ export type BacktestPeriodResult = {
   predictedNumbers: string[];
   actualNumbers: string[];
   hits: string[];
+  actualNumbers2: string[];
+  hits2: string[];
 };
 
 export type BacktestSummary = {
@@ -22,6 +24,8 @@ export type BacktestSummary = {
   totalPredictions: number;
   totalHits: number;
   hitRate: number;
+  totalHits2: number;
+  hitRate2: number;
   periods: BacktestPeriodResult[];
 };
 
@@ -45,6 +49,7 @@ function summarize(
   periods: BacktestPeriodResult[],
 ): BacktestSummary {
   const totalHits = periods.reduce((sum, period) => sum + period.hits.length, 0);
+  const totalHits2 = periods.reduce((sum, period) => sum + period.hits2.length, 0);
   const periodsEvaluated = periods.length;
   const totalPredictions = periodsEvaluated * topN;
 
@@ -55,6 +60,8 @@ function summarize(
     totalPredictions,
     totalHits,
     hitRate: totalPredictions > 0 ? totalHits / totalPredictions : 0,
+    totalHits2,
+    hitRate2: totalPredictions > 0 ? totalHits2 / totalPredictions : 0,
     periods,
   };
 }
@@ -125,6 +132,11 @@ export async function runBacktest(
     ).sort((left, right) => left.localeCompare(right));
     const actualSet = new Set(actualNumbers);
     const hits = predictedNumbers.filter((number) => actualSet.has(number));
+    const actualNumbers2 = Array.from(
+      new Set(actualRecords.flatMap((record) => extractNums2(record.prizes))),
+    ).sort((left, right) => left.localeCompare(right));
+    const actualSet2 = new Set(actualNumbers2);
+    const hits2 = predictedNumbers.filter((number) => actualSet2.has(number.slice(-2)));
 
     evaluatedPeriods.push({
       date: targetDate,
@@ -133,6 +145,8 @@ export async function runBacktest(
       predictedNumbers,
       actualNumbers,
       hits,
+      actualNumbers2,
+      hits2,
     });
   }
 
@@ -144,7 +158,7 @@ function percent(value: number): string {
 }
 
 export function compareBacktestSummaries(summaries: BacktestSummary[]): string {
-  const headers = ["Method", "Region", "Periods", "Predictions", "Hits", "Hit Rate"];
+  const headers = ["Method", "Region", "Periods", "Predictions", "Hits", "Hit Rate", "Hits2", "Hit Rate 2"];
   const rows = summaries.map((summary) => [
     summary.method,
     summary.region,
@@ -152,6 +166,8 @@ export function compareBacktestSummaries(summaries: BacktestSummary[]): string {
     String(summary.totalPredictions),
     String(summary.totalHits),
     percent(summary.hitRate),
+    String(summary.totalHits2),
+    percent(summary.hitRate2),
   ]);
 
   const widths = headers.map((header, columnIndex) => {

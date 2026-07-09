@@ -72,6 +72,8 @@ describe("lottery/lottery-backtest", () => {
     expect(summary.totalPredictions).toBe(24);
     expect(summary.totalHits).toBeGreaterThan(0);
     expect(summary.hitRate).toBeGreaterThan(0);
+    expect(summary.totalHits2).toBeGreaterThanOrEqual(summary.totalHits);
+    expect(summary.hitRate2).toBeGreaterThanOrEqual(summary.hitRate);
   });
 
   test("supports the ensemble method", async () => {
@@ -83,6 +85,7 @@ describe("lottery/lottery-backtest", () => {
     expect(summary.periodsEvaluated).toBe(8);
     expect(summary.totalPredictions).toBe(24);
     expect(summary.hitRate).toBeGreaterThanOrEqual(0);
+    expect(summary.hitRate2).toBeGreaterThanOrEqual(0);
   });
 
   test("returns a non-deterministic random baseline summary", async () => {
@@ -94,6 +97,7 @@ describe("lottery/lottery-backtest", () => {
     expect(summary.periodsEvaluated).toBe(8);
     expect(summary.totalPredictions).toBe(24);
     expect(summary.hitRate).toBeGreaterThanOrEqual(0);
+    expect(summary.hitRate2).toBeGreaterThanOrEqual(0);
   });
 
   test("does not leak future-only patterns into earlier predictions", async () => {
@@ -108,6 +112,8 @@ describe("lottery/lottery-backtest", () => {
     expect(firstEvaluatedPeriod!.date).toBe("2026-01-11");
     expect(firstEvaluatedPeriod!.predictedNumbers).toEqual(trainingOnlyPredictions);
     expect(firstEvaluatedPeriod!.predictedNumbers).not.toEqual(fullDatasetPredictions);
+    expect(firstEvaluatedPeriod!.actualNumbers2.length).toBeGreaterThan(0);
+    expect(Array.isArray(firstEvaluatedPeriod!.hits2)).toBe(true);
   });
 
   test("compareBacktestSummaries returns a readable markdown table", async () => {
@@ -121,5 +127,7 @@ describe("lottery/lottery-backtest", () => {
     expect(table).toContain("stats");
     expect(table).toContain("regression");
     expect(table).toContain("Hit Rate");
+    expect(table).toContain("Hits2");
+    expect(table).toContain("Hit Rate 2");
   });
 });

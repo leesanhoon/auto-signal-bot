@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractNums, matchPrizeLabel } from "../../src/lottery/lottery-format.js";
+import { extractNums, extractNums2, matchPrizeLabel, matchPrizeLabelLast2 } from "../../src/lottery/lottery-format.js";
 import type { CompactPrizes } from "../../src/lottery/lottery-types.js";
 
 describe("lottery-format.ts", () => {
@@ -257,6 +257,92 @@ describe("lottery-format.ts", () => {
       expect(matchPrizeLabel(prizes, "111")).toBe("Giải nhì");
       expect(matchPrizeLabel(prizes, "222")).toBe("Giải nhì");
       expect(matchPrizeLabel(prizes, "333")).toBe("Giải nhì");
+    });
+  });
+  describe("extractNums2", () => {
+    it("should extract last 2 digits from prizes including g8 and deduplicate", () => {
+      const prizes: CompactPrizes = {
+        db: "00123",
+        g1: "00423",
+        g2: ["00789", "1"],
+        g3: ["00890"],
+        g4: [],
+        g5: [],
+        g6: [],
+        g7: ["00901"],
+        g8: ["23", "", "45"],
+      };
+
+      const nums = extractNums2(prizes);
+
+      expect(nums).toEqual(["23", "89", "90", "01", "45"]);
+    });
+
+    it("should skip values shorter than 2 characters", () => {
+      const prizes: CompactPrizes = {
+        db: "9",
+        g1: "",
+        g2: ["1"],
+        g3: [],
+        g4: [],
+        g5: [],
+        g6: [],
+        g7: [],
+        g8: ["7"],
+      };
+
+      expect(extractNums2(prizes)).toEqual([]);
+    });
+  });
+
+  describe("matchPrizeLabelLast2", () => {
+    it("should match by last 2 digits including g8", () => {
+      const prizes: CompactPrizes = {
+        db: "00123",
+        g1: "00456",
+        g2: ["00789"],
+        g3: [],
+        g4: [],
+        g5: [],
+        g6: [],
+        g7: [],
+        g8: ["45"],
+      };
+
+      expect(matchPrizeLabelLast2(prizes, "923")).toBe("Giải đặc biệt");
+      expect(matchPrizeLabelLast2(prizes, "845")).toBe("Giải tám");
+    });
+
+    it("should return undefined when no 2-digit match exists", () => {
+      const prizes: CompactPrizes = {
+        db: "00123",
+        g1: "00456",
+        g2: ["00789"],
+        g3: [],
+        g4: [],
+        g5: [],
+        g6: [],
+        g7: [],
+        g8: ["45"],
+      };
+
+      expect(matchPrizeLabelLast2(prizes, "900")).toBeUndefined();
+    });
+
+    it("should respect label priority order for shared last 2 digits", () => {
+      const prizes: CompactPrizes = {
+        db: "",
+        g1: "",
+        g2: ["00123"],
+        g3: ["99123"],
+        g4: [],
+        g5: [],
+        g6: [],
+        g7: [],
+        g8: ["23"],
+      };
+
+      expect(matchPrizeLabelLast2(prizes, "123")).toBe("Giải nhì");
     });
   });
 });

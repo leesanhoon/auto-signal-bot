@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
     region: "mien-bac" | "mien-trung" | "mien-nam";
     method_version: string | null;
     hit: boolean | null;
+    hit2: boolean | null;
   }>,
   error: null as { message: string } | null,
   from: vi.fn(),
@@ -38,11 +39,11 @@ describe("lottery-hit-rate-report", () => {
 
   test("computeHitRateStats groups by region and method_version", async () => {
     state.data = [
-      { date: "2026-07-08", region: "mien-bac", method_version: "v1", hit: true },
-      { date: "2026-07-08", region: "mien-bac", method_version: "v1", hit: false },
-      { date: "2026-07-07", region: "mien-bac", method_version: "v1", hit: true },
-      { date: "2026-07-08", region: "mien-bac", method_version: "v2", hit: false },
-      { date: "2026-07-06", region: "mien-trung", method_version: "v2", hit: true },
+      { date: "2026-07-08", region: "mien-bac", method_version: "v1", hit: true, hit2: true },
+      { date: "2026-07-08", region: "mien-bac", method_version: "v1", hit: false, hit2: true },
+      { date: "2026-07-07", region: "mien-bac", method_version: "v1", hit: true, hit2: true },
+      { date: "2026-07-08", region: "mien-bac", method_version: "v2", hit: false, hit2: false },
+      { date: "2026-07-06", region: "mien-trung", method_version: "v2", hit: true, hit2: true },
     ];
 
     const stats = await reportModule.computeHitRateStats(30);
@@ -55,6 +56,8 @@ describe("lottery-hit-rate-report", () => {
         totalPredictions: 3,
         totalHits: 2,
         hitRate: 2 / 3,
+        totalHits2: 3,
+        hitRate2: 1,
       },
       {
         region: "mien-bac",
@@ -63,6 +66,8 @@ describe("lottery-hit-rate-report", () => {
         totalPredictions: 1,
         totalHits: 0,
         hitRate: 0,
+        totalHits2: 0,
+        hitRate2: 0,
       },
       {
         region: "mien-trung",
@@ -71,18 +76,20 @@ describe("lottery-hit-rate-report", () => {
         totalPredictions: 1,
         totalHits: 1,
         hitRate: 1,
+        totalHits2: 1,
+        hitRate2: 1,
       },
     ]);
 
     expect(state.from).toHaveBeenCalledWith("lottery_predictions");
-    expect(state.from().select).toHaveBeenCalledWith("date, region, method_version, hit");
+    expect(state.from().select).toHaveBeenCalledWith("date, region, method_version, hit, hit2");
     expect(state.from().not).toHaveBeenCalledWith("verified_at", "is", null);
     expect(state.from().gte.mock.calls[0][0]).toBe("date");
   });
 
   test("computeHitRateStats maps empty method_version to unknown", async () => {
     state.data = [
-      { date: "2026-07-08", region: "mien-nam", method_version: null, hit: false },
+      { date: "2026-07-08", region: "mien-nam", method_version: null, hit: false, hit2: true },
     ];
 
     const stats = await reportModule.computeHitRateStats(7);
@@ -95,6 +102,8 @@ describe("lottery-hit-rate-report", () => {
         totalPredictions: 1,
         totalHits: 0,
         hitRate: 0,
+        totalHits2: 1,
+        hitRate2: 1,
       },
     ]);
   });
@@ -109,6 +118,8 @@ describe("lottery-hit-rate-report", () => {
           totalPredictions: 10,
           totalHits: 4,
           hitRate: 0.4,
+          totalHits2: 7,
+          hitRate2: 0.7,
         },
         {
           region: "mien-trung",
@@ -117,6 +128,8 @@ describe("lottery-hit-rate-report", () => {
           totalPredictions: 0,
           totalHits: 0,
           hitRate: 0,
+          totalHits2: 0,
+          hitRate2: 0,
         },
       ],
       30,
@@ -126,6 +139,7 @@ describe("lottery-hit-rate-report", () => {
     expect(message).toContain("🟦 Miền Bắc");
     expect(message).toContain("ensemble-v1");
     expect(message).toContain("40.0% (4/10)");
+    expect(message).toContain("2 số cuối: 70.0% (7/10)");
     expect(message).toContain("🟨 Miền Trung");
     expect(message).toContain("0.0% (0/0)");
     expect(message).not.toContain("NaN");

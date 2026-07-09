@@ -8,6 +8,8 @@ export type HitRateStat = {
   totalPredictions: number;
   totalHits: number;
   hitRate: number;
+  totalHits2: number;
+  hitRate2: number;
 };
 
 type VerifiedPredictionRow = {
@@ -15,6 +17,7 @@ type VerifiedPredictionRow = {
   region: LotteryRegion;
   method_version: string | null;
   hit: boolean | null;
+  hit2: boolean | null;
 };
 
 const REGION_LABELS: Record<LotteryRegion, string> = {
@@ -53,7 +56,7 @@ export async function computeHitRateStats(
   const cutoffDate = subtractDays(vnTodayDateStr(), safeTrailingDays);
 
   const { data, error } = await (getDb().from("lottery_predictions") as any)
-    .select("date, region, method_version, hit")
+    .select("date, region, method_version, hit, hit2")
     .not("verified_at", "is", null)
     .gte("date", cutoffDate);
 
@@ -70,6 +73,7 @@ export async function computeHitRateStats(
       dates: Set<string>;
       totalPredictions: number;
       totalHits: number;
+      totalHits2: number;
     }
   >();
 
@@ -82,10 +86,12 @@ export async function computeHitRateStats(
       dates: new Set<string>(),
       totalPredictions: 0,
       totalHits: 0,
+      totalHits2: 0,
     };
 
     current.totalPredictions += 1;
     if (row.hit === true) current.totalHits += 1;
+    if (row.hit2 === true) current.totalHits2 += 1;
     current.dates.add(row.date);
     grouped.set(key, current);
   }
@@ -98,6 +104,8 @@ export async function computeHitRateStats(
       totalPredictions: item.totalPredictions,
       totalHits: item.totalHits,
       hitRate: toHitRate(item.totalHits, item.totalPredictions),
+      totalHits2: item.totalHits2,
+      hitRate2: toHitRate(item.totalHits2, item.totalPredictions),
     }))
     .sort((a, b) => {
       if (a.region !== b.region) return a.region.localeCompare(b.region);
@@ -140,8 +148,9 @@ export function formatHitRateReport(
     lines.push(REGION_LABELS[region]);
     for (const stat of regionStats) {
       const hitPercent = toHitRate(stat.totalHits, stat.totalPredictions) * 100;
+      const hitPercent2 = toHitRate(stat.totalHits2, stat.totalPredictions) * 100;
       lines.push(
-        `• \`${stat.methodVersion}\`: ${hitPercent.toFixed(1)}% (${stat.totalHits}/${stat.totalPredictions})`,
+        `• \`${stat.methodVersion}\`: ${hitPercent.toFixed(1)}% (${stat.totalHits}/${stat.totalPredictions}) — 2 số cuối: ${hitPercent2.toFixed(1)}% (${stat.totalHits2}/${stat.totalPredictions})`,
       );
       lines.push(`  ${stat.periodsVerified} kỳ verify`);
     }

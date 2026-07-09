@@ -1,6 +1,6 @@
 import { fetchActualRecords } from "./lottery-scraper.js";
 import { appendWeekdayHistory } from "./lottery-repository.js";
-import { matchPrizeLabel } from "./lottery-format.js";
+import { matchPrizeLabel, matchPrizeLabelLast2 } from "./lottery-format.js";
 import { loadUnverifiedPredictions, markPredictionVerified } from "./lottery-predictions-repository.js";
 import { WEEKDAY_LABELS } from "./lottery-schedule.js";
 import { sendMessage } from "../shared/telegram.js";
@@ -46,6 +46,7 @@ export async function runLotteryVerify(region: LotteryRegion): Promise<void> {
 
   const lines: string[] = [`🔍 *DÒ KẾT QUẢ* — ${REGION_LABELS[region]}`, `📅 ${weekdayLabel}, ${dateStr}`, ""];
   let hitCount = 0;
+  let hit2Count = 0;
 
   for (const prediction of predictions) {
     let matchedProvince: string | undefined;
@@ -60,18 +61,49 @@ export async function runLotteryVerify(region: LotteryRegion): Promise<void> {
       }
     }
 
-    const hit = matchedPrize !== undefined;
-    await markPredictionVerified(dateStr, region, prediction.number, hit, matchedProvince, matchedPrize);
-    if (hit) hitCount++;
+    let matchedProvince2: string | undefined;
+    let matchedPrize2: string | undefined;
 
-    const detail = hit ? `✅ TRÚNG${matchedPrize ? ` — ${matchedPrize}` : ""}${matchedProvince ? ` (${matchedProvince})` : ""}` : "❌ Không trúng";
+    for (const record of actualRecords) {
+      const label2 = matchPrizeLabelLast2(record.prizes, prediction.number);
+      if (label2) {
+        matchedProvince2 = record.province;
+        matchedPrize2 = label2;
+        break;
+      }
+    }
+
+    const hit = matchedPrize !== undefined;
+    const hit2 = matchedPrize2 !== undefined;
+    await markPredictionVerified(
+      dateStr,
+      region,
+      prediction.number,
+      hit,
+      matchedProvince,
+      matchedPrize,
+      hit2,
+      matchedProvince2,
+      matchedPrize2,
+    );
+    if (hit) hitCount++;
+    if (hit2) hit2Count++;
+
+    let detail: string;
+    if (hit) {
+      detail = `✅ TRÚNG${matchedPrize ? ` — ${matchedPrize}` : ""}${matchedProvince ? ` (${matchedProvince})` : ""}`;
+    } else if (hit2) {
+      detail = `🔸 Trúng 2 số cuối${matchedPrize2 ? ` — ${matchedPrize2}` : ""}${matchedProvince2 ? ` (${matchedProvince2})` : ""}`;
+    } else {
+      detail = "❌ Không trúng";
+    }
     lines.push(`#${prediction.rank} \`${prediction.number}\`  —  ${detail}`);
-    logger.info(`✓ [${prediction.number}] ${hit ? "TRÚNG" : "không trúng"}`);
+    logger.info(`✓ [${prediction.number}] ${hit ? "TRÚNG" : hit2 ? "trúng 2 số cuối" : "không trúng"}`);
   }
 
   lines.push("");
-  lines.push(`*Tổng kết: trúng ${hitCount}/${predictions.length}*`);
+  lines.push(`*Tổng kết: trúng đủ 3 số ${hitCount}/${predictions.length}, trúng 2 số cuối ${hit2Count}/${predictions.length}*`);
   await sendMessage(lines.join("\n"));
-  logger.info(`\n✅ Hoàn tất. Trúng ${hitCount}/${predictions.length}.`);
+  logger.info(`\n✅ Hoàn tất. Trúng đủ 3 số ${hitCount}/${predictions.length}, trúng 2 số cuối ${hit2Count}/${predictions.length}.`);
 }
 
