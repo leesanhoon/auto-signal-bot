@@ -44,7 +44,9 @@ type AnalysisOrigin =
   | { source: "cached"; candleKey: string };
 
 function shouldAutoTrackAsOpen(setup: TradeSetup, threshold: number): boolean {
-  return setup.orderType === "MARKET_NOW" && (setup.confidence ?? 0) >= threshold;
+  return (
+    setup.orderType === "MARKET_NOW" && (setup.confidence ?? 0) >= threshold
+  );
 }
 
 function getPairs(): Array<{ pair: string; symbol: string }> {
@@ -56,7 +58,9 @@ function getPairs(): Array<{ pair: string; symbol: string }> {
   return Array.from(seen.entries()).map(([pair, symbol]) => ({ pair, symbol }));
 }
 
-export function getChartScannerErrorScope(tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>): string {
+export function getChartScannerErrorScope(
+  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
+): string {
   return tradingSystem === "smc"
     ? "SMC multi-timeframe scanner"
     : "Bob Volman multi-timeframe scanner";
@@ -68,17 +72,28 @@ async function analyzeCurrentWindow(
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
 ): Promise<AnalysisResult> {
-  const runtimeCharts = getChartsForTimeframeMode(timeframeMode, primaryTimeframe);
+  const runtimeCharts = getChartsForTimeframeMode(
+    timeframeMode,
+    primaryTimeframe,
+  );
   logger.info(`Using ${tradingSystem} engine (no AI vision)`, {
     timeframeMode,
     primaryTimeframe,
     tradingSystem,
-    intervals: Array.from(new Set(runtimeCharts.map((chart) => chart.timeframe))),
+    intervals: Array.from(
+      new Set(runtimeCharts.map((chart) => chart.timeframe)),
+    ),
   });
   const result =
     tradingSystem === "smc"
-      ? await analyzeAllChartsSmc(getPairs(), { timeframeMode, primaryTimeframe })
-      : await analyzeAllChartsDeterministic(getPairs(), { timeframeMode, primaryTimeframe });
+      ? await analyzeAllChartsSmc(getPairs(), {
+          timeframeMode,
+          primaryTimeframe,
+        })
+      : await analyzeAllChartsDeterministic(getPairs(), {
+          timeframeMode,
+          primaryTimeframe,
+        });
   await saveChartAnalysisCache(candleKey, result);
   return result;
 }
@@ -90,27 +105,72 @@ async function loadAnalysisForRun(
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   runContext: ReturnType<typeof getConfiguredChartRunContext>,
   tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
-): Promise<{ result: AnalysisResult | null; origin: AnalysisOrigin | null; heartbeatReason: "no-cache" | "no-event" | null }> {
+): Promise<{
+  result: AnalysisResult | null;
+  origin: AnalysisOrigin | null;
+  heartbeatReason: "no-cache" | "no-event" | null;
+}> {
   const cacheLabel = tradingSystem === "smc" ? "smc" : "deterministic";
-  const cacheKey = buildChartAnalysisCacheKey(candleBaseKey, cacheLabel, timeframeMode, primaryTimeframe);
+  const cacheKey = buildChartAnalysisCacheKey(
+    candleBaseKey,
+    cacheLabel,
+    timeframeMode,
+    primaryTimeframe,
+  );
   const cached = await loadChartAnalysisCache(cacheKey);
-  if (cached) return { result: cached, origin: { source: "cached", candleKey: cacheKey }, heartbeatReason: null };
+  if (cached)
+    return {
+      result: cached,
+      origin: { source: "cached", candleKey: cacheKey },
+      heartbeatReason: null,
+    };
 
-  const withinCloseWindow = isWithinTimeframeCandleCloseWindow(analysisTimeframe, new Date(), CANDLE_CLOSE_WINDOW_MS);
+  const withinCloseWindow = isWithinTimeframeCandleCloseWindow(
+    analysisTimeframe,
+    new Date(),
+    CANDLE_CLOSE_WINDOW_MS,
+  );
   if (withinCloseWindow) {
-    const liveResult = await analyzeCurrentWindow(cacheKey, timeframeMode, primaryTimeframe, tradingSystem);
-    return { result: liveResult, origin: { source: "live", candleKey: cacheKey }, heartbeatReason: null };
+    const liveResult = await analyzeCurrentWindow(
+      cacheKey,
+      timeframeMode,
+      primaryTimeframe,
+      tradingSystem,
+    );
+    return {
+      result: liveResult,
+      origin: { source: "live", candleKey: cacheKey },
+      heartbeatReason: null,
+    };
   }
 
   if (runContext === "manual" && shouldUseLatestCacheForManualRun()) {
-    const latest = await loadLatestChartAnalysisCache(cacheLabel, timeframeMode, primaryTimeframe);
+    const latest = await loadLatestChartAnalysisCache(
+      cacheLabel,
+      timeframeMode,
+      primaryTimeframe,
+    );
     if (latest) {
-      return { result: latest.result, origin: { source: "cached", candleKey: latest.candleKey }, heartbeatReason: null };
+      return {
+        result: latest.result,
+        origin: { source: "cached", candleKey: latest.candleKey },
+        heartbeatReason: null,
+      };
     }
-    return { result: null, origin: null, heartbeatReason: shouldSendHeartbeatOnManualRun() ? "no-cache" : null };
+    return {
+      result: null,
+      origin: null,
+      heartbeatReason: shouldSendHeartbeatOnManualRun() ? "no-cache" : null,
+    };
   }
 
-  return { result: null, origin: null, heartbeatReason: shouldSendHeartbeatOutsideCloseWindow() ? "no-event" : null };
+  return {
+    result: null,
+    origin: null,
+    heartbeatReason: shouldSendHeartbeatOutsideCloseWindow()
+      ? "no-event"
+      : null,
+  };
 }
 
 async function handleAnalysisResult(
@@ -124,7 +184,10 @@ async function handleAnalysisResult(
       try {
         const validation = validateTradeSetupForOpen(setup);
         if (!validation.accepted) {
-          logger.info("Skipped open position due to risk/reward gate", { pair: setup.pair, reason: validation.reason });
+          logger.info("Skipped open position due to risk/reward gate", {
+            pair: setup.pair,
+            reason: validation.reason,
+          });
           continue;
         }
         const saved = await saveOpenPosition(setup);
@@ -135,24 +198,47 @@ async function handleAnalysisResult(
           logger.info("Skipped duplicate open position", { pair: setup.pair });
         }
       } catch (error) {
-        logger.error("Failed to auto-save open position", { pair: setup.pair, error });
+        logger.error("Failed to auto-save open position", {
+          pair: setup.pair,
+          error,
+        });
       }
-    } else if ((setup.confidence ?? 0) >= threshold && setup.orderType !== "MARKET_NOW") {
+    } else if (
+      (setup.confidence ?? 0) >= threshold &&
+      setup.orderType !== "MARKET_NOW"
+    ) {
       try {
         const saved = await savePendingOrder(setup);
         if (saved) {
-          logger.info("Saved pending order", { pair: setup.pair, orderType: setup.orderType, primaryTimeframe: setup.primaryTimeframe });
+          logger.info("Saved pending order", {
+            pair: setup.pair,
+            orderType: setup.orderType,
+            primaryTimeframe: setup.primaryTimeframe,
+          });
         } else {
-          logger.info("Skipped duplicate pending order", { pair: setup.pair, orderType: setup.orderType });
+          logger.info("Skipped duplicate pending order", {
+            pair: setup.pair,
+            orderType: setup.orderType,
+          });
         }
       } catch (error) {
-        logger.error("Failed to save pending order", { pair: setup.pair, error });
+        logger.error("Failed to save pending order", {
+          pair: setup.pair,
+          error,
+        });
       }
     }
   }
 
-  logger.info("Sending results to Telegram", { source: origin.source, candleKey: origin.candleKey });
-  await sendAllAnalyses(result, undefined, { source: origin.source, candleKey: origin.candleKey, systemLabel: tradingSystem });
+  logger.info("Sending results to Telegram", {
+    source: origin.source,
+    candleKey: origin.candleKey,
+  });
+  await sendAllAnalyses(result, undefined, {
+    source: origin.source,
+    candleKey: origin.candleKey,
+    systemLabel: tradingSystem,
+  });
 }
 
 async function maybeSendHeartbeat(
@@ -162,7 +248,15 @@ async function maybeSendHeartbeat(
   latestCacheCandleKey?: string | null,
 ): Promise<void> {
   if (!heartbeatReason) return;
-  await sendMessage(buildHeartbeatMessage({ runContext, engineMode: getConfiguredChartTradingSystem(), reason: heartbeatReason, candleKey, latestCacheCandleKey: latestCacheCandleKey ?? null }));
+  await sendMessage(
+    buildHeartbeatMessage({
+      runContext,
+      engineMode: getConfiguredChartTradingSystem(),
+      reason: heartbeatReason,
+      candleKey,
+      latestCacheCandleKey: latestCacheCandleKey ?? null,
+    }),
+  );
 }
 
 export async function main(): Promise<void> {
@@ -171,18 +265,37 @@ export async function main(): Promise<void> {
   const tradingSystem = getConfiguredChartTradingSystem();
   const timeframeMode = getConfiguredChartTimeframeMode();
   const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
-  const analysisTimeframe = timeframeMode === "single" ? primaryTimeframe : "H4";
-  logger.info("Chart scanner starting", { engineMode: tradingSystem, runContext, timeframeMode, primaryTimeframe, analysisTimeframe });
+  const analysisTimeframe =
+    timeframeMode === "single" ? primaryTimeframe : "H4";
+  logger.info("Chart scanner starting", {
+    engineMode: tradingSystem,
+    runContext,
+    timeframeMode,
+    primaryTimeframe,
+    analysisTimeframe,
+  });
 
   const candleBaseKey = getLastClosedCandleKey(analysisTimeframe);
   const cacheLabel = tradingSystem === "smc" ? "smc" : "deterministic";
-  const candleKey = buildChartAnalysisCacheKey(candleBaseKey, cacheLabel, timeframeMode, primaryTimeframe);
+  const candleKey = buildChartAnalysisCacheKey(
+    candleBaseKey,
+    cacheLabel,
+    timeframeMode,
+    primaryTimeframe,
+  );
   let latestCacheCandleKey: string | null = null;
   let result: AnalysisResult | null = null;
   let origin: AnalysisOrigin | null = null;
   let heartbeatReason: "no-cache" | "no-event" | null = null;
 
-  const analysisState = await loadAnalysisForRun(candleBaseKey, analysisTimeframe, timeframeMode, primaryTimeframe, runContext, tradingSystem);
+  const analysisState = await loadAnalysisForRun(
+    candleBaseKey,
+    analysisTimeframe,
+    timeframeMode,
+    primaryTimeframe,
+    runContext,
+    tradingSystem,
+  );
   result = analysisState.result;
   origin = analysisState.origin;
   heartbeatReason = analysisState.heartbeatReason;
@@ -191,23 +304,34 @@ export async function main(): Promise<void> {
   if (result && origin) {
     await handleAnalysisResult(result, origin, tradingSystem);
   } else {
-    logger.warn(`⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`, { engineMode: tradingSystem });
+    logger.warn(
+      `⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`,
+      { engineMode: tradingSystem },
+    );
   }
 
   logger.info("Checking open positions");
   const openTradeNotifications = await runCheckOpenTrades();
   logger.info("Checking pending orders");
-  const pendingNotifications = await runCheckPendingOrders();
+  // const pendingNotifications = await runCheckPendingOrders();
+  // + pendingNotifications == 0
 
-  if (!result && openTradeNotifications + pendingNotifications === 0) {
-    await maybeSendHeartbeat(runContext, candleKey, heartbeatReason, latestCacheCandleKey);
+  if (!result && openTradeNotifications === 0) {
+    await maybeSendHeartbeat(
+      runContext,
+      candleKey,
+      heartbeatReason,
+      latestCacheCandleKey,
+    );
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const attemptedPairs = result?.analysisStats?.attemptedPairs ?? result?.summaries.length ?? 0;
+  const attemptedPairs =
+    result?.analysisStats?.attemptedPairs ?? result?.summaries.length ?? 0;
   const summaryPairs = result?.summaries.length ?? 0;
   const skippedPairs = result?.analysisStats?.skippedPairs ?? 0;
-  const setupCount = result?.analysisStats?.setupCount ?? result?.setups.length ?? 0;
+  const setupCount =
+    result?.analysisStats?.setupCount ?? result?.setups.length ?? 0;
   logger.info("Run complete", {
     scannedPairs: attemptedPairs,
     attemptedPairs,
@@ -228,7 +352,10 @@ export async function main(): Promise<void> {
 if (!process.env.VITEST) {
   main().catch(async (error) => {
     logger.error("Fatal error", { error });
-    await notifyError(getChartScannerErrorScope(getConfiguredChartTradingSystem()), error);
+    await notifyError(
+      getChartScannerErrorScope(getConfiguredChartTradingSystem()),
+      error,
+    );
     process.exit(1);
   });
 }
