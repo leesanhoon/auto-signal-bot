@@ -25,7 +25,9 @@ const TIMEFRAME_MS: Record<ChartTimeframe, number> = {
   D1: 24 * 60 * 60 * 1000,
 };
 
-function getCandleCloseTime(timeframe: ChartTimeframe | undefined): number | null {
+function getCandleCloseTime(
+  timeframe: ChartTimeframe | undefined,
+): number | null {
   if (!timeframe || !(timeframe in TIMEFRAME_MS)) return null;
 
   const intervalMs = TIMEFRAME_MS[timeframe];
@@ -49,24 +51,6 @@ function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
   const MM = String(closeTime.getUTCMonth() + 1).padStart(2, "0");
 
   return `🕐 Nến gốc [${timeframe}] đóng: ${hh}:${mm} ${dd}/${MM} UTC (${minutesAgo} phút trước)`;
-}
-
-function buildNoSetupReasonSection(result: AnalysisResult): string {
-  if (!result.noSetupReason.trim()) return "";
-
-  const lines = result.noSetupReason
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .slice(0, 8)
-    .map((line) => `• ${escapeMarkdownV1(line)}`);
-
-  if (lines.length === 0) return "";
-
-  return [`📋 *Lý do scan:*`, ...lines].join("\n");
-}
-
-function escapeMarkdownV1(text: string): string {
-  return text.replace(/([\\_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
 }
 
 function getPatternInfo(setup: string): string {
@@ -128,12 +112,16 @@ function buildCopyableSetup(setup: TradeSetup): string {
     `${arrow} *${setup.pair} — ${setup.direction}* (${confidence}% ${confBar})${emaTag}`,
     `📋 *${setup.setup}*`,
     patternInfo,
-    setup.orderType ? `🧭 *Loại lệnh:* ${getOrderTypeLabel(setup.orderType)}` : "",
+    setup.orderType
+      ? `🧭 *Loại lệnh:* ${getOrderTypeLabel(setup.orderType)}`
+      : "",
     setup.entryCondition ? `⏳ *Điều kiện vào:* ${setup.entryCondition}` : "",
     setup.lastPrice !== undefined && setup.lastPrice !== null
       ? `📍 *Giá thật:* ${formatLastPrice(setup.lastPrice)}`
       : "",
-    setup.currentPriceContext ? `📍 *Giá hiện tại:* ${setup.currentPriceContext}` : "",
+    setup.currentPriceContext
+      ? `📍 *Giá hiện tại:* ${setup.currentPriceContext}`
+      : "",
     candleAge ?? "",
     fallbackNote,
     "",
@@ -196,8 +184,12 @@ export function findScreenshotForSetup(
   screenshots: ScreenshotResult[],
 ): { screenshot?: ScreenshotResult; usedFallback: boolean } {
   const preferredTimeframe = normalizeSetupTimeframe(setup);
-  const preferredTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
-  const fallbackTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
+  const preferredTargets: Array<
+    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
+  > = [];
+  const fallbackTargets: Array<
+    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
+  > = [];
 
   for (const chart of setup.sourceCharts ?? []) {
     if (chart.timeframe === preferredTimeframe) preferredTargets.push(chart);
@@ -205,12 +197,15 @@ export function findScreenshotForSetup(
   }
 
   if (setup.telegramChart) {
-    if (setup.telegramChart.timeframe === preferredTimeframe) preferredTargets.push(setup.telegramChart);
+    if (setup.telegramChart.timeframe === preferredTimeframe)
+      preferredTargets.push(setup.telegramChart);
     else fallbackTargets.push(setup.telegramChart);
   }
 
   const findExact = (
-    targets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">>,
+    targets: Array<
+      Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
+    >,
   ): ScreenshotResult | undefined => {
     for (const target of targets) {
       const exactTriple = screenshots.find(
@@ -224,14 +219,18 @@ export function findScreenshotForSetup(
 
     for (const target of targets) {
       const exactSymbolTimeframe = screenshots.find(
-        (s) => s.chart.symbol === target.symbol && s.chart.timeframe === target.timeframe,
+        (s) =>
+          s.chart.symbol === target.symbol &&
+          s.chart.timeframe === target.timeframe,
       );
       if (exactSymbolTimeframe) return exactSymbolTimeframe;
     }
 
     for (const target of targets) {
       if (!target.filepath) continue;
-      const exactFilepath = screenshots.find((s) => s.filepath === target.filepath);
+      const exactFilepath = screenshots.find(
+        (s) => s.filepath === target.filepath,
+      );
       if (exactFilepath) return exactFilepath;
     }
 
@@ -239,7 +238,8 @@ export function findScreenshotForSetup(
   };
 
   const preferredMatch = findExact(preferredTargets);
-  if (preferredMatch) return { screenshot: preferredMatch, usedFallback: false };
+  if (preferredMatch)
+    return { screenshot: preferredMatch, usedFallback: false };
 
   const fallbackMatch = findExact(fallbackTargets);
   if (fallbackMatch) return { screenshot: fallbackMatch, usedFallback: true };
@@ -250,10 +250,13 @@ export function findScreenshotForSetup(
       normalizeChartKey(s.chart.symbol).includes(normalizedPair) &&
       s.chart.timeframe === preferredTimeframe,
   );
-  if (byPreferredTimeframe) return { screenshot: byPreferredTimeframe, usedFallback: true };
+  if (byPreferredTimeframe)
+    return { screenshot: byPreferredTimeframe, usedFallback: true };
 
   return {
-    screenshot: screenshots.find((s) => normalizeChartKey(s.chart.symbol).includes(normalizedPair)),
+    screenshot: screenshots.find((s) =>
+      normalizeChartKey(s.chart.symbol).includes(normalizedPair),
+    ),
     usedFallback: true,
   };
 }
@@ -415,8 +418,12 @@ export async function sendAllAnalysesVolman(
     timeZone: "Asia/Ho_Chi_Minh",
   });
   const threshold = getConfiguredChartSignalConfidenceThreshold();
-  const summaries = result.summaries.filter((summary) => summary.confidence >= threshold);
-  const setups = result.setups.filter((setup) => (setup.confidence ?? 0) >= threshold);
+  const summaries = result.summaries.filter(
+    (summary) => summary.confidence >= threshold,
+  );
+  const setups = result.setups.filter(
+    (setup) => (setup.confidence ?? 0) >= threshold,
+  );
   const isCached = deliveryContext.source === "cached";
   const sourceLabel = isCached ? " từ cache" : " từ thuật toán";
   const cacheLine = isCached
@@ -427,28 +434,16 @@ export async function sendAllAnalysesVolman(
   const setupHeaderSuffix = isCached ? " từ cache" : " từ thuật toán";
   const footerLabel = isCached ? "từ cache" : "từ thuật toán";
 
-  const attemptedCount = result.analysisStats?.attemptedPairs ?? result.summaries.length;
-  const statsLine = result.analysisStats
-    ? `📊 Attempted: ${result.analysisStats.attemptedPairs} | Summaries: ${result.summaries.length} | Skipped: ${result.analysisStats.skippedPairs} | Setups: ${result.analysisStats.setupCount}`
-    : "";
-  const noSetupReasonSection = buildNoSetupReasonSection(result);
+  const attemptedCount =
+    result.analysisStats?.attemptedPairs ?? result.summaries.length;
   const scannerLabel = "Bob Volman Multi-Timeframe Scanner";
 
   if (setups.length === 0) {
     await notifier.sendMessage(
       [
-        `🚀 *${scannerLabel}${sourceLabel}*`,
-        `📅 ${timestamp}`,
-        cacheLine,
-        `📊 Đã quét/thử *${attemptedCount}* cặp (D1/H4/M15 + volume)`,
-        `📊 Có summary cho *${result.summaries.length}* cặp; lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)`,
-        "",
-        `⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ thuật toán"}`,
-        statsLine,
-        noSetupReasonSection,
-        "",
-        `_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
-      ].filter(Boolean).join("\n"),
+        `⏸ *${scannerLabel}* — không có setup đạt ngưỡng (≥${threshold}%)${isCached ? " (cache)" : ""}`,
+        `📅 ${timestamp} | Quét ${attemptedCount} cặp, ${summaries.length}/${result.summaries.length} đạt ngưỡng summary`,
+      ].join("\n"),
     );
     logger.info(
       `  → No setups above threshold (${threshold}%). Notification sent with ${summaries.length} eligible summaries (${footerLabel}).`,
@@ -462,7 +457,10 @@ export async function sendAllAnalysesVolman(
 
   for (const setup of setups) {
     const confidence = setup.confidence ?? 0;
-    const { screenshot, usedFallback } = findScreenshotForSetup(setup, result.screenshots);
+    const { screenshot, usedFallback } = findScreenshotForSetup(
+      setup,
+      result.screenshots,
+    );
 
     if (screenshot) {
       try {
@@ -470,9 +468,13 @@ export async function sendAllAnalysesVolman(
         (setup as Record<string, unknown>).chartFallbackUsed = usedFallback;
         await notifier.sendPhoto(screenshot.buffer, caption);
         if (usedFallback) {
-          logger.warn(`  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`);
+          logger.warn(
+            `  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`,
+          );
         } else {
-          logger.info(`  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`);
+          logger.info(
+            `  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`,
+          );
         }
       } catch (error) {
         logger.error(`  ✗ Failed to send chart ${setup.pair}:`, error);

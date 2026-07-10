@@ -1,8 +1,5 @@
 import { basename } from "path";
-import type {
-  AnalysisResult,
-  TradeSetup,
-} from "../charts/chart-types-smc.js";
+import type { AnalysisResult, TradeSetup } from "../charts/chart-types-smc.js";
 import type {
   ScreenshotResult,
   ChartAnalysisSource,
@@ -29,10 +26,14 @@ const TIMEFRAME_MS: Record<ChartTimeframe, number> = {
 function formatPlainPrice(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return String(value ?? "");
-  return num.toFixed(num >= 100 ? 2 : 5).replace(/\.?0+$/, (m) => (m.startsWith(".") ? "" : m));
+  return num
+    .toFixed(num >= 100 ? 2 : 5)
+    .replace(/\.?0+$/, (m) => (m.startsWith(".") ? "" : m));
 }
 
-function getCandleCloseTime(timeframe: ChartTimeframe | undefined): number | null {
+function getCandleCloseTime(
+  timeframe: ChartTimeframe | undefined,
+): number | null {
   if (!timeframe || !(timeframe in TIMEFRAME_MS)) return null;
 
   const intervalMs = TIMEFRAME_MS[timeframe];
@@ -58,17 +59,24 @@ function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
   return `🕐 Nến gốc [${timeframe}] đóng: ${hh}:${mm} ${dd}/${MM} UTC (${minutesAgo} phút trước)`;
 }
 
-function getSmcDirectionLabel(direction: TradeSetup["direction"]): "BUY" | "SELL" {
+function getSmcDirectionLabel(
+  direction: TradeSetup["direction"],
+): "BUY" | "SELL" {
   return direction === "LONG" ? "BUY" : "SELL";
 }
 
 function parseNumericLike(value: unknown): number | null {
-  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+  const parsed = Number(
+    String(value ?? "")
+      .replace(/,/g, "")
+      .trim(),
+  );
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function formatRiskRewardValue(value: unknown): string {
-  if (typeof value === "number" && Number.isFinite(value)) return `${value.toFixed(1)}:1`;
+  if (typeof value === "number" && Number.isFinite(value))
+    return `${value.toFixed(1)}:1`;
   if (typeof value === "string" && value.trim().length > 0) return value;
   return "N/A";
 }
@@ -102,31 +110,48 @@ export function buildSmcSignalMessage(setup: TradeSetup): string {
 
   if (setup.market) lines.push(`Market: ${setup.market}`);
   lines.push(SMC_SEPARATOR, "", `[ENTRY] ${setup.entry}`);
-  if (setup.entryZone) lines.push(`Entry Zone: ${setup.entryZone.low} - ${setup.entryZone.high}`);
+  if (setup.entryZone)
+    lines.push(`Entry Zone: ${setup.entryZone.low} - ${setup.entryZone.high}`);
 
-  const stopLossDistance = setup.stopLossDistance
-    ?? (() => {
+  const stopLossDistance =
+    setup.stopLossDistance ??
+    (() => {
       const entry = parseNumericLike(setup.entry);
       const sl = parseNumericLike(setup.stopLoss);
-      return entry !== null && sl !== null ? `$${Math.abs(entry - sl).toFixed(2)}` : null;
+      return entry !== null && sl !== null
+        ? `$${Math.abs(entry - sl).toFixed(2)}`
+        : null;
     })();
-  lines.push("", `[SL] ${setup.stopLoss}${stopLossDistance ? ` | SL Distance: ${stopLossDistance}` : ""}`);
+  lines.push(
+    "",
+    `[SL] ${setup.stopLoss}${stopLossDistance ? ` | SL Distance: ${stopLossDistance}` : ""}`,
+  );
 
   const allocation = setup.takeProfitAllocations;
-  const liquidityByTarget = new Map((setup.liquidityTargets ?? []).map((item) => [item.target, item]));
+  const liquidityByTarget = new Map(
+    (setup.liquidityTargets ?? []).map((item) => [item.target, item]),
+  );
   const tpEntries = [
     { key: "TP1", price: setup.takeProfit1, alloc: allocation?.tp1 },
     { key: "TP2", price: setup.takeProfit2, alloc: allocation?.tp2 },
-    ...(setup.takeProfit3 ? [{ key: "TP3", price: setup.takeProfit3, alloc: allocation?.tp3 }] : []),
+    ...(setup.takeProfit3
+      ? [{ key: "TP3", price: setup.takeProfit3, alloc: allocation?.tp3 }]
+      : []),
   ];
   for (const tp of tpEntries) {
     const liq = liquidityByTarget.get(tp.key as "TP1" | "TP2" | "TP3");
-    const rr = liq?.riskReward !== undefined
-      ? formatRiskRewardValue(liq.riskReward)
-      : tp.key === "TP1"
-        ? formatRiskRewardValue(setup.riskReward)
-        : calculateRiskRewardFromPrices(setup.entry, setup.stopLoss, tp.price);
-    const allocText = typeof tp.alloc === "number" ? ` | Chốt ${tp.alloc}%` : "";
+    const rr =
+      liq?.riskReward !== undefined
+        ? formatRiskRewardValue(liq.riskReward)
+        : tp.key === "TP1"
+          ? formatRiskRewardValue(setup.riskReward)
+          : calculateRiskRewardFromPrices(
+              setup.entry,
+              setup.stopLoss,
+              tp.price,
+            );
+    const allocText =
+      typeof tp.alloc === "number" ? ` | Chốt ${tp.alloc}%` : "";
     const liqText = liq ? ` | ${liq.label} ${liq.price}` : "";
     lines.push("", `[${tp.key}] ${tp.price} | R:R ${rr}${allocText}${liqText}`);
   }
@@ -143,31 +168,18 @@ export function buildSmcSignalMessage(setup: TradeSetup): string {
     ? setup.capitalManagement
     : [
         "Risk 1-2% tài khoản cho lệnh này.",
-        setup.takeProfit3 ? "Chiến lược chốt lời: 50% tại TP1, 30% tại TP2, 20% tại TP3." : "Chiến lược chốt lời: 50% tại TP1, 50% tại TP2.",
+        setup.takeProfit3
+          ? "Chiến lược chốt lời: 50% tại TP1, 30% tại TP2, 20% tại TP3."
+          : "Chiến lược chốt lời: 50% tại TP1, 50% tại TP2.",
         "Kéo SL về entry (breakeven) ngay khi chạm TP1 để bảo toàn vốn.",
       ];
   for (const line of capitalManagement) lines.push(`- ${line}`);
 
-  lines.push("", `THẬN TRỌNG: ${setup.caution ?? "Thanh khoản thấp ngoài khung giờ vàng có thể gây biến động bất ngờ."}`);
+  lines.push(
+    "",
+    `THẬN TRỌNG: ${setup.caution ?? "Thanh khoản thấp ngoài khung giờ vàng có thể gây biến động bất ngờ."}`,
+  );
   return lines.join("\n");
-}
-
-function buildNoSetupReasonSection(result: AnalysisResult): string {
-  if (!result.noSetupReason.trim()) return "";
-
-  const lines = result.noSetupReason
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .slice(0, 8)
-    .map((line) => `• ${escapeMarkdownV1(line)}`);
-
-  if (lines.length === 0) return "";
-
-  return [`📋 *Lý do scan:*`, ...lines].join("\n");
-}
-
-function escapeMarkdownV1(text: string): string {
-  return text.replace(/([\\_*\[\]()~`>#+\-=|{}.!])/g, "\\$1");
 }
 
 function normalizeChartKey(value: string): string {
@@ -184,8 +196,12 @@ export function findScreenshotForSetup(
   screenshots: ScreenshotResult[],
 ): { screenshot?: ScreenshotResult; usedFallback: boolean } {
   const preferredTimeframe = normalizeSetupTimeframe(setup);
-  const preferredTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
-  const fallbackTargets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">> = [];
+  const preferredTargets: Array<
+    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
+  > = [];
+  const fallbackTargets: Array<
+    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
+  > = [];
 
   for (const chart of setup.sourceCharts ?? []) {
     if (chart.timeframe === preferredTimeframe) preferredTargets.push(chart);
@@ -193,12 +209,15 @@ export function findScreenshotForSetup(
   }
 
   if (setup.telegramChart) {
-    if (setup.telegramChart.timeframe === preferredTimeframe) preferredTargets.push(setup.telegramChart);
+    if (setup.telegramChart.timeframe === preferredTimeframe)
+      preferredTargets.push(setup.telegramChart);
     else fallbackTargets.push(setup.telegramChart);
   }
 
   const findExact = (
-    targets: Array<Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">>,
+    targets: Array<
+      Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
+    >,
   ): ScreenshotResult | undefined => {
     for (const target of targets) {
       const exactTriple = screenshots.find(
@@ -212,14 +231,18 @@ export function findScreenshotForSetup(
 
     for (const target of targets) {
       const exactSymbolTimeframe = screenshots.find(
-        (s) => s.chart.symbol === target.symbol && s.chart.timeframe === target.timeframe,
+        (s) =>
+          s.chart.symbol === target.symbol &&
+          s.chart.timeframe === target.timeframe,
       );
       if (exactSymbolTimeframe) return exactSymbolTimeframe;
     }
 
     for (const target of targets) {
       if (!target.filepath) continue;
-      const exactFilepath = screenshots.find((s) => s.filepath === target.filepath);
+      const exactFilepath = screenshots.find(
+        (s) => s.filepath === target.filepath,
+      );
       if (exactFilepath) return exactFilepath;
     }
 
@@ -227,7 +250,8 @@ export function findScreenshotForSetup(
   };
 
   const preferredMatch = findExact(preferredTargets);
-  if (preferredMatch) return { screenshot: preferredMatch, usedFallback: false };
+  if (preferredMatch)
+    return { screenshot: preferredMatch, usedFallback: false };
 
   const fallbackMatch = findExact(fallbackTargets);
   if (fallbackMatch) return { screenshot: fallbackMatch, usedFallback: true };
@@ -238,10 +262,13 @@ export function findScreenshotForSetup(
       normalizeChartKey(s.chart.symbol).includes(normalizedPair) &&
       s.chart.timeframe === preferredTimeframe,
   );
-  if (byPreferredTimeframe) return { screenshot: byPreferredTimeframe, usedFallback: true };
+  if (byPreferredTimeframe)
+    return { screenshot: byPreferredTimeframe, usedFallback: true };
 
   return {
-    screenshot: screenshots.find((s) => normalizeChartKey(s.chart.symbol).includes(normalizedPair)),
+    screenshot: screenshots.find((s) =>
+      normalizeChartKey(s.chart.symbol).includes(normalizedPair),
+    ),
     usedFallback: true,
   };
 }
@@ -403,8 +430,12 @@ export async function sendAllAnalysesSmc(
     timeZone: "Asia/Ho_Chi_Minh",
   });
   const threshold = getConfiguredSmcMinSignalConfidence();
-  const summaries = result.summaries.filter((summary) => summary.confidence >= threshold);
-  const setups = result.setups.filter((setup) => (setup.confidence ?? 0) >= threshold);
+  const summaries = result.summaries.filter(
+    (summary) => summary.confidence >= threshold,
+  );
+  const setups = result.setups.filter(
+    (setup) => (setup.confidence ?? 0) >= threshold,
+  );
   const isCached = deliveryContext.source === "cached";
   const sourceLabel = isCached ? " từ cache" : " từ thuật toán";
   const cacheLine = isCached
@@ -415,28 +446,16 @@ export async function sendAllAnalysesSmc(
   const setupHeaderSuffix = isCached ? " từ cache" : " từ thuật toán";
   const footerLabel = isCached ? "từ cache" : "từ thuật toán";
 
-  const attemptedCount = result.analysisStats?.attemptedPairs ?? result.summaries.length;
-  const statsLine = result.analysisStats
-    ? `📊 Attempted: ${result.analysisStats.attemptedPairs} | Summaries: ${result.summaries.length} | Skipped: ${result.analysisStats.skippedPairs} | Setups: ${result.analysisStats.setupCount}`
-    : "";
-  const noSetupReasonSection = buildNoSetupReasonSection(result);
+  const attemptedCount =
+    result.analysisStats?.attemptedPairs ?? result.summaries.length;
   const scannerLabel = "SMC Multi-Timeframe Scanner";
 
   if (setups.length === 0) {
     await notifier.sendMessage(
       [
-        `🚀 *${scannerLabel}${sourceLabel}*`,
-        `📅 ${timestamp}`,
-        cacheLine,
-        `📊 Đã quét/thử *${attemptedCount}* cặp (D1/H4/M15 + volume)`,
-        `📊 Có summary cho *${result.summaries.length}* cặp; lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%)`,
-        "",
-        `⏸ Không có setup đạt ngưỡng${isCached ? " trong cache" : " từ thuật toán"}`,
-        statsLine,
-        noSetupReasonSection,
-        "",
-        `_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
-      ].filter(Boolean).join("\n"),
+        `⏸ *${scannerLabel}* — không có setup đạt ngưỡng (≥${threshold}%)${isCached ? " (cache)" : ""}`,
+        `📅 ${timestamp} | Quét ${attemptedCount} cặp, ${summaries.length}/${result.summaries.length} đạt ngưỡng summary`,
+      ].join("\n"),
     );
     logger.info(
       `  → No setups above threshold (${threshold}%). Notification sent with ${summaries.length} eligible summaries (${footerLabel}).`,
@@ -450,7 +469,10 @@ export async function sendAllAnalysesSmc(
 
   for (const setup of setups) {
     const confidence = setup.confidence ?? 0;
-    const { screenshot, usedFallback } = findScreenshotForSetup(setup, result.screenshots);
+    const { screenshot, usedFallback } = findScreenshotForSetup(
+      setup,
+      result.screenshots,
+    );
 
     if (screenshot) {
       try {
@@ -458,9 +480,13 @@ export async function sendAllAnalysesSmc(
         (setup as Record<string, unknown>).chartFallbackUsed = usedFallback;
         await notifier.sendPhoto(screenshot.buffer, caption);
         if (usedFallback) {
-          logger.warn(`  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`);
+          logger.warn(
+            `  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`,
+          );
         } else {
-          logger.info(`  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`);
+          logger.info(
+            `  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`,
+          );
         }
       } catch (error) {
         logger.error(`  ✗ Failed to send chart ${setup.pair}:`, error);

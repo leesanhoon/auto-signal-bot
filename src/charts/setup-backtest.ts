@@ -19,6 +19,8 @@ const logger = createLogger("charts:setup-backtest");
 // Types
 // ---------------------------------------------------------------------------
 
+export type ExitMode = "fixed" | "trailing" | "swing_trail";
+
 export type SetupBacktestTrade = {
   setup: SetupKind;
   pair: string;
@@ -26,9 +28,18 @@ export type SetupBacktestTrade = {
   direction: "LONG" | "SHORT";
   entryIndex: number;
   entryPrice: number;
+  entryTime: number;
   exitIndex: number | null;
   exitPrice: number | null;
-  outcome: "tp1" | "tp2" | "stop" | "open_at_end";
+  exitTime: number | null;
+  outcome:
+    | "tp1"
+    | "tp2"
+    | "stop"
+    | "trail_be"
+    | "trail_tp1"
+    | "trail_swing"
+    | "open_at_end";
   realizedRiskReward: number;
   confidence: number;
 };
@@ -70,6 +81,9 @@ export function runSetupBacktest(
   candles: Candle[],
   pair: string,
   timeframe: ChartTimeframe,
+  exitMode: ExitMode = "fixed",
+  trailBufferR = 0,
+  swingLookback = 3,
 ): SetupBacktestReport {
   const ema20 = calculateEma(candles, 20);
   const atr14 = calculateAtr(candles, 14);
@@ -219,7 +233,7 @@ export function runSetupBacktest(
     }
 
     const signal = resolvedSignals[0];
-    const trade = buildTrade(candles, signal);
+    const trade = buildTrade(candles, signal, exitMode, trailBufferR, swingLookback);
 
     if (signal.setup === "SB") {
       trades.push(trade);
@@ -250,9 +264,20 @@ export function runSetupBacktest(
   return computeReport(trades);
 }
 
-function buildTrade(candles: Candle[], signal: DetectedSignal): SetupBacktestTrade {
+function buildTrade(
+  candles: Candle[],
+  signal: DetectedSignal,
+  exitMode: ExitMode,
+  trailBufferR: number,
+  swingLookback: number,
+): SetupBacktestTrade {
   const entryIndex = signal.triggerIndex;
-  const outcome = scanOutcome(candles, signal, entryIndex);
+  const outcome =
+    exitMode === "trailing"
+      ? scanOutcomeTrailing(candles, signal, entryIndex, trailBufferR)
+      : exitMode === "swing_trail"
+        ? scanOutcomeSwingTrail(candles, signal, entryIndex, swingLookback)
+        : scanOutcome(candles, signal, entryIndex);
   return {
     setup: signal.setup,
     pair: signal.pair,
@@ -260,8 +285,10 @@ function buildTrade(candles: Candle[], signal: DetectedSignal): SetupBacktestTra
     direction: signal.direction,
     entryIndex,
     entryPrice: signal.entry,
+    entryTime: candles[entryIndex].time,
     exitIndex: outcome.exitIndex,
     exitPrice: outcome.exitPrice,
+    exitTime: outcome.exitIndex !== null ? candles[outcome.exitIndex].time : null,
     outcome: outcome.outcome,
     realizedRiskReward: outcome.realizedRiskReward,
     confidence: signal.confidence,
@@ -318,6 +345,145 @@ function scanOutcome(
         const exitPrice = takeProfit1;
         const rr = (entry - exitPrice) / (stopLoss - entry);
         return { exitIndex: i, exitPrice, outcome: "tp1", realizedRiskReward: rr };
+      }
+    }
+  }
+
+  return {
+    exitIndex: null,
+    exitPrice: null,
+    outcome: "open_at_end",
+    realizedRiskReward: 0,
+  };
+}
+
+/**
+ * Trailing variant: TP1 hit -> SL moves to entry (breakeven).
+ * TP2 hit -> SL moves to TP1. Trade stays open (no fixed target)
+ * until price comes back and hits the trailed SL, or data runs out.
+ *
+ * `trailBufferR` (fraction of the initial risk) pulls the trailed SL back
+ * behind the breakeven/TP1 level instead of sitting exactly on it, so a
+ * shallow pullback doesn't sweep the trade the instant it touches the level.
+ */
+function scanOutcomeTrailing(
+  candles: Candle[],
+  signal: DetectedSignal,
+  entryIndex: number,
+  trailBufferR: number,
+): {
+  exitIndex: number | null;
+  exitPrice: number | null;
+  outcome: SetupBacktestTrade["outcome"];
+  realizedRiskReward: number;
+} {
+  const { entry, stopLoss, takeProfit1, takeProfit2, direction } = signal;
+  const risk = Math.abs(entry - stopLoss);
+  const buffer = trailBufferR * risk;
+  const breakevenStop = direction === "LONG" ? entry - buffer : entry + buffer;
+  const tp1Stop = direction === "LONG" ? takeProfit1 - buffer : takeProfit1 + buffer;
+
+  let currentStop = stopLoss;
+  let tp1Hit = false;
+  let tp2Hit = false;
+
+  for (let i = entryIndex; i < candles.length; i++) {
+    const { high, low } = candles[i];
+
+    if (direction === "LONG") {
+      if (low <= currentStop) {
+        const exitPrice = currentStop;
+        const rr = (exitPrice - entry) / (entry - stopLoss);
+        const outcome = tp2Hit ? "trail_tp1" : tp1Hit ? "trail_be" : "stop";
+        return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
+      }
+      if (!tp1Hit && high >= takeProfit1) {
+        tp1Hit = true;
+        currentStop = breakevenStop;
+      }
+      if (tp1Hit && !tp2Hit && high >= takeProfit2) {
+        tp2Hit = true;
+        currentStop = tp1Stop;
+      }
+    } else {
+      if (high >= currentStop) {
+        const exitPrice = currentStop;
+        const rr = (entry - exitPrice) / (stopLoss - entry);
+        const outcome = tp2Hit ? "trail_tp1" : tp1Hit ? "trail_be" : "stop";
+        return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
+      }
+      if (!tp1Hit && low <= takeProfit1) {
+        tp1Hit = true;
+        currentStop = breakevenStop;
+      }
+      if (tp1Hit && !tp2Hit && low <= takeProfit2) {
+        tp2Hit = true;
+        currentStop = tp1Stop;
+      }
+    }
+  }
+
+  return {
+    exitIndex: null,
+    exitPrice: null,
+    outcome: "open_at_end",
+    realizedRiskReward: 0,
+  };
+}
+
+/**
+ * Structure-based trail: before TP1, SL stays at the original level.
+ * Once TP1 is reached, SL trails behind the low (LONG) / high (SHORT) of the
+ * last `swingLookback` closed candles each bar, only ever tightening —
+ * closer to how Volman manages a runner than a flat breakeven jump.
+ */
+function scanOutcomeSwingTrail(
+  candles: Candle[],
+  signal: DetectedSignal,
+  entryIndex: number,
+  swingLookback: number,
+): {
+  exitIndex: number | null;
+  exitPrice: number | null;
+  outcome: SetupBacktestTrade["outcome"];
+  realizedRiskReward: number;
+} {
+  const { entry, stopLoss, takeProfit1, direction } = signal;
+  let currentStop = stopLoss;
+  let tp1Hit = false;
+
+  for (let i = entryIndex; i < candles.length; i++) {
+    const { high, low } = candles[i];
+
+    if (direction === "LONG") {
+      if (low <= currentStop) {
+        const exitPrice = currentStop;
+        const rr = (exitPrice - entry) / (entry - stopLoss);
+        const outcome = tp1Hit ? "trail_swing" : "stop";
+        return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
+      }
+      if (!tp1Hit && high >= takeProfit1) {
+        tp1Hit = true;
+      }
+      if (tp1Hit) {
+        const start = Math.max(entryIndex, i - swingLookback + 1);
+        const swingLow = Math.min(...candles.slice(start, i + 1).map((c) => c.low));
+        if (swingLow > currentStop) currentStop = swingLow;
+      }
+    } else {
+      if (high >= currentStop) {
+        const exitPrice = currentStop;
+        const rr = (entry - exitPrice) / (stopLoss - entry);
+        const outcome = tp1Hit ? "trail_swing" : "stop";
+        return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
+      }
+      if (!tp1Hit && low <= takeProfit1) {
+        tp1Hit = true;
+      }
+      if (tp1Hit) {
+        const start = Math.max(entryIndex, i - swingLookback + 1);
+        const swingHigh = Math.max(...candles.slice(start, i + 1).map((c) => c.high));
+        if (swingHigh < currentStop) currentStop = swingHigh;
       }
     }
   }
