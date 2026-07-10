@@ -99,21 +99,13 @@ describe("setup-sb-runner: runSbDetection", () => {
     expect(resolved).toContainEqual(signal);
   });
 
-  it("should add SB marker on false-break + SB generated", () => {
-    // After false-break, price builds a tight compression then reverses.
-    // Fixture rationale (see `detectCompression` in indicators.ts and `detectSb` in sb.ts):
-    //   - ctx.atr14 = Array(100).fill(2) → ATR = 2
-    //   - detectCompression requires range ≤ kBlock × ATR, where kBlock=1.2
-    //     → compression threshold = 1.2 × 2 = 2.4
-    //   - Compression window candles[1..4]: high=101.2, low=99 → range=2.2 ≤ 2.4 ✓
-    //   - sbDirection=SHORT, candle[4].close=98.9 < compression low=99 → break below ✓
-    // Adjust these values if kBlock or ctx.atr14 default changes.
+  it("should drop a false-break signal outright (SB reversal retired — no replacement generated)", () => {
     const rangeCandles: Candle[] = [
       { time: 0, open: 100, high: 101, low: 99, close: 100, volume: 100 },          // 0: pre
       { time: 1, open: 100, high: 101.2, low: 99.8, close: 101, volume: 100 },      // 1: breakout above
       { time: 2, open: 101, high: 101.2, low: 99.5, close: 100, volume: 100 },      // 2: false break (returns inside)
-      { time: 3, open: 99.5, high: 100.5, low: 99, close: 99.5, volume: 100 },      // 3: compression below
-      { time: 4, open: 99, high: 99.5, low: 99, close: 98.9, volume: 100 },         // 4: break below → SB SHORT
+      { time: 3, open: 99.5, high: 100.5, low: 99, close: 99.5, volume: 100 },      // 3
+      { time: 4, open: 99, high: 99.5, low: 99, close: 98.9, volume: 100 },         // 4
     ];
     const signal: DetectedSignal = {
       setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
@@ -121,11 +113,7 @@ describe("setup-sb-runner: runSbDetection", () => {
       confidence: 70, triggerIndex: 1, ruleTrace: ["FB trigger"],
     };
     const { resolved } = runSbDetection(rangeCandles, [signal], 4, ctx);
-    // Original FB should be gone (false-break)
-    expect(resolved.find((s) => s.setup === "FB")).toBeUndefined();
-    // SB signal should have been generated in opposite direction
-    const sbSignal = resolved.find((s) => s.setup === "SB");
-    expect(sbSignal).toBeDefined();
-    expect(sbSignal!.direction).toBe("SHORT");
+    // Original FB is gone (false-break) and nothing replaces it.
+    expect(resolved).toHaveLength(0);
   });
 })

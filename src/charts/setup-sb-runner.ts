@@ -1,30 +1,27 @@
 import type { Candle } from "./ohlc-provider.js";
 import type { DetectedSignal, DetectionContext } from "./setup-types.js";
 import { isFalseBreak } from "./indicators.js";
-import { detectSb } from "./setups/sb.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
 import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:setup-sb-runner");
 
 /**
- * Run SB (Second Break) detection on signals that have been flagged as false break.
- * Also filters out the original failed signal when SB is generated.
+ * Drop signals invalidated by a false break of their entry/stop level.
  *
- * For each false-break detected, we look 3 candles ahead to allow new compression/block
- * to form in the opposite direction (per context.md §2.7: SB requires buildup after rejection).
+ * SB (Second Break reversal) used to be generated here from a confirmed false
+ * break, but backtests showed it fires too rarely (~8-37 trades across 2.3
+ * years of H4 data) to establish an edge, so it was retired — a false break
+ * now simply invalidates the original signal instead of spawning a reversal.
  *
- * @returns SB signals (opposite direction reversals) and the remaining valid signals
+ * @returns the remaining valid (non-false-broken) signals
  */
-export const SB_BUILDUP_LOOKAHEAD = 3; // candles to wait after false-break for compression to form
-
 export function runSbDetection(
   candles: Candle[],
   signals: DetectedSignal[],
   currentIndex: number,
-  ctx: DetectionContext,
+  _ctx: DetectionContext,
 ): { resolved: DetectedSignal[] } {
-  const sbSignals: DetectedSignal[] = [];
   const validSignals: DetectedSignal[] = [];
 
   for (const signal of signals) {
@@ -37,36 +34,10 @@ export function runSbDetection(
       const maxLookahead = Math.min(2, candles.length - 1 - signal.triggerIndex);
       const fbResult = isFalseBreak(candles, signal.triggerIndex, levelHigh, levelLow, signal.direction, maxLookahead);
       if (fbResult) {
-        if (currentIndex < signal.triggerIndex + 2) {
-          logger.debug(
-            `Dropped ${signal.setup} signal (false-break confirmed but insufficient trailing candles for SB)`,
-            { pair: signal.pair, triggerIndex: signal.triggerIndex, currentIndex },
-          );
-          continue;
-        }
-
-        // False break detected — run SB at the correct index (near signal trigger)
-        const sbIndex = Math.min(signal.triggerIndex + SB_BUILDUP_LOOKAHEAD, currentIndex);
-        try {
-          const sbSignal = detectSb(candles, sbIndex, ctx, signal);
-          if (sbSignal) {
-            sbSignal.ruleTrace.unshift(`[SB] Phat hien tu false-break cua ${signal.setup}`);
-            sbSignals.push(sbSignal);
-          } else {
-            // Signal was false-break but no SB compression formed — signal lost
-            logger.debug(
-              `Dropped ${signal.setup} signal (false-break confirmed but no SB compression found at index ${sbIndex})`,
-              { pair: signal.pair, triggerIndex: signal.triggerIndex },
-            );
-          }
-        } catch (err) {
-          // SB detector threw error — signal lost
-          logger.debug(
-            `Dropped ${signal.setup} signal (false-break confirmed but SB detection failed)`,
-            { pair: signal.pair, error: err instanceof Error ? err.message : String(err) },
-          );
-        }
-        // Do NOT keep the original failed signal (fix #16)
+        logger.debug(
+          `Dropped ${signal.setup} signal (false-break confirmed)`,
+          { pair: signal.pair, triggerIndex: signal.triggerIndex, currentIndex },
+        );
         continue;
       }
     }
@@ -74,7 +45,5 @@ export function runSbDetection(
     validSignals.push(signal);
   }
 
-  // Merge valid + SB signals and resolve conflicts
-  const combined = [...validSignals, ...sbSignals];
-  return { resolved: resolveSetupConflicts(combined) };
+  return { resolved: resolveSetupConflicts(validSignals) };
 }

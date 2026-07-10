@@ -10,9 +10,6 @@ const SETUP_PRIORITY: SetupKind[] = [
   "IRB",
   "RB",
   "BB",
-  "FB",
-  "DD",
-  "SB",
 ];
 
 /**
@@ -29,7 +26,7 @@ function priorityRank(kind: SetupKind): number {
  * Strategy:
  * 1. Group signals by pair.
  * 2. Within each group, keep the signal with the highest confidence.
- * 3. If confidence is tied, use setup priority: ARB > IRB > RB > BB > FB > DD > SB.
+ * 3. If confidence is tied, use setup priority: ARB > IRB > RB > BB.
  * 4. If both confidence AND priority are equal (same setup), keep the one
  *    with the most recent triggerIndex.
  *

@@ -394,20 +394,12 @@ export function isBinanceSymbol(symbol: string): boolean {
 // Kline row: [openTime, open, high, low, close, volume, closeTime, ...]
 type BinanceKline = [number, string, string, string, string, string, number, ...unknown[]];
 
-async function fetchFromBinance(
-  symbol: string,
-  timeframe: ChartTimeframe,
-  bars: number,
-  endTimeMs?: number,
-): Promise<Candle[] | Error> {
-  const bnSymbol = toBinanceSymbol(symbol);
-  if (!bnSymbol) {
-    return new Error(`Symbol khong dung dinh dang BINANCE:XXXYYY: "${symbol}"`);
-  }
-
-  const interval = getTimeframeConfig(timeframe).binanceCode;
-  // Fetch 1 extra bar: the newest kline is still forming and gets dropped.
-  const limit = Math.min(bars + 1, BINANCE_MAX_LIMIT);
+async function fetchBinanceKlinesPage(
+  bnSymbol: string,
+  interval: string,
+  limit: number,
+  endTimeMs: number | undefined,
+): Promise<{ candles: Candle[]; rawCount: number } | Error> {
   const url = `${BINANCE_BASE_URL}?symbol=${encodeURIComponent(bnSymbol)}&interval=${interval}&limit=${limit}${endTimeMs ? `&endTime=${endTimeMs}` : ""}`;
 
   const body = await fetchJson<unknown>(url, {
@@ -484,6 +476,56 @@ async function fetchFromBinance(
   }
 
   candles.sort((a, b) => a.time - b.time);
+  return { candles, rawCount: (body as BinanceKline[]).length };
+}
+
+/**
+ * Binance caps a single klines request at BINANCE_MAX_LIMIT bars. To backtest
+ * further back than that, page backwards: each round asks for candles ending
+ * just before the oldest one already fetched, until enough bars are collected
+ * or the exchange has no older history left.
+ */
+async function fetchFromBinance(
+  symbol: string,
+  timeframe: ChartTimeframe,
+  bars: number,
+  endTimeMs?: number,
+): Promise<Candle[] | Error> {
+  const bnSymbol = toBinanceSymbol(symbol);
+  if (!bnSymbol) {
+    return new Error(`Symbol khong dung dinh dang BINANCE:XXXYYY: "${symbol}"`);
+  }
+
+  const interval = getTimeframeConfig(timeframe).binanceCode;
+  const pages: Candle[][] = [];
+  // Fetch 1 extra bar overall: the newest kline is still forming and gets dropped.
+  let remaining = bars + 1;
+  let cursorEndTime = endTimeMs;
+
+  while (remaining > 0) {
+    const limit = Math.min(remaining, BINANCE_MAX_LIMIT);
+    const page = await fetchBinanceKlinesPage(bnSymbol, interval, limit, cursorEndTime);
+    if (page instanceof Error) {
+      if (pages.length > 0) break;
+      return page;
+    }
+    if (page.candles.length === 0) break;
+
+    pages.unshift(page.candles);
+    remaining -= page.candles.length;
+    cursorEndTime = page.candles[0].time - 1;
+    // Use the raw row count (before dropping the still-forming candle) to
+    // detect end-of-history — the filtered length is naturally short by one
+    // on the most recent page and would otherwise stop pagination early.
+    if (page.rawCount < limit) break;
+  }
+
+  const dedup = new Map<number, Candle>();
+  for (const candle of pages.flat()) {
+    dedup.set(candle.time, candle);
+  }
+  const candles = Array.from(dedup.values()).sort((a, b) => a.time - b.time);
+
   return candles.slice(-bars);
 }
 

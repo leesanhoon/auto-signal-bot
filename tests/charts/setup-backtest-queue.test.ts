@@ -3,13 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   detectBbMock,
   detectRbMock,
-  detectSbMock,
   isFalseBreakMock,
   nullDetectorMock,
 } = vi.hoisted(() => ({
   detectBbMock: vi.fn(),
   detectRbMock: vi.fn(),
-  detectSbMock: vi.fn(),
   isFalseBreakMock: vi.fn(),
   nullDetectorMock: vi.fn(() => null),
 }));
@@ -28,14 +26,6 @@ vi.mock("../../src/charts/setups/bb.js", () => ({
   detectBb: detectBbMock,
 }));
 
-vi.mock("../../src/charts/setups/dd.js", () => ({
-  detectDd: nullDetectorMock,
-}));
-
-vi.mock("../../src/charts/setups/fb.js", () => ({
-  detectFb: nullDetectorMock,
-}));
-
 vi.mock("../../src/charts/setups/rb.js", () => ({
   detectRb: detectRbMock,
 }));
@@ -46,10 +36,6 @@ vi.mock("../../src/charts/setups/arb.js", () => ({
 
 vi.mock("../../src/charts/setups/irb.js", () => ({
   detectIrb: nullDetectorMock,
-}));
-
-vi.mock("../../src/charts/setups/sb.js", () => ({
-  detectSb: detectSbMock,
 }));
 
 const { runSetupBacktest } = await import("../../src/charts/setup-backtest.js");
@@ -97,27 +83,10 @@ function makeRbSignal(index: number) {
   };
 }
 
-function makeSbSignal(index: number) {
-  return {
-    setup: "SB" as const,
-    pair: "EUR/USD",
-    timeframe: "H4" as const,
-    direction: "SHORT" as const,
-    entry: 99.8,
-    stopLoss: 100.2,
-    takeProfit1: 99.2,
-    takeProfit2: 98.8,
-    confidence: 35,
-    triggerIndex: index,
-    ruleTrace: ["mock SB"],
-  };
-}
-
 describe("runSetupBacktest queue behavior", () => {
   beforeEach(() => {
     detectBbMock.mockReset();
     detectRbMock.mockReset();
-    detectSbMock.mockReset();
     isFalseBreakMock.mockReset();
     nullDetectorMock.mockImplementation(() => null);
   });
@@ -130,7 +99,6 @@ describe("runSetupBacktest queue behavior", () => {
       }
       return null;
     });
-    detectSbMock.mockReturnValue(null);
 
     const report = runSetupBacktest(makeCandles(40), "EUR/USD", "H4");
 
@@ -155,7 +123,6 @@ describe("runSetupBacktest queue behavior", () => {
       }
       return null;
     });
-    detectSbMock.mockReturnValue(null);
 
     const report = runSetupBacktest(makeCandles(40), "EUR/USD", "H4");
 
@@ -172,107 +139,29 @@ describe("runSetupBacktest queue behavior", () => {
     });
   });
 
-  it("does not double-count a false-break signal and its SB reversal", () => {
+  it("drops a false-break signal instead of replacing it with an SB reversal (SB retired)", () => {
     isFalseBreakMock.mockImplementation((_candles, breakoutIndex) => breakoutIndex === 30);
     detectBbMock.mockImplementation((_candles, index) => (index === 30 ? makeBbSignal(index) : null));
-    detectSbMock.mockImplementation((_candles, index) => (index === 33 ? makeSbSignal(index) : null));
     detectRbMock.mockImplementation((_candles, index) => (index === 33 ? makeRbSignal(index) : null));
 
     const report = runSetupBacktest(makeCandles(40), "EUR/USD", "H4");
 
-    expect(report.trades).toHaveLength(2);
+    // The BB signal at 30 is a confirmed false break and is dropped outright —
+    // no SB reversal trade is spawned. Only the later RB signal survives.
+    expect(report.trades).toHaveLength(1);
     expect(report.trades[0]).toMatchObject({
-      setup: "SB",
-      entryIndex: 33,
-    });
-    expect(report.trades[1]).toMatchObject({
       setup: "RB",
       entryIndex: 33,
     });
   });
 
-  it("keeps the original triggerIndex when a fresh signal is deferred behind SB", () => {
-    const candles = makeCandles(41);
-    candles[36] = {
-      ...candles[36],
-      high: 100.6,
-      low: 99.6,
-      close: 100.2,
-    };
-
+  it("only watches a false break once (isFalseBreak checked a single time per pending signal)", () => {
     isFalseBreakMock.mockImplementation((_candles, breakoutIndex) => breakoutIndex === 30);
     detectBbMock.mockImplementation((_candles, index) => (index === 30 ? makeBbSignal(index) : null));
-    detectSbMock.mockImplementation((_candles, index) => {
-      if (index === 33) {
-        return {
-          ...makeSbSignal(index),
-          stopLoss: 100.4,
-          takeProfit1: 99.2,
-          takeProfit2: 98.8,
-        };
-      }
-      return null;
-    });
-    detectRbMock.mockImplementation((_candles, index) => (index === 33 ? makeRbSignal(index) : null));
-
-    const report = runSetupBacktest(candles, "EUR/USD", "H4");
-
-    expect(report.trades).toHaveLength(2);
-    expect(report.trades[0]).toMatchObject({
-      setup: "SB",
-      entryIndex: 33,
-    });
-    expect(report.trades[1]).toMatchObject({
-      setup: "RB",
-      entryIndex: 33,
-    });
-  });
-
-  it("checks SB only once at the first sbIndex", () => {
-    isFalseBreakMock.mockImplementation((_candles, breakoutIndex) => breakoutIndex === 30);
-    detectBbMock.mockImplementation((_candles, index) => (index === 30 ? makeBbSignal(index) : null));
-    detectSbMock.mockImplementation((_candles, index) => {
-      if (index === 33) {
-        return null;
-      }
-      if (index === 34) {
-        return makeSbSignal(index);
-      }
-      return null;
-    });
 
     const report = runSetupBacktest(makeCandles(40), "EUR/USD", "H4");
 
     expect(report.trades).toHaveLength(0);
-    expect(detectSbMock).toHaveBeenCalledTimes(1);
-    expect(detectSbMock).toHaveBeenCalledWith(
-      expect.any(Array),
-      33,
-      expect.objectContaining({
-        pair: "EUR/USD",
-        timeframe: "H4",
-      }),
-      expect.objectContaining({
-        setup: "BB",
-        triggerIndex: 30,
-      }),
-    );
-  });
-
-  it("catches detectSb throws without crashing the backtest", () => {
-    isFalseBreakMock.mockImplementation((_candles, breakoutIndex) => breakoutIndex === 30);
-    detectBbMock.mockImplementation((_candles, index) => (index === 30 ? makeBbSignal(index) : null));
-    detectSbMock.mockImplementation(() => {
-      throw new Error("boom");
-    });
-
-    let report: ReturnType<typeof runSetupBacktest> | undefined;
-    expect(() => {
-      report = runSetupBacktest(makeCandles(40), "EUR/USD", "H4");
-    }).not.toThrow();
-
-    expect(report).toBeDefined();
-    expect(report!.trades).toHaveLength(0);
-    expect(detectSbMock).toHaveBeenCalledTimes(1);
+    expect(isFalseBreakMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,13 +2,10 @@ import type { AnalysisResult, ChartTimeframe } from "./chart-types-volman.js";
 import type { Candle } from "./ohlc-provider.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { calculateEma, calculateAtr, classifyTrend, averageAtr, isTradableWindow } from "./indicators.js";
-import { detectDd } from "./setups/dd.js";
-import { detectFb } from "./setups/fb.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
-import { resolveSetupConflicts } from "./setup-resolver.js";
 import { runSbDetection } from "./setup-sb-runner.js";
 import { buildTradeSetupFromSignal, buildPairSummaryFromContext } from "./signal-assembly.js";
 import type { DetectedSignal } from "./setup-types.js";
@@ -36,8 +33,8 @@ export function passesDeterministicWindowFilter(
  * 1. Fetch OHLC history for the runtime timeframe (200 bars)
  * 2. Session/volatility filter (London/NY overlap + ATR floor)
  * 3. Calculate indicators (EMA20, ATR14)
- * 4. Run 7 Volman setup detectors on the runtime primary timeframe
- * 5. Check false-break → run SB detector on failed signals
+ * 4. Run core Volman setup detectors (BB, RB, ARB, IRB) on the runtime primary timeframe
+ * 5. Drop signals invalidated by a false break (no SB replacement — retired for lack of edge)
  * 6. Resolve conflicts (max 1 signal per pair)
  * 7. Build TradeSetup[] and PairSummary[] from signals
  * 8. Filter out null (price-sanity rejected) setups
@@ -96,10 +93,10 @@ export async function analyzeAllChartsDeterministic(
         timeframe: analysisTimeframe,
       };
 
-      // ---- Run 6 standard detectors on last 5 candles ----
+      // ---- Run core detectors on last 5 candles (DD, FB, SB retired — no edge / too rare) ----
       const startDetectIndex = Math.max(30, lastIndex - 5);
       const allSignals: DetectedSignal[] = [];
-      const detectors = [detectDd, detectFb, detectBb, detectRb, detectArb, detectIrb];
+      const detectors = [detectBb, detectRb, detectArb, detectIrb];
 
       for (let i = startDetectIndex; i <= lastIndex; i++) {
         for (const detector of detectors) {
