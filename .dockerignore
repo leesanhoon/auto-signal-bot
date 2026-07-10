@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+data
+screenshots
+.git
+.github
+.env
+*.png
+tasks
+reviews
+hermes-backup
+supabase/.temp
+__pycache__

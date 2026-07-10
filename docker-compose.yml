@@ -1,0 +1,86 @@
+# Auto Signal Bot — chạy các job theo lịch bằng Docker + Ofelia,
+# thay thế toàn bộ schedule của GitHub Actions.
+#
+# - Service "bot": container thường trực chứa code + node_modules + Chromium,
+#   nhận env từ .env. Không tự chạy gì cả.
+# - Service "scheduler" (Ofelia): đọc labels của "bot" và exec từng job
+#   vào container "bot" đúng lịch.
+#
+# LƯU Ý VỀ LỊCH: Ofelia dùng cron 6 trường (có GIÂY ở đầu).
+# Toàn bộ lịch giữ nguyên UTC như GitHub Actions (TZ=UTC ở cả 2 service).
+# Comment ghi giờ VN (UTC+7) để tiện đối chiếu.
+
+services:
+  bot:
+    build: .
+    image: auto-signal-bot:latest
+    env_file: .env
+    environment:
+      TZ: UTC
+    init: true
+    restart: unless-stopped
+    labels:
+      ofelia.enabled: "true"
+
+      # === Charts ===
+
+      # TradingView Chart Analysis (Volman) — 00:05,04:05,...,20:05 UTC, T2-T6
+      ofelia.job-exec.analyze.schedule: "0 5 0,4,8,12,16,20 * * 1-5"
+      ofelia.job-exec.analyze.command: "npm run analyze"
+      ofelia.job-exec.analyze.no-overlap: "true"
+
+      # SMC Chart Analysis — mỗi 15 phút, T2-T6
+      ofelia.job-exec.analyze-smc.schedule: "0 */15 * * * 1-5"
+      ofelia.job-exec.analyze-smc.command: "npm run analyze:smc"
+      ofelia.job-exec.analyze-smc.no-overlap: "true"
+
+      # === Betting ===
+
+      # Fetch Matches List — 00:00 UTC (07:00 VN) hằng ngày
+      ofelia.job-exec.fetch-matches-list.schedule: "0 0 0 * * *"
+      ofelia.job-exec.fetch-matches-list.command: "npm run fetch-matches-list"
+
+      # Match Odds Scanner — 05:00 UTC (12:00 VN) hằng ngày
+      ofelia.job-exec.match-odds.schedule: "0 0 5 * * *"
+      ofelia.job-exec.match-odds.command: "npm run match-odds"
+
+      # === Reports ===
+
+      # Performance Report — weekly 01:15 UTC thứ 2, monthly 01:20 UTC ngày 1
+      ofelia.job-exec.performance-report-weekly.schedule: "0 15 1 * * 1"
+      ofelia.job-exec.performance-report-weekly.command: "/bin/sh -c 'PERFORMANCE_REPORT_PERIOD=weekly npm run performance-report'"
+      ofelia.job-exec.performance-report-monthly.schedule: "0 20 1 1 * *"
+      ofelia.job-exec.performance-report-monthly.command: "/bin/sh -c 'PERFORMANCE_REPORT_PERIOD=monthly npm run performance-report'"
+
+      # === Lottery ===
+
+      # Lottery History Scanner — 12:00 UTC (19:00 VN) hằng ngày
+      ofelia.job-exec.lottery.schedule: "0 0 12 * * *"
+      ofelia.job-exec.lottery.command: "npm run lottery"
+
+      # Lottery Predictor — trước giờ quay từng miền
+      ofelia.job-exec.lottery-predict-mn.schedule: "0 45 9 * * *"
+      ofelia.job-exec.lottery-predict-mn.command: "/bin/sh -c 'LOTTERY_PREDICT_REGION=mien-nam npm run lottery-predict'"
+      ofelia.job-exec.lottery-predict-mt.schedule: "0 45 10 * * *"
+      ofelia.job-exec.lottery-predict-mt.command: "/bin/sh -c 'LOTTERY_PREDICT_REGION=mien-trung npm run lottery-predict'"
+      ofelia.job-exec.lottery-predict-mb.schedule: "0 45 11 * * *"
+      ofelia.job-exec.lottery-predict-mb.command: "/bin/sh -c 'LOTTERY_PREDICT_REGION=mien-bac npm run lottery-predict'"
+
+      # Lottery Verify — sau giờ quay từng miền
+      ofelia.job-exec.lottery-verify-mn.schedule: "0 45 9 * * *"
+      ofelia.job-exec.lottery-verify-mn.command: "npm run lottery-verify -- mien-nam"
+      ofelia.job-exec.lottery-verify-mt.schedule: "0 45 10 * * *"
+      ofelia.job-exec.lottery-verify-mt.command: "npm run lottery-verify -- mien-trung"
+      ofelia.job-exec.lottery-verify-mb.schedule: "0 50 11 * * *"
+      ofelia.job-exec.lottery-verify-mb.command: "npm run lottery-verify -- mien-bac"
+
+  scheduler:
+    image: mcuadros/ofelia:latest
+    restart: unless-stopped
+    depends_on:
+      - bot
+    command: daemon --docker
+    environment:
+      TZ: UTC
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
