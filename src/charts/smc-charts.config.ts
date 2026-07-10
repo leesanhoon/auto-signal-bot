@@ -75,7 +75,14 @@ const BASE_CHARTS: Array<{ name: string; symbol: string }> = [
   // { name: "AUD/NZD", symbol: "OANDA:AUDNZD" },
 ];
 
-export const CHARTS: ChartConfig[] = BASE_CHARTS.flatMap((base) =>
+export const CHARTS: ChartConfig[] = BASE_CHARTS.filter((base) => {
+  const dayOfWeek = new Date().getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  if (isWeekend && base.symbol.startsWith("OANDA:")) {
+    return false;
+  }
+  return true;
+}).flatMap((base) =>
   TIMEFRAME_CONFIGS.map((timeframe) =>
     chart(base.name, base.symbol, timeframe.timeframe, timeframe.interval),
   ),
