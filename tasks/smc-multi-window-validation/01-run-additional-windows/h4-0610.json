@@ -1,0 +1,3203 @@
+﻿
+> auto-signal-bot@1.0.0 backtest:smc
+> tsx src/charts/smc-backtest-runner.ts
+
+[2026-07-11 00:40:08.233 +0700] [32mINFO[39m: [36mSMC backtest starting[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "timeframe": "H4",
+        "bars": 1000,
+        "endTime": "2026-06-10T00:00:00Z"
+      }
+    ]
+[2026-07-11 00:40:08.788 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BTC/USDT",
+        "signals": 61,
+        "trades": 18
+      }
+    ]
+[2026-07-11 00:40:08.789 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BTC/USDT",
+        "signals": 61,
+        "closedTrades": 18,
+        "winRate": 0.3333333333333333,
+        "avgRiskReward": -0.30987293186149567,
+        "avgBarsHeld": 9.38888888888889,
+        "skippedWhileOpen": 10,
+        "attemptedTrades": 42,
+        "expired": 24,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 12,
+        "tp1": 1,
+        "tp2": 2,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:09.206 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DASH/USDT",
+        "signals": 52,
+        "trades": 17
+      }
+    ]
+[2026-07-11 00:40:09.206 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DASH/USDT",
+        "signals": 52,
+        "closedTrades": 17,
+        "winRate": 0.4117647058823529,
+        "avgRiskReward": 0.17002905389231973,
+        "avgBarsHeld": 7.647058823529412,
+        "skippedWhileOpen": 10,
+        "attemptedTrades": 33,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 10,
+        "tp1": 0,
+        "tp2": 5,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:09.551 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ETH/USDT",
+        "signals": 64,
+        "trades": 21
+      }
+    ]
+[2026-07-11 00:40:09.551 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ETH/USDT",
+        "signals": 64,
+        "closedTrades": 21,
+        "winRate": 0.5714285714285714,
+        "avgRiskReward": 0.35612690961120097,
+        "avgBarsHeld": 2.4285714285714284,
+        "skippedWhileOpen": 2,
+        "attemptedTrades": 48,
+        "expired": 26,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 9,
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:09.891 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "LTC/USDT",
+        "signals": 62,
+        "trades": 29
+      }
+    ]
+[2026-07-11 00:40:09.891 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "LTC/USDT",
+        "signals": 62,
+        "closedTrades": 29,
+        "winRate": 0.6551724137931034,
+        "avgRiskReward": 0.38858427047527716,
+        "avgBarsHeld": 5.413793103448276,
+        "skippedWhileOpen": 11,
+        "attemptedTrades": 42,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 8,
+        "tp2": 5,
+        "tp3": 6
+      }
+    ]
+[2026-07-11 00:40:10.222 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DOT/USDT",
+        "signals": 49,
+        "trades": 21
+      }
+    ]
+[2026-07-11 00:40:10.223 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DOT/USDT",
+        "signals": 49,
+        "closedTrades": 21,
+        "winRate": 0.47619047619047616,
+        "avgRiskReward": 0.08568178039546316,
+        "avgBarsHeld": 2.5238095238095237,
+        "skippedWhileOpen": 3,
+        "attemptedTrades": 42,
+        "expired": 20,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 11,
+        "tp1": 5,
+        "tp2": 3,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:10.611 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "XRP/USDT",
+        "signals": 68,
+        "trades": 32
+      }
+    ]
+[2026-07-11 00:40:10.611 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "XRP/USDT",
+        "signals": 68,
+        "closedTrades": 32,
+        "winRate": 0.375,
+        "avgRiskReward": -0.0968622771765715,
+        "avgBarsHeld": 3.90625,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 48,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 20,
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:10.941 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ADA/USDT",
+        "signals": 52,
+        "trades": 24
+      }
+    ]
+[2026-07-11 00:40:10.941 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ADA/USDT",
+        "signals": 52,
+        "closedTrades": 24,
+        "winRate": 0.4583333333333333,
+        "avgRiskReward": 0.23493159739550937,
+        "avgBarsHeld": 5.416666666666667,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 36,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 13,
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:11.281 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BCH/USDT",
+        "signals": 58,
+        "trades": 22
+      }
+    ]
+[2026-07-11 00:40:11.281 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BCH/USDT",
+        "signals": 58,
+        "closedTrades": 22,
+        "winRate": 0.6363636363636364,
+        "avgRiskReward": 0.5560821173509538,
+        "avgBarsHeld": 4.636363636363637,
+        "skippedWhileOpen": 10,
+        "attemptedTrades": 39,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 8,
+        "tp1": 3,
+        "tp2": 11,
+        "tp3": 0
+      }
+    ]
+[2026-07-11 00:40:11.635 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SOL/USDT",
+        "signals": 63,
+        "trades": 22
+      }
+    ]
+[2026-07-11 00:40:11.635 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SOL/USDT",
+        "signals": 63,
+        "closedTrades": 22,
+        "winRate": 0.5909090909090909,
+        "avgRiskReward": 0.5489449833833926,
+        "avgBarsHeld": 4.181818181818182,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 44,
+        "expired": 21,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 9,
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:11.985 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "AVA/USDT",
+        "signals": 76,
+        "trades": 26
+      }
+    ]
+[2026-07-11 00:40:11.986 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "AVA/USDT",
+        "signals": 76,
+        "closedTrades": 26,
+        "winRate": 0.6538461538461539,
+        "avgRiskReward": 0.8096372809547117,
+        "avgBarsHeld": 3.6923076923076925,
+        "skippedWhileOpen": 11,
+        "attemptedTrades": 46,
+        "expired": 20,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 9,
+        "tp1": 2,
+        "tp2": 12,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:12.333 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ETC/USDT",
+        "signals": 56,
+        "trades": 25
+      }
+    ]
+[2026-07-11 00:40:12.333 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ETC/USDT",
+        "signals": 56,
+        "closedTrades": 25,
+        "winRate": 0.56,
+        "avgRiskReward": 0.4739623776712996,
+        "avgBarsHeld": 3.04,
+        "skippedWhileOpen": 6,
+        "attemptedTrades": 39,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 11,
+        "tp1": 1,
+        "tp2": 9,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:12.680 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "NEO/USDT",
+        "signals": 64,
+        "trades": 32
+      }
+    ]
+[2026-07-11 00:40:12.680 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "NEO/USDT",
+        "signals": 64,
+        "closedTrades": 32,
+        "winRate": 0.59375,
+        "avgRiskReward": 0.639411609687377,
+        "avgBarsHeld": 3.96875,
+        "skippedWhileOpen": 8,
+        "attemptedTrades": 46,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 13,
+        "tp1": 3,
+        "tp2": 8,
+        "tp3": 8
+      }
+    ]
+[2026-07-11 00:40:13.049 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DOGE/USDT",
+        "signals": 59,
+        "trades": 22
+      }
+    ]
+[2026-07-11 00:40:13.049 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DOGE/USDT",
+        "signals": 59,
+        "closedTrades": 22,
+        "winRate": 0.5454545454545454,
+        "avgRiskReward": 0.4558546608240309,
+        "avgBarsHeld": 3.772727272727273,
+        "skippedWhileOpen": 7,
+        "attemptedTrades": 41,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 10,
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:13.417 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BNB/USDT",
+        "signals": 63,
+        "trades": 26
+      }
+    ]
+[2026-07-11 00:40:13.417 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BNB/USDT",
+        "signals": 63,
+        "closedTrades": 26,
+        "winRate": 0.6153846153846154,
+        "avgRiskReward": 0.6029117983769745,
+        "avgBarsHeld": 5.615384615384615,
+        "skippedWhileOpen": 11,
+        "attemptedTrades": 41,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 2,
+        "tp2": 7,
+        "tp3": 7
+      }
+    ]
+[2026-07-11 00:40:13.757 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ZEC/USDT",
+        "signals": 58,
+        "trades": 21
+      }
+    ]
+[2026-07-11 00:40:13.757 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ZEC/USDT",
+        "signals": 58,
+        "closedTrades": 21,
+        "winRate": 0.5714285714285714,
+        "avgRiskReward": 0.41650591931217373,
+        "avgBarsHeld": 4.619047619047619,
+        "skippedWhileOpen": 11,
+        "attemptedTrades": 36,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 9,
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:14.107 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "TRX/USDT",
+        "signals": 80,
+        "trades": 26
+      }
+    ]
+[2026-07-11 00:40:14.107 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "TRX/USDT",
+        "signals": 80,
+        "closedTrades": 26,
+        "winRate": 0.5769230769230769,
+        "avgRiskReward": -0.12845655353704635,
+        "avgBarsHeld": 2.5,
+        "skippedWhileOpen": 4,
+        "attemptedTrades": 56,
+        "expired": 30,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 11,
+        "tp1": 3,
+        "tp2": 9,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:14.474 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "XLM/USDT",
+        "signals": 49,
+        "trades": 19
+      }
+    ]
+[2026-07-11 00:40:14.474 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "XLM/USDT",
+        "signals": 49,
+        "closedTrades": 19,
+        "winRate": 0.5789473684210527,
+        "avgRiskReward": 0.5909283352877731,
+        "avgBarsHeld": 5.947368421052632,
+        "skippedWhileOpen": 12,
+        "attemptedTrades": 31,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 8,
+        "tp1": 2,
+        "tp2": 5,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:14.827 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "AAVE/USDT",
+        "signals": 64,
+        "trades": 27
+      }
+    ]
+[2026-07-11 00:40:14.827 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "AAVE/USDT",
+        "signals": 64,
+        "closedTrades": 27,
+        "winRate": 0.5925925925925926,
+        "avgRiskReward": 0.7472128601754462,
+        "avgBarsHeld": 4.777777777777778,
+        "skippedWhileOpen": 11,
+        "attemptedTrades": 43,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 11,
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 6
+      }
+    ]
+[2026-07-11 00:40:15.208 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "UNI/USDT",
+        "signals": 51,
+        "trades": 20
+      }
+    ]
+[2026-07-11 00:40:15.208 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "UNI/USDT",
+        "signals": 51,
+        "closedTrades": 20,
+        "winRate": 0.65,
+        "avgRiskReward": 0.6959349277664092,
+        "avgBarsHeld": 5.9,
+        "skippedWhileOpen": 7,
+        "attemptedTrades": 37,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 7,
+        "tp1": 4,
+        "tp2": 7,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:15.571 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ARB/USDT",
+        "signals": 50,
+        "trades": 25
+      }
+    ]
+[2026-07-11 00:40:15.572 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ARB/USDT",
+        "signals": 50,
+        "closedTrades": 25,
+        "winRate": 0.48,
+        "avgRiskReward": 0.19894942223522144,
+        "avgBarsHeld": 2.8,
+        "skippedWhileOpen": 5,
+        "attemptedTrades": 39,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 13,
+        "tp1": 3,
+        "tp2": 9,
+        "tp3": 0
+      }
+    ]
+[2026-07-11 00:40:15.932 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "NEAR/USDT",
+        "signals": 57,
+        "trades": 22
+      }
+    ]
+[2026-07-11 00:40:15.932 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "NEAR/USDT",
+        "signals": 57,
+        "closedTrades": 22,
+        "winRate": 0.5454545454545454,
+        "avgRiskReward": 0.5185325343812626,
+        "avgBarsHeld": 5.045454545454546,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 37,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:16.268 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SUI/USDT",
+        "signals": 48,
+        "trades": 20
+      }
+    ]
+[2026-07-11 00:40:16.268 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SUI/USDT",
+        "signals": 48,
+        "closedTrades": 20,
+        "winRate": 0.6,
+        "avgRiskReward": 0.5407072817981293,
+        "avgBarsHeld": 2.6,
+        "skippedWhileOpen": 4,
+        "attemptedTrades": 36,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 8,
+        "tp1": 1,
+        "tp2": 8,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:16.598 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PEPE/USDT",
+        "signals": 42,
+        "trades": 5
+      }
+    ]
+[2026-07-11 00:40:16.598 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PEPE/USDT",
+        "signals": 42,
+        "closedTrades": 5,
+        "winRate": 0.6,
+        "avgRiskReward": 0.003083094108991145,
+        "avgBarsHeld": 96,
+        "skippedWhileOpen": 30,
+        "attemptedTrades": 11,
+        "expired": 5,
+        "expiredHold": 5,
+        "openAtEnd": 1,
+        "stop": 0,
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0
+      }
+    ]
+[2026-07-11 00:40:16.952 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "WLD/USDT",
+        "signals": 53,
+        "trades": 19
+      }
+    ]
+[2026-07-11 00:40:16.952 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "WLD/USDT",
+        "signals": 53,
+        "closedTrades": 19,
+        "winRate": 0.47368421052631576,
+        "avgRiskReward": 0.6193392730811874,
+        "avgBarsHeld": 5.2105263157894735,
+        "skippedWhileOpen": 12,
+        "attemptedTrades": 36,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 1,
+        "tp2": 3,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:17.440 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "TAO/USDT",
+        "signals": 65,
+        "trades": 26
+      }
+    ]
+[2026-07-11 00:40:17.440 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "TAO/USDT",
+        "signals": 65,
+        "closedTrades": 26,
+        "winRate": 0.5769230769230769,
+        "avgRiskReward": 0.686671331120311,
+        "avgBarsHeld": 3.1538461538461537,
+        "skippedWhileOpen": 12,
+        "attemptedTrades": 43,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 11,
+        "tp1": 3,
+        "tp2": 10,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:17.781 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ENA/USDT",
+        "signals": 41,
+        "trades": 17
+      }
+    ]
+[2026-07-11 00:40:17.781 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ENA/USDT",
+        "signals": 41,
+        "closedTrades": 17,
+        "winRate": 0.47058823529411764,
+        "avgRiskReward": 0.3379514558342744,
+        "avgBarsHeld": 3,
+        "skippedWhileOpen": 4,
+        "attemptedTrades": 32,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 9,
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 0
+      }
+    ]
+[2026-07-11 00:40:18.363 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PAXG/USDT",
+        "signals": 63,
+        "trades": 29
+      }
+    ]
+[2026-07-11 00:40:18.363 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PAXG/USDT",
+        "signals": 63,
+        "closedTrades": 29,
+        "winRate": 0.3103448275862069,
+        "avgRiskReward": -1.0698142329923537,
+        "avgBarsHeld": 4.206896551724138,
+        "skippedWhileOpen": 8,
+        "attemptedTrades": 48,
+        "expired": 19,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 20,
+        "tp1": 5,
+        "tp2": 2,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:19.106 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "LINK/USDT",
+        "signals": 55,
+        "trades": 27
+      }
+    ]
+[2026-07-11 00:40:19.106 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "LINK/USDT",
+        "signals": 55,
+        "closedTrades": 27,
+        "winRate": 0.8148148148148148,
+        "avgRiskReward": 1.1445466924316472,
+        "avgBarsHeld": 3.185185185185185,
+        "skippedWhileOpen": 11,
+        "attemptedTrades": 38,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 5,
+        "tp1": 5,
+        "tp2": 14,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:19.444 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "AVAX/USDT",
+        "signals": 47,
+        "trades": 20
+      }
+    ]
+[2026-07-11 00:40:19.444 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "AVAX/USDT",
+        "signals": 47,
+        "closedTrades": 20,
+        "winRate": 0.6,
+        "avgRiskReward": 0.6093520651839264,
+        "avgBarsHeld": 5.65,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 33,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 8,
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:20.197 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ICP/USDT",
+        "signals": 49,
+        "trades": 21
+      }
+    ]
+[2026-07-11 00:40:20.197 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ICP/USDT",
+        "signals": 49,
+        "closedTrades": 21,
+        "winRate": 0.42857142857142855,
+        "avgRiskReward": 0.25042853900762624,
+        "avgBarsHeld": 3.6666666666666665,
+        "skippedWhileOpen": 7,
+        "attemptedTrades": 35,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 12,
+        "tp1": 1,
+        "tp2": 4,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:20.539 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "TIA/USDT",
+        "signals": 50,
+        "trades": 19
+      }
+    ]
+[2026-07-11 00:40:20.539 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "TIA/USDT",
+        "signals": 50,
+        "closedTrades": 19,
+        "winRate": 0.5789473684210527,
+        "avgRiskReward": 0.6251107474296012,
+        "avgBarsHeld": 3.9473684210526314,
+        "skippedWhileOpen": 7,
+        "attemptedTrades": 36,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 8,
+        "tp1": 3,
+        "tp2": 5,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:21.202 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ONDO/USDT",
+        "signals": 51,
+        "trades": 21
+      }
+    ]
+[2026-07-11 00:40:21.202 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ONDO/USDT",
+        "signals": 51,
+        "closedTrades": 21,
+        "winRate": 0.38095238095238093,
+        "avgRiskReward": 0.04067287595391428,
+        "avgBarsHeld": 3.2857142857142856,
+        "skippedWhileOpen": 6,
+        "attemptedTrades": 34,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 13,
+        "tp1": 1,
+        "tp2": 5,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:21.554 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "FIL/USDT",
+        "signals": 49,
+        "trades": 19
+      }
+    ]
+[2026-07-11 00:40:21.554 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "FIL/USDT",
+        "signals": 49,
+        "closedTrades": 19,
+        "winRate": 0.42105263157894735,
+        "avgRiskReward": -0.1231907674970672,
+        "avgBarsHeld": 2.736842105263158,
+        "skippedWhileOpen": 2,
+        "attemptedTrades": 40,
+        "expired": 20,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 11,
+        "tp1": 2,
+        "tp2": 5,
+        "tp3": 1
+      }
+    ]
+[2026-07-11 00:40:21.901 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SEI/USDT",
+        "signals": 70,
+        "trades": 27
+      }
+    ]
+[2026-07-11 00:40:21.901 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SEI/USDT",
+        "signals": 70,
+        "closedTrades": 27,
+        "winRate": 0.5185185185185185,
+        "avgRiskReward": 0.5188377696141734,
+        "avgBarsHeld": 5.37037037037037,
+        "skippedWhileOpen": 15,
+        "attemptedTrades": 43,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 13,
+        "tp1": 1,
+        "tp2": 8,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:22.236 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "FET/USDT",
+        "signals": 63,
+        "trades": 25
+      }
+    ]
+[2026-07-11 00:40:22.236 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "FET/USDT",
+        "signals": 63,
+        "closedTrades": 25,
+        "winRate": 0.6,
+        "avgRiskReward": 0.6596711593651254,
+        "avgBarsHeld": 3.76,
+        "skippedWhileOpen": 4,
+        "attemptedTrades": 43,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:22.589 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "HBAR/USDT",
+        "signals": 49,
+        "trades": 23
+      }
+    ]
+[2026-07-11 00:40:22.589 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "HBAR/USDT",
+        "signals": 49,
+        "closedTrades": 23,
+        "winRate": 0.43478260869565216,
+        "avgRiskReward": -0.10906642744317327,
+        "avgBarsHeld": 3.1739130434782608,
+        "skippedWhileOpen": 8,
+        "attemptedTrades": 35,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 13,
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 1
+      }
+    ]
+[2026-07-11 00:40:22.929 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "IOTA/USDT",
+        "signals": 62,
+        "trades": 22
+      }
+    ]
+[2026-07-11 00:40:22.929 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "IOTA/USDT",
+        "signals": 62,
+        "closedTrades": 22,
+        "winRate": 0.5909090909090909,
+        "avgRiskReward": 0.39766804527615174,
+        "avgBarsHeld": 4.2272727272727275,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 40,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 9,
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:23.302 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BONK/USDT",
+        "signals": 52,
+        "trades": 8
+      }
+    ]
+[2026-07-11 00:40:23.303 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "BONK/USDT",
+        "signals": 52,
+        "closedTrades": 8,
+        "winRate": 0.25,
+        "avgRiskReward": -0.002268715082189156,
+        "avgBarsHeld": 96,
+        "skippedWhileOpen": 34,
+        "attemptedTrades": 13,
+        "expired": 4,
+        "expiredHold": 8,
+        "openAtEnd": 1,
+        "stop": 0,
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0
+      }
+    ]
+[2026-07-11 00:40:23.818 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "LDO/USDT",
+        "signals": 61,
+        "trades": 17
+      }
+    ]
+[2026-07-11 00:40:23.818 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "LDO/USDT",
+        "signals": 61,
+        "closedTrades": 17,
+        "winRate": 0.5882352941176471,
+        "avgRiskReward": 0.423062296654122,
+        "avgBarsHeld": 2.0588235294117645,
+        "skippedWhileOpen": 4,
+        "attemptedTrades": 42,
+        "expired": 24,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 7,
+        "tp1": 3,
+        "tp2": 5,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:24.547 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "INJ/USDT",
+        "signals": 67,
+        "trades": 23
+      }
+    ]
+[2026-07-11 00:40:24.547 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "INJ/USDT",
+        "signals": 67,
+        "closedTrades": 23,
+        "winRate": 0.5652173913043478,
+        "avgRiskReward": 0.5391955331753722,
+        "avgBarsHeld": 4,
+        "skippedWhileOpen": 8,
+        "attemptedTrades": 46,
+        "expired": 23,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 2,
+        "tp2": 7,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:24.885 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "EIGEN/USDT",
+        "signals": 47,
+        "trades": 19
+      }
+    ]
+[2026-07-11 00:40:24.885 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "EIGEN/USDT",
+        "signals": 47,
+        "closedTrades": 19,
+        "winRate": 0.3157894736842105,
+        "avgRiskReward": -0.31926170358424166,
+        "avgBarsHeld": 4.157894736842105,
+        "skippedWhileOpen": 2,
+        "attemptedTrades": 36,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 13,
+        "tp1": 3,
+        "tp2": 2,
+        "tp3": 1
+      }
+    ]
+[2026-07-11 00:40:25.231 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "POL/USDT",
+        "signals": 51,
+        "trades": 21
+      }
+    ]
+[2026-07-11 00:40:25.231 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "POL/USDT",
+        "signals": 51,
+        "closedTrades": 21,
+        "winRate": 0.42857142857142855,
+        "avgRiskReward": -0.016974855474376896,
+        "avgBarsHeld": 4.285714285714286,
+        "skippedWhileOpen": 6,
+        "attemptedTrades": 37,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 12,
+        "tp1": 2,
+        "tp2": 6,
+        "tp3": 1
+      }
+    ]
+[2026-07-11 00:40:25.573 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "APT/USDT",
+        "signals": 68,
+        "trades": 32
+      }
+    ]
+[2026-07-11 00:40:25.573 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "APT/USDT",
+        "signals": 68,
+        "closedTrades": 32,
+        "winRate": 0.53125,
+        "avgRiskReward": 0.12004706356127474,
+        "avgBarsHeld": 4.4375,
+        "skippedWhileOpen": 4,
+        "attemptedTrades": 50,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 15,
+        "tp1": 7,
+        "tp2": 7,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:25.935 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "OP/USDT",
+        "signals": 54,
+        "trades": 24
+      }
+    ]
+[2026-07-11 00:40:25.935 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "OP/USDT",
+        "signals": 54,
+        "closedTrades": 24,
+        "winRate": 0.4583333333333333,
+        "avgRiskReward": 0.40764683906485105,
+        "avgBarsHeld": 2.3333333333333335,
+        "skippedWhileOpen": 3,
+        "attemptedTrades": 39,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 13,
+        "tp1": 0,
+        "tp2": 9,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:26.506 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PENGU/USDT",
+        "signals": 61,
+        "trades": 27
+      }
+    ]
+[2026-07-11 00:40:26.506 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PENGU/USDT",
+        "signals": 61,
+        "closedTrades": 27,
+        "winRate": 0.5555555555555556,
+        "avgRiskReward": 0.4854924222621501,
+        "avgBarsHeld": 4.407407407407407,
+        "skippedWhileOpen": 12,
+        "attemptedTrades": 40,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 12,
+        "tp1": 2,
+        "tp2": 7,
+        "tp3": 6
+      }
+    ]
+[2026-07-11 00:40:26.864 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ORDI/USDT",
+        "signals": 42,
+        "trades": 20
+      }
+    ]
+[2026-07-11 00:40:26.864 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ORDI/USDT",
+        "signals": 42,
+        "closedTrades": 20,
+        "winRate": 0.65,
+        "avgRiskReward": 0.8780371713447913,
+        "avgBarsHeld": 3.9,
+        "skippedWhileOpen": 3,
+        "attemptedTrades": 30,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 7,
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:27.309 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ALGO/USDT",
+        "signals": 47,
+        "trades": 17
+      }
+    ]
+[2026-07-11 00:40:27.309 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ALGO/USDT",
+        "signals": 47,
+        "closedTrades": 17,
+        "winRate": 0.7058823529411765,
+        "avgRiskReward": 0.9129438241463084,
+        "avgBarsHeld": 8.294117647058824,
+        "skippedWhileOpen": 7,
+        "attemptedTrades": 33,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 5,
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:27.636 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "JTO/USDT",
+        "signals": 58,
+        "trades": 24
+      }
+    ]
+[2026-07-11 00:40:27.636 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "JTO/USDT",
+        "signals": 58,
+        "closedTrades": 24,
+        "winRate": 0.5833333333333334,
+        "avgRiskReward": 0.422903465879199,
+        "avgBarsHeld": 4.25,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 40,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 6
+      }
+    ]
+[2026-07-11 00:40:28.062 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PENDLE/USDT",
+        "signals": 57,
+        "trades": 23
+      }
+    ]
+[2026-07-11 00:40:28.062 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PENDLE/USDT",
+        "signals": 57,
+        "closedTrades": 23,
+        "winRate": 0.5652173913043478,
+        "avgRiskReward": 0.4014274094966325,
+        "avgBarsHeld": 5.521739130434782,
+        "skippedWhileOpen": 6,
+        "attemptedTrades": 42,
+        "expired": 19,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 4,
+        "tp2": 7,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:28.423 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "APE/USDT",
+        "signals": 51,
+        "trades": 21
+      }
+    ]
+[2026-07-11 00:40:28.423 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "APE/USDT",
+        "signals": 51,
+        "closedTrades": 21,
+        "winRate": 0.3333333333333333,
+        "avgRiskReward": 0.047400419950761906,
+        "avgBarsHeld": 3.0952380952380953,
+        "skippedWhileOpen": 3,
+        "attemptedTrades": 37,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 14,
+        "tp1": 0,
+        "tp2": 5,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:28.774 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ETHFI/USDT",
+        "signals": 47,
+        "trades": 18
+      }
+    ]
+[2026-07-11 00:40:28.774 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ETHFI/USDT",
+        "signals": 47,
+        "closedTrades": 18,
+        "winRate": 0.6666666666666666,
+        "avgRiskReward": 0.6748216932877378,
+        "avgBarsHeld": 5.5,
+        "skippedWhileOpen": 7,
+        "attemptedTrades": 32,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 6,
+        "tp1": 4,
+        "tp2": 3,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:29.200 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PYTH/USDT",
+        "signals": 60,
+        "trades": 18
+      }
+    ]
+[2026-07-11 00:40:29.200 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "PYTH/USDT",
+        "signals": 60,
+        "closedTrades": 18,
+        "winRate": 0.5555555555555556,
+        "avgRiskReward": 0.5671468120127098,
+        "avgBarsHeld": 4.833333333333333,
+        "skippedWhileOpen": 8,
+        "attemptedTrades": 40,
+        "expired": 22,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 8,
+        "tp1": 1,
+        "tp2": 5,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:29.863 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SHIB/USDT",
+        "signals": 63,
+        "trades": 7
+      }
+    ]
+[2026-07-11 00:40:29.863 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "SHIB/USDT",
+        "signals": 63,
+        "closedTrades": 7,
+        "winRate": 0.7142857142857143,
+        "avgRiskReward": 0.0026369419551607845,
+        "avgBarsHeld": 96,
+        "skippedWhileOpen": 51,
+        "attemptedTrades": 11,
+        "expired": 3,
+        "expiredHold": 7,
+        "openAtEnd": 1,
+        "stop": 0,
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0
+      }
+    ]
+[2026-07-11 00:40:30.200 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "GALA/USDT",
+        "signals": 38,
+        "trades": 15
+      }
+    ]
+[2026-07-11 00:40:30.200 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "GALA/USDT",
+        "signals": 38,
+        "closedTrades": 15,
+        "winRate": 0.3333333333333333,
+        "avgRiskReward": -0.048136419564378335,
+        "avgBarsHeld": 10.466666666666667,
+        "skippedWhileOpen": 6,
+        "attemptedTrades": 28,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 10,
+        "tp1": 1,
+        "tp2": 2,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:30.529 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ZRO/USDT",
+        "signals": 52,
+        "trades": 26
+      }
+    ]
+[2026-07-11 00:40:30.530 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ZRO/USDT",
+        "signals": 52,
+        "closedTrades": 26,
+        "winRate": 0.46153846153846156,
+        "avgRiskReward": 0.2884397789607922,
+        "avgBarsHeld": 3.6538461538461537,
+        "skippedWhileOpen": 6,
+        "attemptedTrades": 40,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 14,
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:30.894 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "RENDER/USDT",
+        "signals": 53,
+        "trades": 26
+      }
+    ]
+[2026-07-11 00:40:30.894 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "RENDER/USDT",
+        "signals": 53,
+        "closedTrades": 26,
+        "winRate": 0.46153846153846156,
+        "avgRiskReward": 0.3105460896661897,
+        "avgBarsHeld": 3.730769230769231,
+        "skippedWhileOpen": 10,
+        "attemptedTrades": 37,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 14,
+        "tp1": 2,
+        "tp2": 6,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:31.225 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "CAKE/USDT",
+        "signals": 62,
+        "trades": 23
+      }
+    ]
+[2026-07-11 00:40:31.225 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "CAKE/USDT",
+        "signals": 62,
+        "closedTrades": 23,
+        "winRate": 0.43478260869565216,
+        "avgRiskReward": 0.03700471062346174,
+        "avgBarsHeld": 4.3478260869565215,
+        "skippedWhileOpen": 6,
+        "attemptedTrades": 45,
+        "expired": 21,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 13,
+        "tp1": 2,
+        "tp2": 2,
+        "tp3": 6
+      }
+    ]
+[2026-07-11 00:40:31.560 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "CRV/USDT",
+        "signals": 60,
+        "trades": 29
+      }
+    ]
+[2026-07-11 00:40:31.560 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "CRV/USDT",
+        "signals": 60,
+        "closedTrades": 29,
+        "winRate": 0.5172413793103449,
+        "avgRiskReward": 0.3244809117840142,
+        "avgBarsHeld": 4.379310344827586,
+        "skippedWhileOpen": 8,
+        "attemptedTrades": 42,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 14,
+        "tp1": 4,
+        "tp2": 8,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:31.933 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "CHZ/USDT",
+        "signals": 62,
+        "trades": 23
+      }
+    ]
+[2026-07-11 00:40:31.933 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "CHZ/USDT",
+        "signals": 62,
+        "closedTrades": 23,
+        "winRate": 0.5217391304347826,
+        "avgRiskReward": 0.5245638411849519,
+        "avgBarsHeld": 4.130434782608695,
+        "skippedWhileOpen": 10,
+        "attemptedTrades": 42,
+        "expired": 19,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 11,
+        "tp1": 0,
+        "tp2": 8,
+        "tp3": 4
+      }
+    ]
+[2026-07-11 00:40:32.252 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "RUNE/USDT",
+        "signals": 54,
+        "trades": 24
+      }
+    ]
+[2026-07-11 00:40:32.252 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "RUNE/USDT",
+        "signals": 54,
+        "closedTrades": 24,
+        "winRate": 0.625,
+        "avgRiskReward": 0.8229091429874628,
+        "avgBarsHeld": 4.291666666666667,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 40,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 9,
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 5
+      }
+    ]
+[2026-07-11 00:40:32.624 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ATOM/USDT",
+        "signals": 60,
+        "trades": 23
+      }
+    ]
+[2026-07-11 00:40:32.624 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "ATOM/USDT",
+        "signals": 60,
+        "closedTrades": 23,
+        "winRate": 0.6086956521739131,
+        "avgRiskReward": 0.47391814949549266,
+        "avgBarsHeld": 5.869565217391305,
+        "skippedWhileOpen": 9,
+        "attemptedTrades": 41,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 9,
+        "tp1": 5,
+        "tp2": 7,
+        "tp3": 2
+      }
+    ]
+[2026-07-11 00:40:32.980 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DYDX/USDT",
+        "signals": 55,
+        "trades": 23
+      }
+    ]
+[2026-07-11 00:40:32.980 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "DYDX/USDT",
+        "signals": 55,
+        "closedTrades": 23,
+        "winRate": 0.5652173913043478,
+        "avgRiskReward": 0.5229765886004156,
+        "avgBarsHeld": 3.5652173913043477,
+        "skippedWhileOpen": 11,
+        "attemptedTrades": 37,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 3
+      }
+    ]
+[2026-07-11 00:40:33.324 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "STRK/USDT",
+        "signals": 47,
+        "trades": 19
+      }
+    ]
+[2026-07-11 00:40:33.324 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "STRK/USDT",
+        "signals": 47,
+        "closedTrades": 19,
+        "winRate": 0.47368421052631576,
+        "avgRiskReward": 0.1662401732978683,
+        "avgBarsHeld": 4.052631578947368,
+        "skippedWhileOpen": 3,
+        "attemptedTrades": 37,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0,
+        "stop": 10,
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 1
+      }
+    ]
+{
+  "timeframe": "H4",
+  "bars": 1000,
+  "summary": {
+    "pairs": 64,
+    "signals": 3583,
+    "trades": 1406,
+    "attemptedTrades": 2437,
+    "skippedWhileOpen": 575,
+    "winRatePct": 52.49,
+    "avgRiskReward": 0.36,
+    "avgBarsHeld": 5.63,
+    "outcomes": {
+      "tp1": 156,
+      "tp2": 380,
+      "tp3": 202,
+      "stop": 648,
+      "expired": 1011,
+      "expiredHold": 20,
+      "openAtEnd": 20
+    }
+  },
+  "bySetup": {
+    "SMC_CHOCH_OB": {
+      "trades": 406,
+      "winRatePct": 53.69,
+      "avgRiskReward": 0.4
+    },
+    "SMC_FVG_CONTINUATION": {
+      "trades": 249,
+      "winRatePct": 35.74,
+      "avgRiskReward": -0.25
+    },
+    "SMC_BOS_OB": {
+      "trades": 751,
+      "winRatePct": 58.72,
+      "avgRiskReward": 0.55
+    }
+  },
+  "byGrade": {
+    "B": {
+      "trades": 1326,
+      "winRatePct": 52.79,
+      "avgRiskReward": 0.36
+    },
+    "A": {
+      "trades": 80,
+      "winRatePct": 60,
+      "avgRiskReward": 0.5
+    }
+  },
+  "pairs": [
+    {
+      "pair": "BTC/USDT",
+      "signals": 61,
+      "trades": 18,
+      "winRatePct": 33.33,
+      "avgRiskReward": -0.31,
+      "avgBarsHeld": 9.39,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 2,
+        "tp3": 3,
+        "stop": 12,
+        "expired": 24,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DASH/USDT",
+      "signals": 52,
+      "trades": 17,
+      "winRatePct": 41.18,
+      "avgRiskReward": 0.17,
+      "avgBarsHeld": 7.65,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 5,
+        "tp3": 2,
+        "stop": 10,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "ETH/USDT",
+      "signals": 64,
+      "trades": 21,
+      "winRatePct": 57.14,
+      "avgRiskReward": 0.36,
+      "avgBarsHeld": 2.43,
+      "attemptedTrades": 48,
+      "skippedWhileOpen": 2,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 2,
+        "stop": 9,
+        "expired": 26,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "LTC/USDT",
+      "signals": 62,
+      "trades": 29,
+      "winRatePct": 65.52,
+      "avgRiskReward": 0.39,
+      "avgBarsHeld": 5.41,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 8,
+        "tp2": 5,
+        "tp3": 6,
+        "stop": 10,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DOT/USDT",
+      "signals": 49,
+      "trades": 21,
+      "winRatePct": 47.62,
+      "avgRiskReward": 0.09,
+      "avgBarsHeld": 2.52,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 3,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 3,
+        "tp3": 2,
+        "stop": 11,
+        "expired": 20,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "XRP/USDT",
+      "signals": 68,
+      "trades": 32,
+      "winRatePct": 37.5,
+      "avgRiskReward": -0.1,
+      "avgBarsHeld": 3.91,
+      "attemptedTrades": 48,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 4,
+        "stop": 20,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ADA/USDT",
+      "signals": 52,
+      "trades": 24,
+      "winRatePct": 45.83,
+      "avgRiskReward": 0.23,
+      "avgBarsHeld": 5.42,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 4,
+        "stop": 13,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "BCH/USDT",
+      "signals": 58,
+      "trades": 22,
+      "winRatePct": 63.64,
+      "avgRiskReward": 0.56,
+      "avgBarsHeld": 4.64,
+      "attemptedTrades": 39,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 11,
+        "tp3": 0,
+        "stop": 8,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "SOL/USDT",
+      "signals": 63,
+      "trades": 22,
+      "winRatePct": 59.09,
+      "avgRiskReward": 0.55,
+      "avgBarsHeld": 4.18,
+      "attemptedTrades": 44,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 5,
+        "stop": 9,
+        "expired": 21,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "AVA/USDT",
+      "signals": 76,
+      "trades": 26,
+      "winRatePct": 65.38,
+      "avgRiskReward": 0.81,
+      "avgBarsHeld": 3.69,
+      "attemptedTrades": 46,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 12,
+        "tp3": 3,
+        "stop": 9,
+        "expired": 20,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ETC/USDT",
+      "signals": 56,
+      "trades": 25,
+      "winRatePct": 56,
+      "avgRiskReward": 0.47,
+      "avgBarsHeld": 3.04,
+      "attemptedTrades": 39,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 9,
+        "tp3": 4,
+        "stop": 11,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "NEO/USDT",
+      "signals": 64,
+      "trades": 32,
+      "winRatePct": 59.38,
+      "avgRiskReward": 0.64,
+      "avgBarsHeld": 3.97,
+      "attemptedTrades": 46,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 8,
+        "tp3": 8,
+        "stop": 13,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DOGE/USDT",
+      "signals": 59,
+      "trades": 22,
+      "winRatePct": 54.55,
+      "avgRiskReward": 0.46,
+      "avgBarsHeld": 3.77,
+      "attemptedTrades": 41,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 5,
+        "stop": 10,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "BNB/USDT",
+      "signals": 63,
+      "trades": 26,
+      "winRatePct": 61.54,
+      "avgRiskReward": 0.6,
+      "avgBarsHeld": 5.62,
+      "attemptedTrades": 41,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 7,
+        "tp3": 7,
+        "stop": 10,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ZEC/USDT",
+      "signals": 58,
+      "trades": 21,
+      "winRatePct": 57.14,
+      "avgRiskReward": 0.42,
+      "avgBarsHeld": 4.62,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 4,
+        "stop": 9,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "TRX/USDT",
+      "signals": 80,
+      "trades": 26,
+      "winRatePct": 57.69,
+      "avgRiskReward": -0.13,
+      "avgBarsHeld": 2.5,
+      "attemptedTrades": 56,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 9,
+        "tp3": 3,
+        "stop": 11,
+        "expired": 30,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "XLM/USDT",
+      "signals": 49,
+      "trades": 19,
+      "winRatePct": 57.89,
+      "avgRiskReward": 0.59,
+      "avgBarsHeld": 5.95,
+      "attemptedTrades": 31,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 5,
+        "tp3": 4,
+        "stop": 8,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "AAVE/USDT",
+      "signals": 64,
+      "trades": 27,
+      "winRatePct": 59.26,
+      "avgRiskReward": 0.75,
+      "avgBarsHeld": 4.78,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 6,
+        "stop": 11,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "UNI/USDT",
+      "signals": 51,
+      "trades": 20,
+      "winRatePct": 65,
+      "avgRiskReward": 0.7,
+      "avgBarsHeld": 5.9,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 7,
+        "tp3": 2,
+        "stop": 7,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ARB/USDT",
+      "signals": 50,
+      "trades": 25,
+      "winRatePct": 48,
+      "avgRiskReward": 0.2,
+      "avgBarsHeld": 2.8,
+      "attemptedTrades": 39,
+      "skippedWhileOpen": 5,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 9,
+        "tp3": 0,
+        "stop": 13,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "NEAR/USDT",
+      "signals": 57,
+      "trades": 22,
+      "winRatePct": 54.55,
+      "avgRiskReward": 0.52,
+      "avgBarsHeld": 5.05,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 2,
+        "stop": 10,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "SUI/USDT",
+      "signals": 48,
+      "trades": 20,
+      "winRatePct": 60,
+      "avgRiskReward": 0.54,
+      "avgBarsHeld": 2.6,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 8,
+        "tp3": 3,
+        "stop": 8,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PEPE/USDT",
+      "signals": 42,
+      "trades": 5,
+      "winRatePct": 60,
+      "avgRiskReward": 0,
+      "avgBarsHeld": 96,
+      "attemptedTrades": 11,
+      "skippedWhileOpen": 30,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0,
+        "stop": 0,
+        "expired": 5,
+        "expiredHold": 5,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "WLD/USDT",
+      "signals": 53,
+      "trades": 19,
+      "winRatePct": 47.37,
+      "avgRiskReward": 0.62,
+      "avgBarsHeld": 5.21,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 3,
+        "tp3": 5,
+        "stop": 10,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "TAO/USDT",
+      "signals": 65,
+      "trades": 26,
+      "winRatePct": 57.69,
+      "avgRiskReward": 0.69,
+      "avgBarsHeld": 3.15,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 10,
+        "tp3": 2,
+        "stop": 11,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ENA/USDT",
+      "signals": 41,
+      "trades": 17,
+      "winRatePct": 47.06,
+      "avgRiskReward": 0.34,
+      "avgBarsHeld": 3,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 9,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PAXG/USDT",
+      "signals": 63,
+      "trades": 29,
+      "winRatePct": 31.03,
+      "avgRiskReward": -1.07,
+      "avgBarsHeld": 4.21,
+      "attemptedTrades": 48,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 2,
+        "tp3": 2,
+        "stop": 20,
+        "expired": 19,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "LINK/USDT",
+      "signals": 55,
+      "trades": 27,
+      "winRatePct": 81.48,
+      "avgRiskReward": 1.14,
+      "avgBarsHeld": 3.19,
+      "attemptedTrades": 38,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 14,
+        "tp3": 3,
+        "stop": 5,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "AVAX/USDT",
+      "signals": 47,
+      "trades": 20,
+      "winRatePct": 60,
+      "avgRiskReward": 0.61,
+      "avgBarsHeld": 5.65,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 3,
+        "stop": 8,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "ICP/USDT",
+      "signals": 49,
+      "trades": 21,
+      "winRatePct": 42.86,
+      "avgRiskReward": 0.25,
+      "avgBarsHeld": 3.67,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 4,
+        "tp3": 4,
+        "stop": 12,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "TIA/USDT",
+      "signals": 50,
+      "trades": 19,
+      "winRatePct": 57.89,
+      "avgRiskReward": 0.63,
+      "avgBarsHeld": 3.95,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 5,
+        "tp3": 3,
+        "stop": 8,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ONDO/USDT",
+      "signals": 51,
+      "trades": 21,
+      "winRatePct": 38.1,
+      "avgRiskReward": 0.04,
+      "avgBarsHeld": 3.29,
+      "attemptedTrades": 34,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 5,
+        "tp3": 2,
+        "stop": 13,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "FIL/USDT",
+      "signals": 49,
+      "trades": 19,
+      "winRatePct": 42.11,
+      "avgRiskReward": -0.12,
+      "avgBarsHeld": 2.74,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 2,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 5,
+        "tp3": 1,
+        "stop": 11,
+        "expired": 20,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "SEI/USDT",
+      "signals": 70,
+      "trades": 27,
+      "winRatePct": 51.85,
+      "avgRiskReward": 0.52,
+      "avgBarsHeld": 5.37,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 15,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 8,
+        "tp3": 5,
+        "stop": 13,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "FET/USDT",
+      "signals": 63,
+      "trades": 25,
+      "winRatePct": 60,
+      "avgRiskReward": 0.66,
+      "avgBarsHeld": 3.76,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 5,
+        "stop": 10,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "HBAR/USDT",
+      "signals": 49,
+      "trades": 23,
+      "winRatePct": 43.48,
+      "avgRiskReward": -0.11,
+      "avgBarsHeld": 3.17,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 1,
+        "stop": 13,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "IOTA/USDT",
+      "signals": 62,
+      "trades": 22,
+      "winRatePct": 59.09,
+      "avgRiskReward": 0.4,
+      "avgBarsHeld": 4.23,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 5,
+        "stop": 9,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "BONK/USDT",
+      "signals": 52,
+      "trades": 8,
+      "winRatePct": 25,
+      "avgRiskReward": 0,
+      "avgBarsHeld": 96,
+      "attemptedTrades": 13,
+      "skippedWhileOpen": 34,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0,
+        "stop": 0,
+        "expired": 4,
+        "expiredHold": 8,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "LDO/USDT",
+      "signals": 61,
+      "trades": 17,
+      "winRatePct": 58.82,
+      "avgRiskReward": 0.42,
+      "avgBarsHeld": 2.06,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 5,
+        "tp3": 2,
+        "stop": 7,
+        "expired": 24,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "INJ/USDT",
+      "signals": 67,
+      "trades": 23,
+      "winRatePct": 56.52,
+      "avgRiskReward": 0.54,
+      "avgBarsHeld": 4,
+      "attemptedTrades": 46,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 7,
+        "tp3": 4,
+        "stop": 10,
+        "expired": 23,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "EIGEN/USDT",
+      "signals": 47,
+      "trades": 19,
+      "winRatePct": 31.58,
+      "avgRiskReward": -0.32,
+      "avgBarsHeld": 4.16,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 2,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 2,
+        "tp3": 1,
+        "stop": 13,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "POL/USDT",
+      "signals": 51,
+      "trades": 21,
+      "winRatePct": 42.86,
+      "avgRiskReward": -0.02,
+      "avgBarsHeld": 4.29,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 6,
+        "tp3": 1,
+        "stop": 12,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "APT/USDT",
+      "signals": 68,
+      "trades": 32,
+      "winRatePct": 53.13,
+      "avgRiskReward": 0.12,
+      "avgBarsHeld": 4.44,
+      "attemptedTrades": 50,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 7,
+        "tp2": 7,
+        "tp3": 3,
+        "stop": 15,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "OP/USDT",
+      "signals": 54,
+      "trades": 24,
+      "winRatePct": 45.83,
+      "avgRiskReward": 0.41,
+      "avgBarsHeld": 2.33,
+      "attemptedTrades": 39,
+      "skippedWhileOpen": 3,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 9,
+        "tp3": 2,
+        "stop": 13,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PENGU/USDT",
+      "signals": 61,
+      "trades": 27,
+      "winRatePct": 55.56,
+      "avgRiskReward": 0.49,
+      "avgBarsHeld": 4.41,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 7,
+        "tp3": 6,
+        "stop": 12,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ORDI/USDT",
+      "signals": 42,
+      "trades": 20,
+      "winRatePct": 65,
+      "avgRiskReward": 0.88,
+      "avgBarsHeld": 3.9,
+      "attemptedTrades": 30,
+      "skippedWhileOpen": 3,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 4,
+        "stop": 7,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ALGO/USDT",
+      "signals": 47,
+      "trades": 17,
+      "winRatePct": 70.59,
+      "avgRiskReward": 0.91,
+      "avgBarsHeld": 8.29,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 4,
+        "stop": 5,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "JTO/USDT",
+      "signals": 58,
+      "trades": 24,
+      "winRatePct": 58.33,
+      "avgRiskReward": 0.42,
+      "avgBarsHeld": 4.25,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 6,
+        "stop": 10,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PENDLE/USDT",
+      "signals": 57,
+      "trades": 23,
+      "winRatePct": 56.52,
+      "avgRiskReward": 0.4,
+      "avgBarsHeld": 5.52,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 7,
+        "tp3": 2,
+        "stop": 10,
+        "expired": 19,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "APE/USDT",
+      "signals": 51,
+      "trades": 21,
+      "winRatePct": 33.33,
+      "avgRiskReward": 0.05,
+      "avgBarsHeld": 3.1,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 3,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 5,
+        "tp3": 2,
+        "stop": 14,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ETHFI/USDT",
+      "signals": 47,
+      "trades": 18,
+      "winRatePct": 66.67,
+      "avgRiskReward": 0.67,
+      "avgBarsHeld": 5.5,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 3,
+        "tp3": 5,
+        "stop": 6,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PYTH/USDT",
+      "signals": 60,
+      "trades": 18,
+      "winRatePct": 55.56,
+      "avgRiskReward": 0.57,
+      "avgBarsHeld": 4.83,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 5,
+        "tp3": 4,
+        "stop": 8,
+        "expired": 22,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "SHIB/USDT",
+      "signals": 63,
+      "trades": 7,
+      "winRatePct": 71.43,
+      "avgRiskReward": 0,
+      "avgBarsHeld": 96,
+      "attemptedTrades": 11,
+      "skippedWhileOpen": 51,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0,
+        "stop": 0,
+        "expired": 3,
+        "expiredHold": 7,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "GALA/USDT",
+      "signals": 38,
+      "trades": 15,
+      "winRatePct": 33.33,
+      "avgRiskReward": -0.05,
+      "avgBarsHeld": 10.47,
+      "attemptedTrades": 28,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 2,
+        "tp3": 2,
+        "stop": 10,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "ZRO/USDT",
+      "signals": 52,
+      "trades": 26,
+      "winRatePct": 46.15,
+      "avgRiskReward": 0.29,
+      "avgBarsHeld": 3.65,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 3,
+        "stop": 14,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "RENDER/USDT",
+      "signals": 53,
+      "trades": 26,
+      "winRatePct": 46.15,
+      "avgRiskReward": 0.31,
+      "avgBarsHeld": 3.73,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 6,
+        "tp3": 4,
+        "stop": 14,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "CAKE/USDT",
+      "signals": 62,
+      "trades": 23,
+      "winRatePct": 43.48,
+      "avgRiskReward": 0.04,
+      "avgBarsHeld": 4.35,
+      "attemptedTrades": 45,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 2,
+        "tp3": 6,
+        "stop": 13,
+        "expired": 21,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "CRV/USDT",
+      "signals": 60,
+      "trades": 29,
+      "winRatePct": 51.72,
+      "avgRiskReward": 0.32,
+      "avgBarsHeld": 4.38,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 8,
+        "tp3": 3,
+        "stop": 14,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "CHZ/USDT",
+      "signals": 62,
+      "trades": 23,
+      "winRatePct": 52.17,
+      "avgRiskReward": 0.52,
+      "avgBarsHeld": 4.13,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 8,
+        "tp3": 4,
+        "stop": 11,
+        "expired": 19,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "RUNE/USDT",
+      "signals": 54,
+      "trades": 24,
+      "winRatePct": 62.5,
+      "avgRiskReward": 0.82,
+      "avgBarsHeld": 4.29,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 5,
+        "stop": 9,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ATOM/USDT",
+      "signals": 60,
+      "trades": 23,
+      "winRatePct": 60.87,
+      "avgRiskReward": 0.47,
+      "avgBarsHeld": 5.87,
+      "attemptedTrades": 41,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 7,
+        "tp3": 2,
+        "stop": 9,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DYDX/USDT",
+      "signals": 55,
+      "trades": 23,
+      "winRatePct": 56.52,
+      "avgRiskReward": 0.52,
+      "avgBarsHeld": 3.57,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 3,
+        "stop": 10,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "STRK/USDT",
+      "signals": 47,
+      "trades": 19,
+      "winRatePct": 47.37,
+      "avgRiskReward": 0.17,
+      "avgBarsHeld": 4.05,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 3,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 4,
+        "tp3": 1,
+        "stop": 10,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "WIF/USDT",
+      "signals": 41,
+      "trades": 19,
+      "winRatePct": 57.89,
+      "avgRiskReward": 0.67,
+      "avgBarsHeld": 5.11,
+      "attemptedTrades": 31,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 3,
+        "stop": 8,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    }
+  ]
+}
+[2026-07-11 00:40:33.661 +0700] [32mINFO[39m: [36mSMC backtest pair complete[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "WIF/USDT",
+        "signals": 41,
+        "trades": 19
+      }
+    ]
+[2026-07-11 00:40:33.661 +0700] [32mINFO[39m: [36mSMC backtest pair summary[39m
+    [35msource[39m: "charts:smc-backtest-runner"
+    [35margs[39m: [
+      {
+        "pair": "WIF/USDT",
+        "signals": 41,
+        "closedTrades": 19,
+        "winRate": 0.5789473684210527,
+        "avgRiskReward": 0.6716159120799322,
+        "avgBarsHeld": 5.105263157894737,
+        "skippedWhileOpen": 7,
+        "attemptedTrades": 31,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 1,
+        "stop": 8,
+        "tp1": 1,
+        "tp2": 7,
+        "tp3": 3
+      }
+    ]

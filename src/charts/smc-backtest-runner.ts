@@ -21,6 +21,12 @@ function parseBacktestBars(value: string | undefined): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 500;
 }
 
+function parseBacktestEndTime(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function round(value: number): number {
   return Number(value.toFixed(2));
 }
@@ -42,6 +48,7 @@ function formatPairSummary(pair: string, report: SmcBacktestReport) {
       tp3: report.outcomes.tp3,
       stop: report.outcomes.stop,
       expired: report.outcomes.expired,
+      expiredHold: report.outcomes.expired_hold,
       openAtEnd: report.outcomes.open_at_end,
     },
   };
@@ -63,6 +70,7 @@ function summarizeReports(reports: SmcBacktestReport[]) {
       tp3: 0,
       stop: 0,
       expired: 0,
+      expiredHold: 0,
       openAtEnd: 0,
     },
   };
@@ -77,6 +85,7 @@ function summarizeReports(reports: SmcBacktestReport[]) {
     totals.outcomes.tp3 += report.outcomes.tp3;
     totals.outcomes.stop += report.outcomes.stop;
     totals.outcomes.expired += report.outcomes.expired;
+    totals.outcomes.expiredHold += report.outcomes.expired_hold;
     totals.outcomes.openAtEnd += report.outcomes.open_at_end;
 
     for (const stats of Object.values(report.byPairStats)) {
@@ -99,15 +108,43 @@ function summarizeReports(reports: SmcBacktestReport[]) {
   };
 }
 
+function summarizeBySetupAndGrade(reports: SmcBacktestReport[]) {
+  const allTrades = reports.flatMap((r) => r.trades);
+  const closedTrades = allTrades.filter((t) => t.outcome !== "open_at_end" && t.outcome !== "expired");
+
+  function bucket(items: typeof closedTrades) {
+    const wins = items.filter((t) => t.realizedRiskReward > 0);
+    return {
+      trades: items.length,
+      winRatePct: items.length ? round((wins.length / items.length) * 100) : 0,
+      avgRiskReward: items.length ? round(items.reduce((s, t) => s + t.realizedRiskReward, 0) / items.length) : 0,
+    };
+  }
+
+  const bySetup: Record<string, ReturnType<typeof bucket>> = {};
+  for (const setup of new Set(closedTrades.map((t) => t.setup))) {
+    bySetup[setup] = bucket(closedTrades.filter((t) => t.setup === setup));
+  }
+
+  const byGrade: Record<string, ReturnType<typeof bucket>> = {};
+  for (const trade of closedTrades) {
+    if (!trade.grade) continue;
+    if (!byGrade[trade.grade]) byGrade[trade.grade] = bucket(closedTrades.filter((t) => t.grade === trade.grade));
+  }
+
+  return { bySetup, byGrade };
+}
+
 async function main(): Promise<void> {
   const timeframe = parseBacktestTimeframe(process.env.BACKTEST_TIMEFRAME);
   const bars = parseBacktestBars(process.env.BACKTEST_BARS);
-  logger.info("SMC backtest starting", { timeframe, bars });
+  const endTimeMs = parseBacktestEndTime(process.env.BACKTEST_END_TIME);
+  logger.info("SMC backtest starting", { timeframe, bars, endTime: process.env.BACKTEST_END_TIME ?? "latest" });
   const pairs = Array.from(new Map(CHARTS.map((chart) => [chart.name.replace(` ${chart.timeframe}`, ""), { pair: chart.name.replace(` ${chart.timeframe}`, ""), symbol: chart.symbol }])).values());
   const reports: SmcBacktestReport[] = [];
   const pairSummaries: ReturnType<typeof formatPairSummary>[] = [];
   for (const { pair, symbol } of pairs) {
-    const candlesOrError = await fetchOhlcHistory(symbol, timeframe, bars);
+    const candlesOrError = await fetchOhlcHistory(symbol, timeframe, bars, { bypassCache: true, endTimeMs });
     if (candlesOrError instanceof Error) {
       logger.warn(`Skip ${pair}: ${candlesOrError.message}`);
       continue;
@@ -116,7 +153,7 @@ async function main(): Promise<void> {
     const htfTimeframe = getHtfTimeframeFor(timeframe);
     let htfContexts: ReturnType<typeof buildRollingHtfContexts> | undefined;
     if (htfTimeframe) {
-      const htfCandlesOrError = await fetchOhlcHistory(symbol, htfTimeframe, 300);
+      const htfCandlesOrError = await fetchOhlcHistory(symbol, htfTimeframe, 300, { bypassCache: true, endTimeMs });
       if (!(htfCandlesOrError instanceof Error)) {
         htfContexts = buildRollingHtfContexts(htfTimeframe, htfCandlesOrError as Candle[], candles);
       }
@@ -135,6 +172,7 @@ async function main(): Promise<void> {
       skippedWhileOpen: report.byPairStats[pair]?.skippedWhileOpen ?? 0,
       attemptedTrades: report.byPairStats[pair]?.attemptedTrades ?? 0,
       expired: report.outcomes.expired,
+      expiredHold: report.outcomes.expired_hold,
       openAtEnd: report.outcomes.open_at_end,
       stop: report.outcomes.stop,
       tp1: report.outcomes.tp1,
@@ -143,12 +181,15 @@ async function main(): Promise<void> {
     });
   }
 
+  const setupGradeBreakdown = summarizeBySetupAndGrade(reports);
   console.log(
     JSON.stringify(
       {
         timeframe,
         bars,
         summary: summarizeReports(reports),
+        bySetup: setupGradeBreakdown.bySetup,
+        byGrade: setupGradeBreakdown.byGrade,
         pairs: pairSummaries,
       },
       null,

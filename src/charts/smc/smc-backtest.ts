@@ -5,6 +5,16 @@ import type { SmcGrade, SmcSetupName, SmcSignal } from "./smc-types.js";
 import type { HtfContext } from "./smc-htf-context.js";
 
 const loggerName = "charts:smc-backtest";
+const MAX_HOLD_BARS = 96;
+
+const PARTIAL_WEIGHTS_WITH_TP3 = { tp1: 0.5, tp2: 0.3, tp3: 0.2 } as const;
+const PARTIAL_WEIGHTS_NO_TP3 = { tp1: 0.5, tp2: 0.5 } as const;
+
+const FEE_RATE = Number(process.env.BACKTEST_FEE_RATE ?? "0.001");
+const SLIPPAGE_RATE = Number(process.env.BACKTEST_SLIPPAGE_RATE ?? "0.0002");
+const TOTAL_COST_RATE = isNaN(FEE_RATE) || FEE_RATE < 0 ? 0.001 : FEE_RATE;
+const TOTAL_SLIPPAGE_RATE = isNaN(SLIPPAGE_RATE) || SLIPPAGE_RATE < 0 ? 0.0002 : SLIPPAGE_RATE;
+const COST_PER_DIRECTION = Math.max(0, TOTAL_COST_RATE + TOTAL_SLIPPAGE_RATE);
 
 export type SmcBacktestOutcomeCounts = {
   tp1: number;
@@ -12,6 +22,7 @@ export type SmcBacktestOutcomeCounts = {
   tp3: number;
   stop: number;
   expired: number;
+  expired_hold: number;
   open_at_end: number;
 };
 
@@ -24,7 +35,7 @@ export type SmcBacktestTrade = {
   entryPrice: number;
   exitIndex: number | null;
   exitPrice: number | null;
-  outcome: "tp1" | "tp2" | "tp3" | "stop" | "expired" | "open_at_end";
+  outcome: "tp1" | "tp2" | "tp3" | "stop" | "expired" | "expired_hold" | "open_at_end";
   realizedRiskReward: number;
   confidence: number;
   grade?: SmcGrade;
@@ -64,6 +75,7 @@ function createOutcomeCounts(): SmcBacktestOutcomeCounts {
     tp3: 0,
     stop: 0,
     expired: 0,
+    expired_hold: 0,
     open_at_end: 0,
   };
 }
@@ -149,46 +161,198 @@ function recordTrade(stats: SmcBacktestDetailedStats, trade: SmcBacktestTrade, c
   }
 }
 
+function calculateFeeCost(weight: number, entry: number, exitPrice: number, risk: number): number {
+  if (risk === 0) return 0;
+  return weight * ((entry + exitPrice) * COST_PER_DIRECTION) / risk;
+}
+
 function scanOutcome(
   candles: Candle[],
   signal: FilledSignal,
 ): Pick<SmcBacktestTrade, "exitIndex" | "exitPrice" | "outcome" | "realizedRiskReward"> {
   const { direction, entry, stopLoss, takeProfit1, takeProfit2, takeProfit3, fillIndex } = signal;
-  for (let i = fillIndex; i < candles.length; i += 1) {
-    const { high, low } = candles[i];
+  const maxIndex = Math.min(candles.length - 1, fillIndex + MAX_HOLD_BARS);
+  const risk = Math.abs(entry - stopLoss);
+  const hasTP3 = takeProfit3 !== undefined;
+  const weights = hasTP3 ? PARTIAL_WEIGHTS_WITH_TP3 : PARTIAL_WEIGHTS_NO_TP3;
+
+  let currentStop = stopLoss;
+  let remainingWeight = 1;
+  let realizedR = 0;
+  let tp1Done = false;
+  let tp2Done = false;
+  let tp3Done = false;
+  let lastExitPrice = entry;
+  let lastTpOutcome: "tp1" | "tp2" | "tp3" | null = null;
+
+  for (let i = fillIndex; i <= maxIndex; i += 1) {
+    const candle = candles[i];
+    const { high, low, close } = candle;
+
     if (direction === "LONG") {
-      if (low <= stopLoss) {
-        return { exitIndex: i, exitPrice: stopLoss, outcome: "stop", realizedRiskReward: (stopLoss - entry) / (entry - stopLoss) };
+      if (low <= currentStop) {
+        const closePrice = Math.max(low, currentStop);
+        const tradeR = remainingWeight * (closePrice - entry) / risk;
+        const costR = calculateFeeCost(remainingWeight, entry, closePrice, risk);
+        realizedR += tradeR - costR;
+        const outcome = tp1Done ? (lastTpOutcome ?? "tp1") : "stop";
+        return {
+          exitIndex: i,
+          exitPrice: closePrice,
+          outcome,
+          realizedRiskReward: realizedR,
+        };
       }
-      if (takeProfit3 !== undefined && high >= takeProfit3) {
-        return { exitIndex: i, exitPrice: takeProfit3, outcome: "tp3", realizedRiskReward: (takeProfit3 - entry) / (entry - stopLoss) };
-      }
-      if (high >= takeProfit2) {
-        return { exitIndex: i, exitPrice: takeProfit2, outcome: "tp2", realizedRiskReward: (takeProfit2 - entry) / (entry - stopLoss) };
-      }
-      if (high >= takeProfit1) {
-        return { exitIndex: i, exitPrice: takeProfit1, outcome: "tp1", realizedRiskReward: (takeProfit1 - entry) / (entry - stopLoss) };
+
+      if (i > fillIndex) {
+        if (!tp1Done && high >= takeProfit1) {
+          const tradeR = weights.tp1 * (takeProfit1 - entry) / risk;
+          const costR = calculateFeeCost(weights.tp1, entry, takeProfit1, risk);
+          realizedR += tradeR - costR;
+          remainingWeight -= weights.tp1;
+          currentStop = entry;
+          tp1Done = true;
+          lastExitPrice = takeProfit1;
+          lastTpOutcome = "tp1";
+        }
+
+        if (!tp2Done && high >= takeProfit2) {
+          const tradeR = weights.tp2 * (takeProfit2 - entry) / risk;
+          const costR = calculateFeeCost(weights.tp2, entry, takeProfit2, risk);
+          realizedR += tradeR - costR;
+          remainingWeight -= weights.tp2;
+          tp2Done = true;
+          lastExitPrice = takeProfit2;
+          lastTpOutcome = "tp2";
+          if (!hasTP3) {
+            return {
+              exitIndex: i,
+              exitPrice: lastExitPrice,
+              outcome: "tp2",
+              realizedRiskReward: realizedR,
+            };
+          }
+        }
+
+        if (hasTP3 && !tp3Done && high >= takeProfit3) {
+          const tradeR = PARTIAL_WEIGHTS_WITH_TP3.tp3 * (takeProfit3 - entry) / risk;
+          const costR = calculateFeeCost(PARTIAL_WEIGHTS_WITH_TP3.tp3, entry, takeProfit3, risk);
+          realizedR += tradeR - costR;
+          remainingWeight = 0;
+          tp3Done = true;
+          lastExitPrice = takeProfit3;
+          lastTpOutcome = "tp3";
+          return {
+            exitIndex: i,
+            exitPrice: lastExitPrice,
+            outcome: "tp3",
+            realizedRiskReward: realizedR,
+          };
+        }
       }
     } else {
-      if (high >= stopLoss) {
-        return { exitIndex: i, exitPrice: stopLoss, outcome: "stop", realizedRiskReward: (entry - stopLoss) / (stopLoss - entry) };
+      if (high >= currentStop) {
+        const closePrice = Math.min(high, currentStop);
+        const tradeR = remainingWeight * (entry - closePrice) / risk;
+        const costR = calculateFeeCost(remainingWeight, entry, closePrice, risk);
+        realizedR += tradeR - costR;
+        const outcome = tp1Done ? (lastTpOutcome ?? "tp1") : "stop";
+        return {
+          exitIndex: i,
+          exitPrice: closePrice,
+          outcome,
+          realizedRiskReward: realizedR,
+        };
       }
-      if (takeProfit3 !== undefined && low <= takeProfit3) {
-        return { exitIndex: i, exitPrice: takeProfit3, outcome: "tp3", realizedRiskReward: (entry - takeProfit3) / (stopLoss - entry) };
-      }
-      if (low <= takeProfit2) {
-        return { exitIndex: i, exitPrice: takeProfit2, outcome: "tp2", realizedRiskReward: (entry - takeProfit2) / (stopLoss - entry) };
-      }
-      if (low <= takeProfit1) {
-        return { exitIndex: i, exitPrice: takeProfit1, outcome: "tp1", realizedRiskReward: (entry - takeProfit1) / (stopLoss - entry) };
+
+      if (i > fillIndex) {
+        if (!tp1Done && low <= takeProfit1) {
+          const tradeR = weights.tp1 * (entry - takeProfit1) / risk;
+          const costR = calculateFeeCost(weights.tp1, entry, takeProfit1, risk);
+          realizedR += tradeR - costR;
+          remainingWeight -= weights.tp1;
+          currentStop = entry;
+          tp1Done = true;
+          lastExitPrice = takeProfit1;
+          lastTpOutcome = "tp1";
+        }
+
+        if (!tp2Done && low <= takeProfit2) {
+          const tradeR = weights.tp2 * (entry - takeProfit2) / risk;
+          const costR = calculateFeeCost(weights.tp2, entry, takeProfit2, risk);
+          realizedR += tradeR - costR;
+          remainingWeight -= weights.tp2;
+          tp2Done = true;
+          lastExitPrice = takeProfit2;
+          lastTpOutcome = "tp2";
+          if (!hasTP3) {
+            return {
+              exitIndex: i,
+              exitPrice: lastExitPrice,
+              outcome: "tp2",
+              realizedRiskReward: realizedR,
+            };
+          }
+        }
+
+        if (hasTP3 && !tp3Done && low <= takeProfit3) {
+          const tradeR = PARTIAL_WEIGHTS_WITH_TP3.tp3 * (entry - takeProfit3) / risk;
+          const costR = calculateFeeCost(PARTIAL_WEIGHTS_WITH_TP3.tp3, entry, takeProfit3, risk);
+          realizedR += tradeR - costR;
+          remainingWeight = 0;
+          tp3Done = true;
+          lastExitPrice = takeProfit3;
+          lastTpOutcome = "tp3";
+          return {
+            exitIndex: i,
+            exitPrice: lastExitPrice,
+            outcome: "tp3",
+            realizedRiskReward: realizedR,
+          };
+        }
       }
     }
   }
-  return { exitIndex: null, exitPrice: null, outcome: "open_at_end", realizedRiskReward: 0 };
+
+  if (fillIndex + MAX_HOLD_BARS <= candles.length - 1) {
+    const exitIndex = fillIndex + MAX_HOLD_BARS;
+    const exitPrice = candles[exitIndex].close;
+    if (remainingWeight > 0) {
+      const partialR = direction === "LONG"
+        ? (exitPrice - entry) / risk
+        : (entry - exitPrice) / risk;
+      const costR = calculateFeeCost(remainingWeight, entry, exitPrice, risk);
+      realizedR += remainingWeight * partialR - costR;
+    }
+    const outcome = lastTpOutcome ?? "expired_hold";
+    return {
+      exitIndex,
+      exitPrice,
+      outcome,
+      realizedRiskReward: realizedR,
+    };
+  }
+
+  if (remainingWeight > 0) {
+    const finalClose = candles[candles.length - 1].close;
+    const partialR = direction === "LONG"
+      ? (finalClose - entry) / risk
+      : (entry - finalClose) / risk;
+    const costR = calculateFeeCost(remainingWeight, entry, finalClose, risk);
+    realizedR += remainingWeight * partialR - costR;
+  }
+
+  const outcome = lastTpOutcome ?? "open_at_end";
+  return {
+    exitIndex: lastTpOutcome ? candles.length - 1 : null,
+    exitPrice: lastTpOutcome ? candles[candles.length - 1].close : null,
+    outcome,
+    realizedRiskReward: realizedR,
+  };
 }
 
 function fillSignal(candles: Candle[], signal: SmcSignal, maxLookahead = 5): FilledSignal | null {
-  const start = Math.max(0, signal.triggerIndex);
+  const start = Math.max(0, signal.triggerIndex + 1);
   const end = Math.min(candles.length - 1, start + maxLookahead);
   const zoneLow = signal.entryZone ? Math.min(signal.entryZone.low, signal.entryZone.high) : signal.entry;
   const zoneHigh = signal.entryZone ? Math.max(signal.entryZone.low, signal.entryZone.high) : signal.entry;
@@ -218,8 +382,11 @@ export function runSmcBacktest(candles: Candle[], pair: string, timeframe: Chart
       trades: [],
       assumptions: [
         "Chỉ dùng candle đóng.",
-        "Limit entry được xem là fill nếu giá chạm entry zone trong 5 candle sau tín hiệu.",
-        "TP1/TP2/TP3 được tính theo ưu tiên TP3 > TP2 > TP1; nếu không fill thì trade open_at_end.",
+        "Limit entry được xem là fill nếu giá chạm entry zone trong 5 nến SAU nến sinh tín hiệu (không fill trên nến sinh tín hiệu).",
+        "Trên nến fill chỉ xét stop loss; TP1/TP2/TP3 xét từ nến sau nến fill.",
+        "Partial exit: 50% tại TP1 (SL dời về entry), 30% tại TP2, 20% tại TP3 (không có TP3 thì 50/50); outcome ghi theo TP xa nhất chốt được.",
+        "Trade không chạm SL/TP trong 96 nến sau fill sẽ đóng tại close (outcome expired_hold hoặc TP xa nhất đã chốt) và giải phóng slot.",
+        `RR đã trừ fee ${(TOTAL_COST_RATE * 100).toFixed(3)}%/chiều và slippage ${(TOTAL_SLIPPAGE_RATE * 100).toFixed(3)}%/chiều (đặt BACKTEST_FEE_RATE=0 và BACKTEST_SLIPPAGE_RATE=0 để xem gross).`,
         "HTF context (bias/dealing-range) được tính lại theo từng thời điểm lịch sử (rolling), chỉ dùng nến HTF đã đóng tính đến thời điểm đó — không look-ahead.",
       ],
     };
@@ -380,8 +547,11 @@ function computeReport(
     trades,
     assumptions: [
       "Chỉ dùng candle đóng và không mô phỏng order book.",
-      "Limit entry fill nếu giá chạm entry zone trong 5 candle sau tín hiệu.",
-      "SL/TP được kiểm tra theo high/low của candle và ưu tiên TP3 > TP2 > TP1.",
+      "Limit entry được xem là fill nếu giá chạm entry zone trong 5 nến SAU nến sinh tín hiệu (không fill trên nến sinh tín hiệu).",
+      "Trên nến fill chỉ xét stop loss; TP1/TP2/TP3 xét từ nến sau nến fill.",
+      "Partial exit: 50% tại TP1 (SL dời về entry), 30% tại TP2, 20% tại TP3 (không có TP3 thì 50/50); outcome ghi theo TP xa nhất chốt được.",
+      "Trade không chạm SL/TP trong 96 nến sau fill sẽ đóng tại close (outcome expired_hold hoặc TP xa nhất đã chốt) và giải phóng slot.",
+      `RR đã trừ fee ${(TOTAL_COST_RATE * 100).toFixed(3)}%/chiều và slippage ${(TOTAL_SLIPPAGE_RATE * 100).toFixed(3)}%/chiều (đặt BACKTEST_FEE_RATE=0 và BACKTEST_SLIPPAGE_RATE=0 để xem gross).`,
       "HTF context (bias/dealing-range) được tính lại theo từng thời điểm lịch sử (rolling), chỉ dùng nến HTF đã đóng tính đến thời điểm đó — không look-ahead.",
     ],
   };

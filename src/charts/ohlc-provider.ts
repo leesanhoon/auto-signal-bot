@@ -398,6 +398,7 @@ async function fetchFromBinance(
   symbol: string,
   timeframe: ChartTimeframe,
   bars: number,
+  endTimeMs?: number,
 ): Promise<Candle[] | Error> {
   const bnSymbol = toBinanceSymbol(symbol);
   if (!bnSymbol) {
@@ -407,7 +408,7 @@ async function fetchFromBinance(
   const interval = getTimeframeConfig(timeframe).binanceCode;
   // Fetch 1 extra bar: the newest kline is still forming and gets dropped.
   const limit = Math.min(bars + 1, BINANCE_MAX_LIMIT);
-  const url = `${BINANCE_BASE_URL}?symbol=${encodeURIComponent(bnSymbol)}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_BASE_URL}?symbol=${encodeURIComponent(bnSymbol)}&interval=${interval}&limit=${limit}${endTimeMs ? `&endTime=${endTimeMs}` : ""}`;
 
   const body = await fetchJson<unknown>(url, {
     label: "Binance",
@@ -628,8 +629,11 @@ export async function fetchOhlcHistory(
   symbol: string,
   timeframe: ChartTimeframe,
   bars: number,
+  options?: { bypassCache?: boolean; endTimeMs?: number },
 ): Promise<Candle[] | Error> {
   const useBinance = isBinanceSymbol(symbol);
+  const bypassCache = options?.bypassCache ?? false;
+  const endTimeMs = options?.endTimeMs;
 
   let twelveDataApiKey: string | undefined;
   if (!useBinance) {
@@ -640,12 +644,12 @@ export async function fetchOhlcHistory(
   }
 
   const key = cacheKey(symbol, timeframe);
-  const cached = isCacheEnabled(timeframe) ? cache.get(key) : undefined;
+  const cached = !bypassCache && isCacheEnabled(timeframe) ? cache.get(key) : undefined;
   if (cached && cached.expiresAt > Date.now()) {
     return cached.candles.slice();
   }
 
-  if (isCacheEnabled(timeframe)) {
+  if (!bypassCache && isCacheEnabled(timeframe)) {
     const persisted = await loadOhlcCandleCache(key);
     if (persisted) {
       cache.set(key, { candles: persisted.candles.slice(), expiresAt: persisted.expiresAtMs });
@@ -653,11 +657,15 @@ export async function fetchOhlcHistory(
     }
   }
 
+  if (endTimeMs && !useBinance) {
+    logger.warn(`Bỏ qua pin window cho ${symbol}: chưa hỗ trợ TwelveData`);
+  }
+
   const result = useBinance
-    ? await fetchFromBinance(symbol, timeframe, bars)
+    ? await fetchFromBinance(symbol, timeframe, bars, endTimeMs)
     : await fetchFromTwelveData(symbol, timeframe, bars, twelveDataApiKey!);
   if (result instanceof Error) return result;
-  if (isCacheEnabled(timeframe)) {
+  if (!bypassCache && isCacheEnabled(timeframe)) {
     const latestCandleTime =
       result.length > 0 ? result[result.length - 1].time : null;
     const expiresAt = getCacheExpiryMs(
