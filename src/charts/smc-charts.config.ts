@@ -1,7 +1,5 @@
 import type { ChartConfig, ChartTimeframe } from "./chart-types-common.js";
-import type {
-  ChartTimeframeMode,
-} from "./smc-config-env.js";
+import type { ChartTimeframeMode } from "./smc-config-env.js";
 
 const TIMEFRAME_CONFIGS: Array<{
   timeframe: ChartTimeframe;
@@ -31,6 +29,18 @@ const BASE_CHARTS: Array<{ name: string; symbol: string }> = [
   // Crypto — Binance spot (24/7, public API, khong can API key)
   { name: "BTC/USDT", symbol: "BINANCE:BTCUSDT" },
   { name: "ETH/USDT", symbol: "BINANCE:ETHUSDT" },
+  { name: "BNB/USDT", symbol: "BINANCE:BNBUSDT" },
+  { name: "XRP/USDT", symbol: "BINANCE:XRPUSDT" },
+  { name: "ADA/USDT", symbol: "BINANCE:ADAUSDT" },
+  { name: "SOL/USDT", symbol: "BINANCE:SOLUSDT" },
+  { name: "DOGE/USDT", symbol: "BINANCE:DOGEUSDT" },
+  { name: "DOT/USDT", symbol: "BINANCE:DOTUSDT" },
+  { name: "MATIC/USDT", symbol: "BINANCE:MATICUSDT" },
+  { name: "LTC/USDT", symbol: "BINANCE:LTCUSDT" },
+  { name: "AVAX/USDT", symbol: "BINANCE:AVAXUSDT" },
+  { name: "SHIB/USDT", symbol: "BINANCE:SHIBUSDT" },
+  { name: "TRX/USDT", symbol: "BINANCE:TRXUSDT" },
+  { name: "UNI/USDT", symbol: "BINANCE:UNIUSDT" },
 
   // Commodities
   { name: "XAU/USD", symbol: "OANDA:XAUUSD" },
