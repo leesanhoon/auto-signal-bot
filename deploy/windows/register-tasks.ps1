@@ -112,6 +112,24 @@ Register-BotTask "lottery-verify-mien-nam"    @((New-ScheduledTaskTrigger -Daily
 Register-BotTask "lottery-verify-mien-trung"  @((New-ScheduledTaskTrigger -Daily -At "17:45"))
 Register-BotTask "lottery-verify-mien-bac"    @((New-ScheduledTaskTrigger -Daily -At "18:50"))
 
+# === Auto-update ===
+
+# Tự pull code mới mỗi đêm lúc 02:00 VN (giờ có ít job trùng lịch nhất).
+# Chỉ git pull + (nếu package-lock.json đổi) npm ci — xem auto-update.ps1.
+$autoUpdate = (Resolve-Path (Join-Path $PSScriptRoot "auto-update.ps1")).Path
+$autoUpdateAction = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$autoUpdate`""
+Register-ScheduledTask `
+    -TaskName "auto-update" `
+    -TaskPath $taskPath `
+    -Action $autoUpdateAction `
+    -Trigger (New-ScheduledTaskTrigger -Daily -At "02:00") `
+    -Settings $settings `
+    -Principal $principal `
+    -Force | Out-Null
+Write-Host "Registered: ${taskPath}auto-update"
+
 Write-Host ""
 Write-Host "Xong. Kiểm tra: Get-ScheduledTask -TaskPath '$taskPath'"
 Write-Host "Chạy thử ngay:  Start-ScheduledTask -TaskPath '$taskPath' -TaskName 'analyze-smc'"

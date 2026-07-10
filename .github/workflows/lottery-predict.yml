@@ -1,10 +1,6 @@
 name: Lottery Predictor
 
 on:
-  schedule:
-    - cron: "45 9 * * *"
-    - cron: "45 10 * * *"
-    - cron: "45 11 * * *"
   workflow_dispatch:
     inputs:
       region:

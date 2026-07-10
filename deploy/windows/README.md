@@ -37,7 +37,7 @@ notepad .env   # điền giá trị thật (chép từ GitHub -> Settings -> Sec
 ## Kiểm tra
 
 ```powershell
-# Danh sách task đã đăng ký (13 task trong folder \AutoSignalBot\)
+# Danh sách task đã đăng ký (14 task trong folder \AutoSignalBot\, gồm cả auto-update)
 Get-ScheduledTask -TaskPath "\AutoSignalBot\"
 
 # Chạy thử ngay một job, không chờ lịch
@@ -53,16 +53,28 @@ Get-ScheduledTask -TaskPath "\AutoSignalBot\" | Get-ScheduledTaskInfo |
 
 Hoặc chạy tay không qua Task Scheduler: `.\deploy\windows\run-job.ps1 -Job analyze-smc`
 
-## Cập nhật code
+## Cập nhật code — tự động
 
-Khi có commit mới trên `main`:
+`register-tasks.ps1` đăng ký thêm task **`auto-update`** chạy mỗi đêm lúc **02:00 VN** (giờ ít job trùng lịch nhất). Task này ([auto-update.ps1](auto-update.ps1)):
+
+1. `git fetch` — nếu không có commit mới thì thoát, không làm gì cả.
+2. Nếu có: `git pull --ff-only`.
+3. Chỉ chạy `npm ci` + cài lại Chromium **nếu `package-lock.json` thực sự thay đổi** giữa 2 commit — tránh đụng `node_modules` không cần thiết mỗi đêm.
+
+Nghĩa là: push code lên `main` xong, chậm nhất 02:00 đêm đó mini PC tự cập nhật, không cần bạn làm gì. Log ghi vào `logs\auto-update-YYYY-MM-DD.log`.
+
+Lưu ý: 02:00 rơi vào khung `analyze-smc` đang chạy lặp mỗi 15 phút (T2–T6), nên về lý thuyết có xác suất rất nhỏ `git pull` trùng đúng lúc một job khác đang đọc file nguồn. Rủi ro thấp và tự phục hồi (job kế tiếp 15 phút sau chạy bình thường với code mới), nhưng nếu bạn cần chắc chắn 100% không chồng lấn, đổi giờ trigger `auto-update` sang cuối tuần (T7/CN, ngoài khung `analyze-smc`) trong `register-tasks.ps1`.
+
+## Cập nhật code — chạy tay (bắt buộc npm ci)
+
+Muốn ép cập nhật ngay, hoặc khi cần chắc chắn `npm ci` + Chromium chạy lại dù `package-lock.json` không đổi:
 
 ```powershell
 cd C:\bots\auto-signal-bot
 .\deploy\windows\update.ps1
 ```
 
-(Không cần đăng ký lại task — task chỉ gọi `run-job.ps1`, lần chạy kế tiếp tự dùng code mới. Chỉ chạy lại `register-tasks.ps1` khi **lịch** thay đổi.)
+(Không cần đăng ký lại task sau khi update code — task chỉ gọi `run-job.ps1`/`auto-update.ps1`, lần chạy kế tiếp tự dùng code mới. Chỉ chạy lại `register-tasks.ps1` khi **lịch** (giờ chạy) thay đổi.)
 
 ## Lịch chạy (giờ VN, đã quy đổi từ UTC của GitHub Actions)
 
