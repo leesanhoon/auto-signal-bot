@@ -31,8 +31,8 @@ export function detectBb(
 
   // Stricter slope requirement for BB: |slope| > 0.2
   const slope = computeSlope(ctx.ema20, ctx.atr14, index);
-  if (slope === null || Math.abs(slope) <= 0.2) {
-    trace.push(`|slope|=${slope !== null ? Math.abs(slope).toFixed(2) : 'null'} <= 0.2 -> khong du doc cho BB`);
+  if (slope === null || Math.abs(slope) <= 0.15) {
+    trace.push(`|slope|=${slope !== null ? Math.abs(slope).toFixed(2) : 'null'} <= 0.15 -> khong du doc cho BB`);
     return null;
   }
   trace.push(`EMA20 slope=${slope.toFixed(2)}`);
@@ -56,8 +56,8 @@ export function detectBb(
   }
 
   // Block must be near EMA20
-  if (block.distanceToEma > 0.25) {
-    trace.push(`Block cach EMA20 ${block.distanceToEma.toFixed(2)} ATR (>0.25) -> khong sat EMA`);
+  if (block.distanceToEma > 0.35) {
+    trace.push(`Block cach EMA20 ${block.distanceToEma.toFixed(2)} ATR (>0.35) -> khong sat EMA`);
     return null;
   }
   trace.push(`Block sat EMA20, distance=${block.distanceToEma.toFixed(2)} ATR`);
