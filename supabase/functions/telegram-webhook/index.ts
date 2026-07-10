@@ -55,16 +55,19 @@ const COMMANDS = {
     description: "dự đoán xổ số (cả 3 miền)",
   },
   lottery_predict_mien_nam: {
-    file: "lottery-predict-mien-nam.yml",
+    file: "lottery-predict.yml",
     description: "dự đoán xổ số Miền Nam",
+    parseInputs: () => ({ region: "mien-nam" }),
   },
   lottery_predict_mien_trung: {
-    file: "lottery-predict-mien-trung.yml",
+    file: "lottery-predict.yml",
     description: "dự đoán xổ số Miền Trung",
+    parseInputs: () => ({ region: "mien-trung" }),
   },
   lottery_predict_mien_bac: {
-    file: "lottery-predict-mien-bac.yml",
+    file: "lottery-predict.yml",
     description: "dự đoán xổ số Miền Bắc",
+    parseInputs: () => ({ region: "mien-bac" }),
   },
   performance_report: {
     file: "performance-report.yml",

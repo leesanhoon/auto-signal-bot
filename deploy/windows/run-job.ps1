@@ -10,8 +10,8 @@ Set-Location $repo
 
 # Bảng job: npm script + env riêng + argument. Tên job khớp với register-tasks.ps1.
 $jobs = @{
-    "analyze"                     = @{ Script = "analyze" }
-    "analyze-smc"                 = @{ Script = "analyze:smc" }
+    "analyze"                     = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto" } }
+    "analyze-smc"                 = @{ Script = "analyze:smc"; Env = @{ CHART_RUN_CONTEXT = "auto" } }
     "fetch-matches-list"          = @{ Script = "fetch-matches-list" }
     "match-odds"                  = @{ Script = "match-odds" }
     "performance-report-weekly"   = @{ Script = "performance-report"; Env = @{ PERFORMANCE_REPORT_PERIOD = "weekly" } }
