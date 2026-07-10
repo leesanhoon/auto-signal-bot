@@ -16,6 +16,7 @@ import {
   shouldUseLatestCacheForManualRun,
 } from "./smc-config-env.js";
 import type { AnalysisResult, TradeSetup } from "./chart-types-smc.js";
+import { applySignalFreshnessGuard } from "./signal-freshness.js";
 import { getLastClosedCandleKey, isWithinTimeframeCandleCloseWindow } from "./chart-cache.js";
 import {
   loadChartAnalysisCache,
@@ -113,6 +114,34 @@ async function loadAnalysisForRun(
 
 async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrigin): Promise<void> {
   const threshold = getConfiguredSmcMinSignalConfidence();
+
+  // Apply freshness guard BEFORE auto-track to prevent saving stale positions
+  const symbolByPair = new Map(getPairs().map((p) => [p.pair, p.symbol]));
+  const freshnessReasons: string[] = [];
+  const filteredSetups: TradeSetup[] = [];
+
+  for (const setup of result.setups) {
+    const symbol = symbolByPair.get(setup.pair) ?? setup.pair;
+    const guardedSetup = await applySignalFreshnessGuard(setup, symbol);
+    if (guardedSetup.noSetupReason) {
+      freshnessReasons.push(`${setup.pair}: ${guardedSetup.noSetupReason}`);
+      logger.info("Setup filtered by freshness guard", {
+        pair: setup.pair,
+        reason: guardedSetup.noSetupReason,
+      });
+    } else {
+      filteredSetups.push(guardedSetup);
+    }
+  }
+
+  result.setups = filteredSetups;
+  if (freshnessReasons.length > 0) {
+    result.noSetupReason = [result.noSetupReason, ...freshnessReasons]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  // Auto-track open positions (now only for fresh setups after guard)
   for (const setup of result.setups) {
     if (shouldAutoTrackAsOpen(setup, threshold)) {
       try {

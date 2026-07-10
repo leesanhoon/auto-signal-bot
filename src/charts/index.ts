@@ -23,6 +23,7 @@ import {
   shouldUseLatestCacheForManualRun,
 } from "./volman-config-env.js";
 import type { AnalysisResult, TradeSetup } from "./chart-types-volman.js";
+import { applySignalFreshnessGuard } from "./signal-freshness.js";
 import {
   getLastClosedCandleKey,
   isWithinTimeframeCandleCloseWindow,
@@ -164,6 +165,39 @@ async function handleAnalysisResult(
   origin: AnalysisOrigin,
 ): Promise<void> {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
+
+  // Apply freshness guard BEFORE auto-track to prevent saving stale positions
+  const symbolByPair = new Map<string, string>();
+  for (const chart of CHARTS) {
+    const pair = chart.name.replace(/ [A-Z0-9]+$/, ""); // Remove timeframe suffix
+    if (!symbolByPair.has(pair)) symbolByPair.set(pair, chart.symbol);
+  }
+
+  const freshnessReasons: string[] = [];
+  const filteredSetups: TradeSetup[] = [];
+
+  for (const setup of result.setups) {
+    const symbol = symbolByPair.get(setup.pair) ?? setup.pair;
+    const guardedSetup = await applySignalFreshnessGuard(setup as any, symbol);
+    if (guardedSetup.noSetupReason) {
+      freshnessReasons.push(`${setup.pair}: ${guardedSetup.noSetupReason}`);
+      logger.info("Setup filtered by freshness guard", {
+        pair: setup.pair,
+        reason: guardedSetup.noSetupReason,
+      });
+    } else {
+      filteredSetups.push(guardedSetup as TradeSetup);
+    }
+  }
+
+  result.setups = filteredSetups;
+  if (freshnessReasons.length > 0) {
+    result.noSetupReason = [result.noSetupReason, ...freshnessReasons]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  // Auto-track open positions (now only for fresh setups after guard)
   for (const setup of result.setups) {
     if (shouldAutoTrackAsOpen(setup, threshold)) {
       try {

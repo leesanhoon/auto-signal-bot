@@ -39,6 +39,7 @@ type CandleRowMap = {
 type TimeframeConfig = {
   intervalMs: number;
   twelveDataCode: string;
+  binanceCode: string;
 };
 
 type FetchWithRetryOptions = {
@@ -64,22 +65,27 @@ const TIMEFRAME_CONFIG: Record<ChartTimeframe, TimeframeConfig> = {
   M15: {
     intervalMs: 15 * 60 * 1000,
     twelveDataCode: "15min",
+    binanceCode: "15m",
   },
   M30: {
     intervalMs: 30 * 60 * 1000,
     twelveDataCode: "30min",
+    binanceCode: "30m",
   },
   H1: {
     intervalMs: 60 * 60 * 1000,
     twelveDataCode: "1h",
+    binanceCode: "1h",
   },
   H4: {
     intervalMs: 4 * 60 * 60 * 1000,
     twelveDataCode: "4h",
+    binanceCode: "4h",
   },
   D1: {
     intervalMs: 24 * 60 * 60 * 1000,
     twelveDataCode: "1day",
+    binanceCode: "1d",
   },
 };
 
@@ -204,8 +210,9 @@ function getCacheExpiryMs(
   timeframe: ChartTimeframe,
   nowMs: number,
   latestCandleTime: number | null,
+  tradesContinuously = false,
 ): number {
-  if (isForexWeekendClosed(nowMs)) {
+  if (!tradesContinuously && isForexWeekendClosed(nowMs)) {
     return getNextWeekendReopenMs(nowMs);
   }
 
@@ -366,6 +373,254 @@ async function fetchFromTwelveData(
 }
 
 // ---------------------------------------------------------------------------
+// Binance provider (crypto spot, public API — no key required)
+// ---------------------------------------------------------------------------
+
+const BINANCE_BASE_URL = "https://api.binance.com/api/v3/klines";
+const BINANCE_MAX_LIMIT = 1000;
+
+export function toBinanceSymbol(symbol: string): string | null {
+  const prefix = "BINANCE:";
+  if (!symbol.startsWith(prefix)) return null;
+  const instrument = symbol.slice(prefix.length).trim().toUpperCase();
+  if (!/^[A-Z0-9]{5,}$/.test(instrument)) return null;
+  return instrument;
+}
+
+export function isBinanceSymbol(symbol: string): boolean {
+  return toBinanceSymbol(symbol) !== null;
+}
+
+// Kline row: [openTime, open, high, low, close, volume, closeTime, ...]
+type BinanceKline = [number, string, string, string, string, string, number, ...unknown[]];
+
+async function fetchFromBinance(
+  symbol: string,
+  timeframe: ChartTimeframe,
+  bars: number,
+): Promise<Candle[] | Error> {
+  const bnSymbol = toBinanceSymbol(symbol);
+  if (!bnSymbol) {
+    return new Error(`Symbol khong dung dinh dang BINANCE:XXXYYY: "${symbol}"`);
+  }
+
+  const interval = getTimeframeConfig(timeframe).binanceCode;
+  // Fetch 1 extra bar: the newest kline is still forming and gets dropped.
+  const limit = Math.min(bars + 1, BINANCE_MAX_LIMIT);
+  const url = `${BINANCE_BASE_URL}?symbol=${encodeURIComponent(bnSymbol)}&interval=${interval}&limit=${limit}`;
+
+  const body = await fetchJson<unknown>(url, {
+    label: "Binance",
+    headers: { Accept: "application/json" },
+    rateLimit: {
+      key: "binance",
+      envVar: "BINANCE_RATE_LIMIT_RPM",
+      defaultRpm: 300,
+    },
+    retryOptions: {
+      maxAttempts: 3,
+      baseDelayMs: 1000,
+      isRetryable: (error) => {
+        const status = (error as { status?: number }).status;
+        // 418/429 = ban/rate-limit; retrying immediately makes bans worse.
+        return status !== 418 && status !== 429 && status !== 400;
+      },
+    },
+    onHttpError: async (res) => {
+      let apiMessage: string | undefined;
+      try {
+        apiMessage = ((await res.clone().json()) as { msg?: string })?.msg;
+      } catch {
+        // ignore
+      }
+      const error = new Error(
+        `Binance API tra ve ${res.status} cho ${bnSymbol} ${interval}${apiMessage ? `: ${apiMessage}` : ""}`,
+      );
+      (error as any).status = res.status;
+      return error;
+    },
+  });
+  if (body instanceof Error) return body;
+
+  if (!Array.isArray(body)) {
+    return new Error("Binance response khong phai mang klines");
+  }
+
+  const nowMs = Date.now();
+  const candles: Candle[] = [];
+  for (const raw of body as BinanceKline[]) {
+    if (!Array.isArray(raw) || raw.length < 7) continue;
+
+    const time = readFiniteNumber(raw[0]);
+    const open = readFiniteNumber(raw[1]);
+    const high = readFiniteNumber(raw[2]);
+    const low = readFiniteNumber(raw[3]);
+    const close = readFiniteNumber(raw[4]);
+    const volume = readFiniteNumber(raw[5]);
+    const closeTime = readFiniteNumber(raw[6]);
+
+    if (
+      !Number.isFinite(time) ||
+      !Number.isFinite(open) ||
+      !Number.isFinite(high) ||
+      !Number.isFinite(low) ||
+      !Number.isFinite(close)
+    ) {
+      continue;
+    }
+
+    // Drop the still-forming candle (closeTime is in the future).
+    if (Number.isFinite(closeTime) && closeTime > nowMs) continue;
+
+    candles.push({
+      time,
+      open,
+      high,
+      low,
+      close,
+      volume: Number.isFinite(volume) ? volume : 0,
+    });
+  }
+
+  candles.sort((a, b) => a.time - b.time);
+  return candles.slice(-bars);
+}
+
+// ---------------------------------------------------------------------------
+// Fetch last price (ticker)
+// ---------------------------------------------------------------------------
+
+const BINANCE_TICKER_URL = "https://api.binance.com/api/v3/ticker/price";
+const TWELVEDATA_PRICE_URL = "https://api.twelvedata.com/price";
+
+export async function fetchLastPrice(symbol: string): Promise<number | Error> {
+  const useBinance = isBinanceSymbol(symbol);
+
+  let twelveDataApiKey: string | undefined;
+  if (!useBinance) {
+    const tdSymbol = toTwelveDataSymbol(symbol);
+    if (!tdSymbol) {
+      return new Error(`Symbol khong dung dinh dang OANDA:XXXYYY: "${symbol}"`);
+    }
+    twelveDataApiKey = process.env.TWELVEDATA_API_KEY?.trim();
+    if (!twelveDataApiKey) {
+      return new Error("TWELVEDATA_API_KEY chua cau hinh");
+    }
+  }
+
+  return useBinance
+    ? await fetchLastPriceFromBinance(symbol)
+    : await fetchLastPriceFromTwelveData(symbol, twelveDataApiKey!);
+}
+
+async function fetchLastPriceFromBinance(symbol: string): Promise<number | Error> {
+  const bnSymbol = toBinanceSymbol(symbol);
+  if (!bnSymbol) {
+    return new Error(`Symbol khong dung dinh dang BINANCE:XXXYYY: "${symbol}"`);
+  }
+
+  const url = `${BINANCE_TICKER_URL}?symbol=${encodeURIComponent(bnSymbol)}`;
+
+  const body = await fetchJson<any>(url, {
+    label: "Binance ticker/price",
+    headers: { Accept: "application/json" },
+    rateLimit: {
+      key: "binance",
+      envVar: "BINANCE_RATE_LIMIT_RPM",
+      defaultRpm: 300,
+    },
+    retryOptions: {
+      maxAttempts: 3,
+      baseDelayMs: 1000,
+      isRetryable: (error) => {
+        const status = (error as { status?: number }).status;
+        return status !== 418 && status !== 429 && status !== 400;
+      },
+    },
+    onHttpError: async (res) => {
+      let apiMessage: string | undefined;
+      try {
+        apiMessage = ((await res.clone().json()) as { msg?: string })?.msg;
+      } catch {
+        // ignore
+      }
+      const error = new Error(
+        `Binance API tra ve ${res.status} cho ${bnSymbol}${apiMessage ? `: ${apiMessage}` : ""}`,
+      );
+      (error as any).status = res.status;
+      return error;
+    },
+  });
+  if (body instanceof Error) return body;
+
+  const price = body?.price;
+  if (!price) {
+    return new Error(`Binance khong tra ve price cho ${bnSymbol}`);
+  }
+
+  const numPrice = readFiniteNumber(price);
+  if (!Number.isFinite(numPrice)) {
+    return new Error(`Khong the parse price tu Binance: ${price}`);
+  }
+
+  return numPrice;
+}
+
+async function fetchLastPriceFromTwelveData(
+  symbol: string,
+  apiKey: string,
+): Promise<number | Error> {
+  const tdSymbol = toTwelveDataSymbol(symbol);
+  if (!tdSymbol) {
+    return new Error(`Symbol khong dung dinh dang OANDA:XXXYYY: "${symbol}"`);
+  }
+
+  const url = `${TWELVEDATA_PRICE_URL}?symbol=${encodeURIComponent(tdSymbol)}&apikey=${apiKey}&timezone=UTC`;
+
+  const body = await fetchJson<any>(url, {
+    label: "Twelve Data price",
+    headers: { Accept: "application/json" },
+    rateLimit: {
+      key: "twelvedata",
+      envVar: "TWELVEDATA_RATE_LIMIT_RPM",
+      defaultRpm: 7,
+    },
+    retryOptions: { maxAttempts: 3, baseDelayMs: 1000 },
+    onHttpError: async (res) => {
+      let apiMessage: string | undefined;
+      try {
+        apiMessage = ((await res.clone().json()) as { message?: string })
+          ?.message;
+      } catch {
+        // ignore
+      }
+      const error = new Error(
+        `Twelve Data API tra ve ${res.status} cho ${tdSymbol}${apiMessage ? `: ${apiMessage}` : ""}`,
+      );
+      (error as any).status = res.status;
+      return error;
+    },
+  });
+  if (body instanceof Error) return body;
+
+  if (body?.status === "error") {
+    return new Error(`Twelve Data API loi: ${body.message ?? "unknown error"}`);
+  }
+
+  const price = body?.price;
+  if (!price) {
+    return new Error(`Twelve Data khong tra ve price cho ${tdSymbol}`);
+  }
+
+  const numPrice = readFiniteNumber(price);
+  if (!Number.isFinite(numPrice)) {
+    return new Error(`Khong the parse price tu Twelve Data: ${price}`);
+  }
+
+  return numPrice;
+}
+
+// ---------------------------------------------------------------------------
 // Fetch OHLC history
 // ---------------------------------------------------------------------------
 
@@ -374,9 +629,14 @@ export async function fetchOhlcHistory(
   timeframe: ChartTimeframe,
   bars: number,
 ): Promise<Candle[] | Error> {
-  const twelveDataApiKey = process.env.TWELVEDATA_API_KEY?.trim();
-  if (!twelveDataApiKey) {
-    return new Error("TWELVEDATA_API_KEY chua cau hinh");
+  const useBinance = isBinanceSymbol(symbol);
+
+  let twelveDataApiKey: string | undefined;
+  if (!useBinance) {
+    twelveDataApiKey = process.env.TWELVEDATA_API_KEY?.trim();
+    if (!twelveDataApiKey) {
+      return new Error("TWELVEDATA_API_KEY chua cau hinh");
+    }
   }
 
   const key = cacheKey(symbol, timeframe);
@@ -393,17 +653,19 @@ export async function fetchOhlcHistory(
     }
   }
 
-  const result = await fetchFromTwelveData(
-    symbol,
-    timeframe,
-    bars,
-    twelveDataApiKey,
-  );
+  const result = useBinance
+    ? await fetchFromBinance(symbol, timeframe, bars)
+    : await fetchFromTwelveData(symbol, timeframe, bars, twelveDataApiKey!);
   if (result instanceof Error) return result;
   if (isCacheEnabled(timeframe)) {
     const latestCandleTime =
       result.length > 0 ? result[result.length - 1].time : null;
-    const expiresAt = getCacheExpiryMs(timeframe, Date.now(), latestCandleTime);
+    const expiresAt = getCacheExpiryMs(
+      timeframe,
+      Date.now(),
+      latestCandleTime,
+      useBinance,
+    );
     cache.set(key, {
       candles: result.slice(),
       expiresAt,

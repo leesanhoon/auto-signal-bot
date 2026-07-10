@@ -28,6 +28,20 @@ describe("toTwelveDataSymbol", () => {
   });
 });
 
+describe("toBinanceSymbol", () => {
+  test("maps BINANCE:BTCUSDT correctly", () => {
+    expect(ohlc.toBinanceSymbol("BINANCE:BTCUSDT")).toBe("BTCUSDT");
+  });
+
+  test("returns null for non-BINANCE prefix", () => {
+    expect(ohlc.toBinanceSymbol("OANDA:EURUSD")).toBeNull();
+  });
+
+  test("returns null for too-short instrument", () => {
+    expect(ohlc.toBinanceSymbol("BINANCE:BTC")).toBeNull();
+  });
+});
+
 describe("fetchOhlcHistory", () => {
   beforeEach(() => {
     delete process.env.TWELVEDATA_API_KEY;
@@ -276,6 +290,58 @@ describe("fetchOhlcHistory", () => {
     );
   });
 
+  test("fetches BINANCE symbols from Binance klines API without TWELVEDATA_API_KEY", async () => {
+    // openTime, open, high, low, close, volume, closeTime
+    const nowMs = Date.parse("2024-01-01T12:30:00Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(nowMs);
+
+    const klines = [
+      [Date.parse("2024-01-01T04:00:00Z"), "42000", "42500", "41800", "42400", "120.5", Date.parse("2024-01-01T08:00:00Z") - 1],
+      [Date.parse("2024-01-01T08:00:00Z"), "42400", "42800", "42200", "42600", "98.2", Date.parse("2024-01-01T12:00:00Z") - 1],
+      // Still-forming candle: closeTime in the future -> must be dropped
+      [Date.parse("2024-01-01T12:00:00Z"), "42600", "42700", "42500", "42650", "10.0", Date.parse("2024-01-01T16:00:00Z") - 1],
+    ];
+
+    vi.mocked(ohlcCacheRepo.loadOhlcCandleCache).mockResolvedValue(null);
+    vi.mocked(ohlcCacheRepo.saveOhlcCandleCache).mockResolvedValue(undefined);
+
+    let capturedUrl = "";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      capturedUrl = String(url);
+      return new Response(JSON.stringify(klines), { status: 200 });
+    });
+
+    const result = await ohlc.fetchOhlcHistory("BINANCE:BTCUSDT", "H4", 100);
+
+    expect(result).not.toBeInstanceOf(Error);
+    const candles = result as Candle[];
+    expect(capturedUrl).toContain("api.binance.com/api/v3/klines");
+    expect(capturedUrl).toContain("symbol=BTCUSDT");
+    expect(capturedUrl).toContain("interval=4h");
+    expect(candles).toHaveLength(2);
+    expect(candles[0].time).toBe(Date.parse("2024-01-01T04:00:00Z"));
+    expect(candles[0].open).toBe(42000);
+    expect(candles[1].close).toBe(42600);
+    expect(candles[1].volume).toBe(98.2);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    nowSpy.mockRestore();
+  });
+
+  test("returns Binance API errors clearly", async () => {
+    vi.mocked(ohlcCacheRepo.loadOhlcCandleCache).mockResolvedValue(null);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: -1121, msg: "Invalid symbol." }), { status: 400 }),
+    );
+
+    const result = await ohlc.fetchOhlcHistory("BINANCE:FAKEPAIR", "H4", 100);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("Invalid symbol");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   test("D1 never touches Supabase cache (loadOhlcCandleCache and saveOhlcCandleCache not called)", async () => {
     process.env.TWELVEDATA_API_KEY = "td-key";
 
@@ -300,5 +366,124 @@ describe("fetchOhlcHistory", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(ohlcCacheRepo.loadOhlcCandleCache).not.toHaveBeenCalled();
     expect(ohlcCacheRepo.saveOhlcCandleCache).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchLastPrice", () => {
+  beforeEach(() => {
+    delete process.env.TWELVEDATA_API_KEY;
+    vi.useRealTimers();
+    resetRateLimitStateForTests();
+    vi.restoreAllMocks();
+  });
+
+  test("fetches Binance ticker/price successfully", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ symbol: "BTCUSDT", price: "42500.00" }), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchLastPrice("BINANCE:BTCUSDT");
+
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result).toBe(42500);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0][0];
+    expect(String(url)).toContain("api.binance.com/api/v3/ticker/price");
+    expect(String(url)).toContain("symbol=BTCUSDT");
+  });
+
+  test("fetches Twelve Data price successfully", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok", symbol: "EUR/USD", price: 1.3456 }), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchLastPrice("OANDA:EURUSD");
+
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result).toBe(1.3456);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0][0];
+    expect(String(url)).toContain("api.twelvedata.com/price");
+    expect(String(url)).toContain("symbol=EUR%2FUSD");
+  });
+
+  test("returns error when Binance API returns 500", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ msg: "Internal Server Error" }), { status: 500 }),
+    );
+
+    const result = await ohlc.fetchLastPrice("BINANCE:BTCUSDT");
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("Binance API tra ve 500");
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  test("returns error for invalid symbol format", async () => {
+    const result = await ohlc.fetchLastPrice("INVALID:XYZ");
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("Symbol khong dung dinh dang");
+  });
+
+  test("returns error when response missing price field", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchLastPrice("OANDA:EURUSD");
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("Twelve Data khong tra ve price");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns error when TWELVEDATA_API_KEY is missing for Twelve Data symbol", async () => {
+    const result = await ohlc.fetchLastPrice("OANDA:EURUSD");
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("TWELVEDATA_API_KEY");
+  });
+
+  test("returns error when Binance response missing price field", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ symbol: "BTCUSDT" }), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchLastPrice("BINANCE:BTCUSDT");
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("Binance khong tra ve price");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("parses Binance price from string correctly", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ symbol: "ETHUSDT", price: "2345.6789" }), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchLastPrice("BINANCE:ETHUSDT");
+
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result).toBe(2345.6789);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns error when Twelve Data API returns error status", async () => {
+    process.env.TWELVEDATA_API_KEY = "td-key";
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "error", message: "Invalid symbol" }), { status: 200 }),
+    );
+
+    const result = await ohlc.fetchLastPrice("OANDA:INVALID");
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain("Invalid symbol");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,9 +2,9 @@ name: SMC Chart Analysis
 
 on:
   workflow_dispatch:
-  schedule:
-    # Mỗi 15 phút, T2-T6, từ 07:00 đến 06:45 VN = UTC 00:00-23:45
-    - cron: "*/15 * * * 1-5"
+  # schedule:
+  #   # Mỗi 15 phút, T2-T6, từ 07:00 đến 06:45 VN = UTC 00:00-23:45
+  #   - cron: "*/15 * * * 1-5"
 
 concurrency:
   group: analyze-smc

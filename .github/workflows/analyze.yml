@@ -2,11 +2,11 @@ name: TradingView Chart Analysis
 
 on:
   workflow_dispatch:
-  schedule:
-    # T2-T6 07:05, 11:05, 15:05, 19:05, 23:05 VN = UTC 00:05, 04:05, 08:05, 12:05, 16:05
-    - cron: "5 0,4,8,12,16 * * 1-5"
-    # T3-T7 03:05 VN = UTC 20:05 (hôm trước)
-    - cron: "5 20 * * 2-6"
+  # schedule:
+  #   # T2-T6 07:05, 11:05, 15:05, 19:05, 23:05 VN = UTC 00:05, 04:05, 08:05, 12:05, 16:05
+  #   - cron: "5 0,4,8,12,16 * * 1-5"
+  #   # T3-T7 03:05 VN = UTC 20:05 (hôm trước)
+  #   - cron: "5 20 * * 2-6"
 
 concurrency:
   group: analyze-volman

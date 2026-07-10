@@ -18,10 +18,44 @@ const logger = createLogger("shared:telegram-smc");
 
 const SMC_SEPARATOR = "━━━━━━━━━━━━━━━━━━━━━━━";
 
+const TIMEFRAME_MS: Record<ChartTimeframe, number> = {
+  M15: 15 * 60 * 1000,
+  M30: 30 * 60 * 1000,
+  H1: 60 * 60 * 1000,
+  H4: 4 * 60 * 60 * 1000,
+  D1: 24 * 60 * 60 * 1000,
+};
+
 function formatPlainPrice(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return String(value ?? "");
   return num.toFixed(num >= 100 ? 2 : 5).replace(/\.?0+$/, (m) => (m.startsWith(".") ? "" : m));
+}
+
+function getCandleCloseTime(timeframe: ChartTimeframe | undefined): number | null {
+  if (!timeframe || !(timeframe in TIMEFRAME_MS)) return null;
+
+  const intervalMs = TIMEFRAME_MS[timeframe];
+  const nowMs = Date.now();
+  return Math.floor(nowMs / intervalMs) * intervalMs;
+}
+
+function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
+  const closeTimeMs = getCandleCloseTime(timeframe);
+  if (!closeTimeMs) return null;
+
+  const nowMs = Date.now();
+  const minutesAgo = Math.floor((nowMs - closeTimeMs) / 60000);
+
+  if (minutesAgo < 0) return null;
+
+  const closeTime = new Date(closeTimeMs);
+  const hh = String(closeTime.getUTCHours()).padStart(2, "0");
+  const mm = String(closeTime.getUTCMinutes()).padStart(2, "0");
+  const dd = String(closeTime.getUTCDate()).padStart(2, "0");
+  const MM = String(closeTime.getUTCMonth() + 1).padStart(2, "0");
+
+  return `🕐 Nến gốc [${timeframe}] đóng: ${hh}:${mm} ${dd}/${MM} UTC (${minutesAgo} phút trước)`;
 }
 
 function getSmcDirectionLabel(direction: TradeSetup["direction"]): "BUY" | "SELL" {
@@ -62,6 +96,10 @@ export function buildSmcSignalMessage(setup: TradeSetup): string {
     SMC_SEPARATOR,
     `Timeframe: ${setup.primaryTimeframe ?? "N/A"}${setup.sessionLabel ? ` | Session: ${setup.sessionLabel}` : ""}`,
   ];
+
+  const candleAge = formatCandleAge(setup.primaryTimeframe);
+  if (candleAge) lines.push(candleAge);
+
   if (setup.market) lines.push(`Market: ${setup.market}`);
   lines.push(SMC_SEPARATOR, "", `[ENTRY] ${setup.entry}`);
   if (setup.entryZone) lines.push(`Entry Zone: ${setup.entryZone.low} - ${setup.entryZone.high}`);

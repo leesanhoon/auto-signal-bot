@@ -2,9 +2,9 @@ name: Fetch Matches List
 
 on:
   workflow_dispatch:
-  schedule:
-    # 07:00 VN hằng ngày = UTC 00:00
-    - cron: "0 0 * * *"
+  # schedule:
+  #   # 07:00 VN hằng ngày = UTC 00:00
+  #   - cron: "0 0 * * *"
 
 jobs:
   fetch-matches-list:

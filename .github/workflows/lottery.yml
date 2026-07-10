@@ -2,9 +2,9 @@ name: Lottery History Scanner
 
 on:
   workflow_dispatch:
-  schedule:
-    # 19:00 VN hằng ngày = UTC 12:00
-    - cron: "0 12 * * *"
+  # schedule:
+  #   # 19:00 VN hằng ngày = UTC 12:00
+  #   - cron: "0 12 * * *"
 
 jobs:
   lottery:

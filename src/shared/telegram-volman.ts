@@ -17,6 +17,40 @@ import { sendMessage, sendPhoto, telegramNotifier } from "./telegram-client.js";
 
 const logger = createLogger("shared:telegram-volman");
 
+const TIMEFRAME_MS: Record<ChartTimeframe, number> = {
+  M15: 15 * 60 * 1000,
+  M30: 30 * 60 * 1000,
+  H1: 60 * 60 * 1000,
+  H4: 4 * 60 * 60 * 1000,
+  D1: 24 * 60 * 60 * 1000,
+};
+
+function getCandleCloseTime(timeframe: ChartTimeframe | undefined): number | null {
+  if (!timeframe || !(timeframe in TIMEFRAME_MS)) return null;
+
+  const intervalMs = TIMEFRAME_MS[timeframe];
+  const nowMs = Date.now();
+  return Math.floor(nowMs / intervalMs) * intervalMs;
+}
+
+function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
+  const closeTimeMs = getCandleCloseTime(timeframe);
+  if (!closeTimeMs) return null;
+
+  const nowMs = Date.now();
+  const minutesAgo = Math.floor((nowMs - closeTimeMs) / 60000);
+
+  if (minutesAgo < 0) return null;
+
+  const closeTime = new Date(closeTimeMs);
+  const hh = String(closeTime.getUTCHours()).padStart(2, "0");
+  const mm = String(closeTime.getUTCMinutes()).padStart(2, "0");
+  const dd = String(closeTime.getUTCDate()).padStart(2, "0");
+  const MM = String(closeTime.getUTCMonth() + 1).padStart(2, "0");
+
+  return `🕐 Nến gốc [${timeframe}] đóng: ${hh}:${mm} ${dd}/${MM} UTC (${minutesAgo} phút trước)`;
+}
+
 function buildNoSetupReasonSection(result: AnalysisResult): string {
   if (!result.noSetupReason.trim()) return "";
 
@@ -89,6 +123,7 @@ function buildCopyableSetup(setup: TradeSetup): string {
   const fallbackNote = setup.chartFallbackUsed
     ? `⚠️ Ảnh minh họa không đúng khung thời gian gốc (${normalizeSetupTimeframe(setup)}), chỉ tham khảo.`
     : "";
+  const candleAge = formatCandleAge(setup.primaryTimeframe);
   return [
     `${arrow} *${setup.pair} — ${setup.direction}* (${confidence}% ${confBar})${emaTag}`,
     `📋 *${setup.setup}*`,
@@ -99,6 +134,7 @@ function buildCopyableSetup(setup: TradeSetup): string {
       ? `📍 *Giá thật:* ${formatLastPrice(setup.lastPrice)}`
       : "",
     setup.currentPriceContext ? `📍 *Giá hiện tại:* ${setup.currentPriceContext}` : "",
+    candleAge ?? "",
     fallbackNote,
     "",
     "```",

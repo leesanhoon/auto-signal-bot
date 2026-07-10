@@ -13,13 +13,13 @@ on:
           - mien-trung
           - mien-nam
         default: all
-  schedule:
-    # Miền Nam 16:45 VN = UTC 09:45
-    - cron: "45 9 * * *"
-    # Miền Trung 17:45 VN = UTC 10:45
-    - cron: "45 10 * * *"
-    # Miền Bắc 18:45 VN = UTC 11:45
-    - cron: "45 11 * * *"
+  # schedule:
+  #   # Miền Nam 16:45 VN = UTC 09:45
+  #   - cron: "45 9 * * *"
+  #   # Miền Trung 17:45 VN = UTC 10:45
+  #   - cron: "45 10 * * *"
+  #   # Miền Bắc 18:45 VN = UTC 11:45
+  #   - cron: "45 11 * * *"
 
 jobs:
   lottery-predict:

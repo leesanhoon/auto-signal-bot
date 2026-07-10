@@ -28,6 +28,10 @@ function chart(
 }
 
 const BASE_CHARTS: Array<{ name: string; symbol: string }> = [
+  // Crypto — Binance spot (24/7, public API, khong can API key)
+  { name: "BTC/USDT", symbol: "BINANCE:BTCUSDT" },
+  { name: "ETH/USDT", symbol: "BINANCE:ETHUSDT" },
+
   // Commodities
   { name: "XAU/USD", symbol: "OANDA:XAUUSD" },
   // { name: "XAG/USD", symbol: "OANDA:XAGUSD" },
