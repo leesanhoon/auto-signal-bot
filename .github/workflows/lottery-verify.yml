@@ -11,6 +11,13 @@ on:
           - mien-bac
           - mien-trung
           - mien-nam
+  schedule:
+    # Miền Nam 16:45 VN = UTC 09:45
+    - cron: "45 9 * * *"
+    # Miền Trung 17:45 VN = UTC 10:45
+    - cron: "45 10 * * *"
+    # Miền Bắc 18:50 VN = UTC 11:50
+    - cron: "50 11 * * *"
 
 jobs:
   lottery-verify:

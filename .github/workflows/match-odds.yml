@@ -2,6 +2,9 @@ name: Match Odds Scanner
 
 on:
   workflow_dispatch:
+  schedule:
+    # 12:00 VN hằng ngày = UTC 05:00
+    - cron: "0 5 * * *"
 
 jobs:
   match-odds:

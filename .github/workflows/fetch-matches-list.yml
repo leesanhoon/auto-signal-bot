@@ -2,11 +2,14 @@ name: Fetch Matches List
 
 on:
   workflow_dispatch:
+  schedule:
+    # 07:00 VN hằng ngày = UTC 00:00
+    - cron: "0 0 * * *"
 
 jobs:
   fetch-matches-list:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     environment: production
 
     steps:
@@ -24,10 +27,7 @@ jobs:
 
       - name: Run fetch matches list
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-          API_FOOTBALL_LEAGUE: ${{ vars.API_FOOTBALL_LEAGUE }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: npm run fetch-matches-list
