@@ -3,7 +3,7 @@ import { getDb } from "../shared/db.js";
 import { loadWeekdayHistory } from "./lottery-repository.js";
 import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
 import { savePredictions } from "./lottery-predictions-repository.js";
-import { sendMessage, notifyError } from "../shared/telegram.js";
+import { sendMessage, notifyError } from "../shared/telegram-client.js";
 import type { LotteryRegion } from "./lottery-types.js";
 import { createLogger } from "../shared/logger.js";
 

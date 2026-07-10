@@ -1,6 +1,6 @@
 import "../shared/env.js";
 import { runLotteryCheck } from "./lottery-runner.js";
-import { notifyError } from "../shared/telegram.js";
+import { notifyError } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("lottery:lottery-index");

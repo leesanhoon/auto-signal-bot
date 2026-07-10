@@ -58,11 +58,11 @@ vi.mock("../../src/charts/screenshot.js", () => ({
   captureAllCharts: mocks.captureAllCharts,
 }));
 
-vi.mock("../../src/charts/analyzer.js", () => ({
+vi.mock("../../src/charts/analyzer-common.js", () => ({
   buildChartAnalysisCacheKey: mocks.buildChartAnalysisCacheKey,
 }));
 
-vi.mock("../../src/charts/chart-cache-repository.js", () => ({
+vi.mock("../../src/charts/chart-cache-repository-volman.js", () => ({
   loadChartAnalysisCache: mocks.loadChartAnalysisCache,
   loadLatestChartAnalysisCache: mocks.loadLatestChartAnalysisCache,
   saveChartAnalysisCache: mocks.saveChartAnalysisCache,
@@ -79,31 +79,34 @@ vi.mock("../../src/charts/chart-cache.js", async (importOriginal) => {
   };
 });
 
-vi.mock("../../src/charts/check-open-trades-runner.js", () => ({
+vi.mock("../../src/charts/check-open-trades-runner-volman.js", () => ({
   runCheckOpenTrades: mocks.runCheckOpenTrades,
 }));
 
-// vi.mock("../../src/charts/check-pending-orders-runner.js", () => ({
+// vi.mock("../../src/charts/check-pending-orders-runner-volman.js", () => ({
 //   runCheckPendingOrders: mocks.runCheckPendingOrders,
 // }));
 
-vi.mock("../../src/shared/telegram.js", () => ({
-  sendAllAnalyses: mocks.sendAllAnalyses,
+vi.mock("../../src/shared/telegram-client.js", () => ({
   sendMessage: mocks.sendMessage,
-  buildHeartbeatMessage: mocks.buildHeartbeatMessage,
   notifyError: mocks.notifyError,
+}));
+
+vi.mock("../../src/shared/telegram-volman.js", () => ({
+  buildHeartbeatMessage: mocks.buildHeartbeatMessage,
+  sendAllAnalysesVolman: mocks.sendAllAnalyses,
 }));
 
 vi.mock("../../src/shared/logger.js", () => ({
   createLogger: () => mocks.logger,
 }));
 
-vi.mock("../../src/charts/positions-repository.js", () => ({
+vi.mock("../../src/charts/positions-repository-volman.js", () => ({
   saveOpenPosition: mocks.saveOpenPosition,
   savePendingOrder: mocks.savePendingOrder,
 }));
 
-vi.mock("../../src/charts/position-engine.js", () => ({
+vi.mock("../../src/charts/position-engine-volman.js", () => ({
   validateTradeSetupForOpen: mocks.validateTradeSetupForOpen,
 }));
 
@@ -115,11 +118,10 @@ vi.mock("../../src/charts/smc/smc-pipeline.js", () => ({
   analyzeAllChartsSmc: mocks.analyzeAllChartsSmc,
 }));
 
-vi.mock("../../src/charts/chart-config-env.js", () => ({
+vi.mock("../../src/charts/volman-config-env.js", () => ({
   getConfiguredChartSignalConfidenceThreshold:
     mocks.getConfiguredChartSignalConfidenceThreshold,
   getConfiguredChartEngineMode: mocks.getConfiguredChartEngineMode,
-  getConfiguredChartTradingSystem: mocks.getConfiguredChartTradingSystem,
   getConfiguredChartRunContext: mocks.getConfiguredChartRunContext,
   getConfiguredChartTimeframeMode: mocks.getConfiguredChartTimeframeMode,
   getConfiguredChartPrimaryTimeframe: mocks.getConfiguredChartPrimaryTimeframe,
@@ -304,7 +306,6 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(MOCK_RESULT, undefined, {
       source: "cached",
       candleKey: "2026-07-03T08:deterministic",
-      systemLabel: "bob-volman",
     });
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
@@ -458,39 +459,16 @@ describe("charts/index main() — H4 close guard", () => {
     });
   });
 
-  test("khi trading system là smc thì gọi SMC pipeline và dùng cache label smc", async () => {
-    mocks.getConfiguredChartTradingSystem.mockReturnValue("smc");
-    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
-    mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT as any);
-
-    await main();
-
-    expect(mocks.analyzeAllChartsSmc).toHaveBeenCalledTimes(1);
-    expect(mocks.analyzeAllChartsDeterministic).not.toHaveBeenCalled();
-    expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(
-      expect.stringContaining(":smc:"),
-    );
-    expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
-      MOCK_RESULT,
-      undefined,
-      expect.objectContaining({ source: "live", systemLabel: "smc" }),
-    );
-  });
-
   test("fatal error scope follows the selected trading system", () => {
-    expect(getChartScannerErrorScope("bob-volman")).toBe(
+    expect(getChartScannerErrorScope()).toBe(
       "Bob Volman multi-timeframe scanner",
     );
-    expect(getChartScannerErrorScope("smc")).toBe(
-      "SMC multi-timeframe scanner",
-    );
   });
 
-  test("ngoài window + manual run + SMC + có latest cache thì dùng latest cache label smc", async () => {
-    mocks.getConfiguredChartTradingSystem.mockReturnValue("smc");
+  test("ngoài window + manual run + Volman + có latest cache thì dùng latest cache label deterministic", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("manual");
     mocks.loadLatestChartAnalysisCache.mockResolvedValue({
-      candleKey: "2026-07-03T08:smc",
+      candleKey: "2026-07-03T08:deterministic",
       result: MOCK_RESULT as any,
     });
 
@@ -498,7 +476,7 @@ describe("charts/index main() — H4 close guard", () => {
 
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
     expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith(
-      "smc",
+      "deterministic",
       "multi",
       "M15",
     );
@@ -509,8 +487,7 @@ describe("charts/index main() — H4 close guard", () => {
       undefined,
       expect.objectContaining({
         source: "cached",
-        candleKey: "2026-07-03T08:smc",
-        systemLabel: "smc",
+        candleKey: "2026-07-03T08:deterministic",
       }),
     );
   });

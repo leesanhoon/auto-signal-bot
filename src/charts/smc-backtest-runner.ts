@@ -1,11 +1,11 @@
 import "../shared/env.js";
 import { createLogger } from "../shared/logger.js";
-import { CHARTS } from "./charts.config.js";
+import { CHARTS } from "./smc-charts.config.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { buildRollingHtfContexts, getHtfTimeframeFor } from "./smc/smc-htf-context.js";
 import { runSmcBacktest } from "./smc/smc-backtest.js";
 import type { Candle } from "./ohlc-provider.js";
-import type { ChartTimeframe } from "./chart-types.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
 import type { SmcBacktestReport } from "./smc/smc-backtest.js";
 
 const logger = createLogger("charts:smc-backtest-runner");

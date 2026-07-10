@@ -1,10 +1,10 @@
 import "../shared/env.js";
 import { createLogger } from "../shared/logger.js";
-import { CHARTS } from "./charts.config.js";
+import { CHARTS } from "./volman-charts.config.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { runSetupBacktest } from "./setup-backtest.js";
 import type { Candle } from "./ohlc-provider.js";
-import type { ChartTimeframe } from "./chart-types.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
 
 const logger = createLogger("charts:setup-backtest");
 const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H4", "D1"];

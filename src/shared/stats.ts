@@ -1,4 +1,4 @@
-import type { PerformanceSummary } from "../charts/performance-tracking.js";
+import type { PerformanceSummary } from "../charts/performance-tracking-volman.js";
 import type { AiProvider } from "./ai-usage.js";
 
 export type AiUsageDailySummary = {

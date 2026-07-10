@@ -2,7 +2,7 @@ import { fetchActualRecords } from "./lottery-scraper.js";
 import { appendWeekdayHistory, loadWeekdayHistory } from "./lottery-repository.js";
 import { buildLotteryDataset, lotteryFilename } from "./lottery-format.js";
 import { WEEKDAY_LABELS } from "./lottery-schedule.js";
-import { sendDocument, sendMessage } from "../shared/telegram.js";
+import { sendDocument, sendMessage } from "../shared/telegram-client.js";
 import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
 import { createLogger } from "../shared/logger.js";
 

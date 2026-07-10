@@ -1,5 +1,5 @@
-import type { PairSummary, TradeSetup } from "../chart-types.js";
-import { applyPriceSanityChecks, formatPrice } from "../analyzer.js";
+import type { PairSummary, TradeSetup } from "../chart-types-smc.js";
+import { applyPriceSanityChecks, formatPrice } from "../analyzer-smc.js";
 import type {
   SmcEntryZone,
   SmcGrade,

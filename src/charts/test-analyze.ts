@@ -1,7 +1,7 @@
 import "../shared/env.js";
 import { readdir, readFile } from "fs/promises";
 import { join, extname } from "path";
-import type { ScreenshotResult, ChartConfig, ChartTimeframe } from "./chart-types.js";
+import type { ScreenshotResult, ChartConfig, ChartTimeframe } from "./chart-types-common.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
 import { createLogger } from "../shared/logger.js";
 

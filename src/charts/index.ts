@@ -1,27 +1,28 @@
 import "../shared/env.js";
-import { saveOpenPosition /*, savePendingOrder */ } from "./positions-repository.js";
-import { runCheckOpenTrades } from "./check-open-trades-runner.js";
+import { saveOpenPosition /*, savePendingOrder */ } from "./positions-repository-volman.js";
+import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
 // import { runCheckPendingOrders } from "./check-pending-orders-runner.js"; // DISABLED: signals-only mode, xem tasks/disable-pending-orders/plan.md
 import {
-  buildHeartbeatMessage,
-  sendAllAnalyses,
   sendMessage,
   notifyError,
-} from "../shared/telegram.js";
+} from "../shared/telegram-client.js";
+import {
+  buildHeartbeatMessage,
+  sendAllAnalysesVolman,
+} from "../shared/telegram-volman.js";
 import { createLogger } from "../shared/logger.js";
-import { validateTradeSetupForOpen } from "./position-engine.js";
+import { validateTradeSetupForOpen } from "./position-engine-volman.js";
 import {
   getConfiguredChartPrimaryTimeframe,
   getConfiguredChartEngineMode,
   getConfiguredChartRunContext,
   getConfiguredChartSignalConfidenceThreshold,
-  getConfiguredChartTradingSystem,
   getConfiguredChartTimeframeMode,
   shouldSendHeartbeatOnManualRun,
   shouldSendHeartbeatOutsideCloseWindow,
   shouldUseLatestCacheForManualRun,
-} from "./chart-config-env.js";
-import type { AnalysisResult, TradeSetup } from "./chart-types.js";
+} from "./volman-config-env.js";
+import type { AnalysisResult, TradeSetup } from "./chart-types-volman.js";
 import {
   getLastClosedCandleKey,
   isWithinTimeframeCandleCloseWindow,
@@ -30,11 +31,10 @@ import {
   loadChartAnalysisCache,
   loadLatestChartAnalysisCache,
   saveChartAnalysisCache,
-} from "./chart-cache-repository.js";
+} from "./chart-cache-repository-volman.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
-import { analyzeAllChartsSmc } from "./smc/smc-pipeline.js";
-import { CHARTS, getChartsForTimeframeMode } from "./charts.config.js";
-import { buildChartAnalysisCacheKey } from "./analyzer.js";
+import { CHARTS, getChartsForTimeframeMode } from "./volman-charts.config.js";
+import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
 const logger = createLogger("charts:index");
 const CANDLE_CLOSE_WINDOW_MS = 20 * 60 * 1000;
@@ -58,42 +58,30 @@ function getPairs(): Array<{ pair: string; symbol: string }> {
   return Array.from(seen.entries()).map(([pair, symbol]) => ({ pair, symbol }));
 }
 
-export function getChartScannerErrorScope(
-  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
-): string {
-  return tradingSystem === "smc"
-    ? "SMC multi-timeframe scanner"
-    : "Bob Volman multi-timeframe scanner";
+export function getChartScannerErrorScope(): string {
+  return "Bob Volman multi-timeframe scanner";
 }
 
 async function analyzeCurrentWindow(
   candleKey: string,
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
-  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
 ): Promise<AnalysisResult> {
   const runtimeCharts = getChartsForTimeframeMode(
     timeframeMode,
     primaryTimeframe,
   );
-  logger.info(`Using ${tradingSystem} engine (no AI vision)`, {
+  logger.info(`Using Bob Volman engine (no AI vision)`, {
     timeframeMode,
     primaryTimeframe,
-    tradingSystem,
     intervals: Array.from(
       new Set(runtimeCharts.map((chart) => chart.timeframe)),
     ),
   });
-  const result =
-    tradingSystem === "smc"
-      ? await analyzeAllChartsSmc(getPairs(), {
-          timeframeMode,
-          primaryTimeframe,
-        })
-      : await analyzeAllChartsDeterministic(getPairs(), {
-          timeframeMode,
-          primaryTimeframe,
-        });
+  const result = await analyzeAllChartsDeterministic(getPairs(), {
+    timeframeMode,
+    primaryTimeframe,
+  });
   await saveChartAnalysisCache(candleKey, result);
   return result;
 }
@@ -104,13 +92,12 @@ async function loadAnalysisForRun(
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
   runContext: ReturnType<typeof getConfiguredChartRunContext>,
-  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
 ): Promise<{
   result: AnalysisResult | null;
   origin: AnalysisOrigin | null;
   heartbeatReason: "no-cache" | "no-event" | null;
 }> {
-  const cacheLabel = tradingSystem === "smc" ? "smc" : "deterministic";
+  const cacheLabel = "deterministic";
   const cacheKey = buildChartAnalysisCacheKey(
     candleBaseKey,
     cacheLabel,
@@ -135,7 +122,6 @@ async function loadAnalysisForRun(
       cacheKey,
       timeframeMode,
       primaryTimeframe,
-      tradingSystem,
     );
     return {
       result: liveResult,
@@ -176,7 +162,6 @@ async function loadAnalysisForRun(
 async function handleAnalysisResult(
   result: AnalysisResult,
   origin: AnalysisOrigin,
-  tradingSystem: ReturnType<typeof getConfiguredChartTradingSystem>,
 ): Promise<void> {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
   for (const setup of result.setups) {
@@ -235,10 +220,9 @@ async function handleAnalysisResult(
     source: origin.source,
     candleKey: origin.candleKey,
   });
-  await sendAllAnalyses(result, undefined, {
+  await sendAllAnalysesVolman(result, undefined, {
     source: origin.source,
     candleKey: origin.candleKey,
-    systemLabel: tradingSystem,
   });
 }
 
@@ -252,7 +236,7 @@ async function maybeSendHeartbeat(
   await sendMessage(
     buildHeartbeatMessage({
       runContext,
-      engineMode: getConfiguredChartTradingSystem(),
+      engineMode: "bob-volman",
       reason: heartbeatReason,
       candleKey,
       latestCacheCandleKey: latestCacheCandleKey ?? null,
@@ -263,13 +247,12 @@ async function maybeSendHeartbeat(
 export async function main(): Promise<void> {
   const startTime = Date.now();
   const runContext = getConfiguredChartRunContext();
-  const tradingSystem = getConfiguredChartTradingSystem();
   const timeframeMode = getConfiguredChartTimeframeMode();
   const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
   const analysisTimeframe =
     timeframeMode === "single" ? primaryTimeframe : "H4";
   logger.info("Chart scanner starting", {
-    engineMode: tradingSystem,
+    engineMode: "bob-volman",
     runContext,
     timeframeMode,
     primaryTimeframe,
@@ -277,7 +260,7 @@ export async function main(): Promise<void> {
   });
 
   const candleBaseKey = getLastClosedCandleKey(analysisTimeframe);
-  const cacheLabel = tradingSystem === "smc" ? "smc" : "deterministic";
+  const cacheLabel = "deterministic";
   const candleKey = buildChartAnalysisCacheKey(
     candleBaseKey,
     cacheLabel,
@@ -295,7 +278,6 @@ export async function main(): Promise<void> {
     timeframeMode,
     primaryTimeframe,
     runContext,
-    tradingSystem,
   );
   result = analysisState.result;
   origin = analysisState.origin;
@@ -303,11 +285,11 @@ export async function main(): Promise<void> {
   if (origin?.source === "cached") latestCacheCandleKey = origin.candleKey;
 
   if (result && origin) {
-    await handleAnalysisResult(result, origin, tradingSystem);
+    await handleAnalysisResult(result, origin);
   } else {
     logger.warn(
       `⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`,
-      { engineMode: tradingSystem },
+      { engineMode: "bob-volman" },
     );
   }
 
@@ -339,7 +321,7 @@ export async function main(): Promise<void> {
     skippedPairs,
     setupCount,
     elapsedSeconds: Number(elapsed),
-    engineMode: tradingSystem,
+    engineMode: "bob-volman",
     runContext,
     timeframeMode,
     primaryTimeframe,
@@ -353,7 +335,7 @@ if (!process.env.VITEST) {
   main().catch(async (error) => {
     logger.error("Fatal error", { error });
     await notifyError(
-      getChartScannerErrorScope(getConfiguredChartTradingSystem()),
+      getChartScannerErrorScope(),
       error,
     );
     process.exit(1);

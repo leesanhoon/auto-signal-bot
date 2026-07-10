@@ -1,4 +1,4 @@
-import type { ChartTimeframe } from "./chart-types.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
 
 export type SetupKind = "DD" | "FB" | "BB" | "RB" | "ARB" | "IRB" | "SB";
 

@@ -54,13 +54,14 @@ describe("charts/screenshot", () => {
       close: async () => undefined,
     });
 
+    const buildChartHtmlMock = () => "<html></html>";
     const promise = screenshot.captureChartScreenshot({
       symbol: "OANDA:EURUSD",
       name: "EUR/USD H4",
       interval: "240",
       description: "EUR/USD — H4",
       timeframe: "H4",
-    });
+    }, buildChartHtmlMock);
 
     await Promise.resolve();
     expect(close).not.toHaveBeenCalled();

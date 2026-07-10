@@ -21,7 +21,7 @@ vi.mock("../../../src/charts/ohlc-provider.js", () => ({
   fetchOhlcHistory: mocks.fetchOhlcHistory,
 }));
 
-vi.mock("../../../src/charts/chart-config-env.js", () => ({
+vi.mock("../../../src/charts/smc-config-env.js", () => ({
   getConfiguredSmcSignalFreshnessCandles: mocks.getConfiguredSmcSignalFreshnessCandles,
   getConfiguredSmcMinSignalConfidence: mocks.getConfiguredSmcMinSignalConfidence,
 }));
@@ -70,7 +70,7 @@ import { analyzeAllChartsSmc, analyzeSmcSignalsAtIndex, analyzeSmcWindow } from 
 import type { Candle } from "../../../src/charts/ohlc-provider.js";
 import type { HtfContext } from "../../../src/charts/smc/smc-htf-context.js";
 import { gradeFromScore } from "../../../src/charts/smc/smc-signal-assembly.js";
-import { buildSmcSignalMessage } from "../../../src/shared/telegram.js";
+import { buildSmcSignalMessage } from "../../../src/shared/telegram-smc.js";
 
 function candle(time: number, open: number, high: number, low: number, close: number): Candle {
   return { time, open, high, low, close, volume: 100 };

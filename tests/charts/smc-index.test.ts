@@ -50,11 +50,11 @@ const mocks = vi.hoisted(() => ({
 // ============================================================
 // Hoisted vi.mock calls — these are hoisted to top of file
 // ============================================================
-vi.mock("../../src/charts/analyzer.js", () => ({
+vi.mock("../../src/charts/analyzer-common.js", () => ({
   buildChartAnalysisCacheKey: mocks.buildChartAnalysisCacheKey,
 }));
 
-vi.mock("../../src/charts/chart-cache-repository.js", () => ({
+vi.mock("../../src/charts/chart-cache-repository-smc.js", () => ({
   loadChartAnalysisCache: mocks.loadChartAnalysisCache,
   loadLatestChartAnalysisCache: mocks.loadLatestChartAnalysisCache,
   saveChartAnalysisCache: mocks.saveChartAnalysisCache,
@@ -71,30 +71,40 @@ vi.mock("../../src/charts/chart-cache.js", async (importOriginal) => {
   };
 });
 
-vi.mock("../../src/charts/check-open-trades-runner.js", () => ({
+vi.mock("../../src/charts/check-open-trades-runner-smc.js", () => ({
   runCheckOpenTrades: mocks.runCheckOpenTrades,
 }));
 
-vi.mock("../../src/charts/check-pending-orders-runner.js", () => ({
+vi.mock("../../src/charts/check-pending-orders-runner-smc.js", () => ({
   runCheckPendingOrders: mocks.runCheckPendingOrders,
 }));
 
-vi.mock("../../src/shared/telegram.js", () => ({
-  sendAllAnalyses: mocks.sendAllAnalyses,
+vi.mock("../../src/shared/telegram-client.js", () => ({
   sendMessage: mocks.sendMessage,
   notifyError: mocks.notifyError,
+}));
+
+vi.mock("../../src/shared/telegram-smc.js", () => ({
+  buildHeartbeatMessage: (options: any) => {
+    const runLabel = options.runContext === "manual" ? "Manual run" : "Auto run";
+    const reason = options.reason === "no-cache"
+      ? "Không có cache phân tích hợp lệ để dùng lại trong lượt chạy ngoài cửa sổ đóng nến."
+      : "Không có event trade/pending nào phát sinh trong lượt chạy này.";
+    return `🚀 *SMC Multi-Timeframe Scanner heartbeat*\n*Run:* ${runLabel}\n*Last closed candle:* ${options.candleKey}\n*Reason:* ${options.reason}\n_${reason}_`;
+  },
+  sendAllAnalysesSmc: mocks.sendAllAnalyses,
 }));
 
 vi.mock("../../src/shared/logger.js", () => ({
   createLogger: () => mocks.logger,
 }));
 
-vi.mock("../../src/charts/positions-repository.js", () => ({
+vi.mock("../../src/charts/positions-repository-smc.js", () => ({
   saveOpenPosition: mocks.saveOpenPosition,
   savePendingOrder: mocks.savePendingOrder,
 }));
 
-vi.mock("../../src/charts/position-engine.js", () => ({
+vi.mock("../../src/charts/position-engine-smc.js", () => ({
   validateTradeSetupForOpen: mocks.validateTradeSetupForOpen,
 }));
 
@@ -102,9 +112,7 @@ vi.mock("../../src/charts/smc/smc-pipeline.js", () => ({
   analyzeAllChartsSmc: mocks.analyzeAllChartsSmc,
 }));
 
-vi.mock("../../src/charts/chart-config-env.js", () => ({
-  getConfiguredChartSignalConfidenceThreshold:
-    mocks.getConfiguredChartSignalConfidenceThreshold,
+vi.mock("../../src/charts/smc-config-env.js", () => ({
   getConfiguredChartRunContext: mocks.getConfiguredChartRunContext,
   getConfiguredChartTimeframeMode: mocks.getConfiguredChartTimeframeMode,
   getConfiguredChartPrimaryTimeframe: mocks.getConfiguredChartPrimaryTimeframe,
@@ -301,7 +309,6 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
       expect.objectContaining({
         source: "cached",
         candleKey: expect.any(String),
-        systemLabel: "smc",
       }),
     );
   });
@@ -324,7 +331,6 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
       expect.objectContaining({
         source: "live",
         candleKey: expect.any(String),
-        systemLabel: "smc",
       }),
     );
   });
@@ -398,7 +404,6 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
       expect.objectContaining({
         source: "cached",
         candleKey: "2026-07-03T08:smc",
-        systemLabel: "smc",
       }),
     );
   });

@@ -96,7 +96,7 @@ export type SmcFairValueGap = {
 export type SmcSignal = {
   setup: SmcSetupName;
   pair: string;
-  timeframe: import("../chart-types.js").ChartTimeframe;
+  timeframe: import("../chart-types-common.js").ChartTimeframe;
   direction: SmcDirection;
   entry: number;
   stopLoss: number;

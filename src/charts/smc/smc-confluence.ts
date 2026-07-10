@@ -1,4 +1,4 @@
-import type { ChartTimeframe } from "../chart-types.js";
+import type { ChartTimeframe } from "../chart-types-common.js";
 import type { Candle } from "../ohlc-provider.js";
 import { fetchOhlcHistory } from "../ohlc-provider.js";
 import { detectStructureBreak, findSwingPoints } from "./smc-structure.js";

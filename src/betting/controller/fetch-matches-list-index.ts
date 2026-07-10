@@ -3,7 +3,7 @@ import { createBettingApiClient } from "../client/betting-api-client.js";
 import { getDb } from "../../shared/db.js";
 import { createMatchRepository } from "../repository/match-repository.js";
 import { createBettingService } from "../service/betting-service.js";
-import { notifyError } from "../../shared/telegram.js";
+import { notifyError } from "../../shared/telegram-client.js";
 import { createLogger } from "../../shared/logger.js";
 import type { MatchInfo } from "../model/betting-types.js";
 

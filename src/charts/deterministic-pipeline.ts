@@ -1,4 +1,4 @@
-import type { AnalysisResult, ChartTimeframe } from "./chart-types.js";
+import type { AnalysisResult, ChartTimeframe } from "./chart-types-volman.js";
 import type { Candle } from "./ohlc-provider.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { calculateEma, calculateAtr, classifyTrend, averageAtr, isTradableWindow } from "./indicators.js";

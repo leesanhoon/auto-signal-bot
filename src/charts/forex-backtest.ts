@@ -1,4 +1,4 @@
-import type { ClosedPositionRecord, PerformanceSummary } from "./performance-tracking.js";
+import type { ClosedPositionRecord, PerformanceSummary } from "./performance-tracking-volman.js";
 
 export type ForexBacktestRow = {
   id: number;

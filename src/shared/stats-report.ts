@@ -1,4 +1,4 @@
-import { summarizeClosedPositionsPerformance, type ClosedPositionRecord } from "../charts/performance-tracking.js";
+import { summarizeClosedPositionsPerformance, type ClosedPositionRecord } from "../charts/performance-tracking-volman.js";
 import { vnDateStr } from "./vn-time.js";
 import type { AiUsageDailySummary, StatsReport } from "./stats.js";
 import type { AiProvider } from "./ai-usage.js";

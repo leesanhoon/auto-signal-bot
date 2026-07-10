@@ -22,7 +22,7 @@ vi.mock("../../src/lottery/lottery-predictions-repository.js", () => ({
   loadCachedPredictions: state.loadCachedPredictions,
   savePredictions: state.savePredictions,
 }));
-vi.mock("../../src/shared/telegram.js", () => ({
+vi.mock("../../src/shared/telegram-client.js", () => ({
   sendMessage: state.sendMessage,
 }));
 

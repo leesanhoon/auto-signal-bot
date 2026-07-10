@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Candle } from "../../../src/charts/ohlc-provider.js";
-import type { ChartTimeframe } from "../../../src/charts/chart-types.js";
+import type { ChartTimeframe } from "../../../src/charts/chart-types-common.js";
 import type { SmcSignal } from "../../../src/charts/smc/smc-types.js";
 import type { HtfContext } from "../../../src/charts/smc/smc-htf-context.js";
 

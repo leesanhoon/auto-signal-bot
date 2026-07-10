@@ -1,8 +1,8 @@
 import type { DetectedSignal, SetupKind } from "./setup-types.js";
-import type { TradeSetup, PairSummary, ChartTimeframe, ChartOrderType } from "./chart-types.js";
+import type { TradeSetup, PairSummary, ChartTimeframe, ChartOrderType } from "./chart-types-volman.js";
 import type { TrendState } from "./indicators.js";
-import { formatPrice, applyPriceSanityChecks } from "./analyzer.js";
-import { calculateRiskRewardPlan } from "./position-engine.js";
+import { formatPrice, applyPriceSanityChecks } from "./analyzer-volman.js";
+import { calculateRiskRewardPlan } from "./position-engine-volman.js";
 
 // ---------------------------------------------------------------------------
 // Rule-to-Vietnamese mapping for reasons

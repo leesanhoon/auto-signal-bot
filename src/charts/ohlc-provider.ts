@@ -1,4 +1,4 @@
-import type { ChartTimeframe } from "./chart-types.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
 import { withRetry } from "../shared/retry.js";
 import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 import { createLogger } from "../shared/logger.js";

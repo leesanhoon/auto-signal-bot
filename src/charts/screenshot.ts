@@ -1,10 +1,15 @@
 import { chromium, type BrowserContext, type Frame } from "playwright";
 import { mkdir } from "fs/promises";
 import { join } from "path";
-import { CHARTS, buildChartHtml, getChartsForTimeframeMode } from "./charts.config.js";
-import type { ChartTimeframeMode } from "./chart-config-env.js";
-import type { CandleRangeStats, ChartTimeframe, ScreenshotResult } from "./chart-types.js";
+import type { CandleRangeStats, ChartTimeframe, ChartConfig, ScreenshotResult } from "./chart-types-common.js";
 import { createLogger } from "../shared/logger.js";
+
+// Import buildChartHtml as a type to avoid dependency on a specific config
+type BuildChartHtmlFn = (chart: ChartConfig) => string;
+type GetChartsForTimeframeModeFn = (mode: "multi" | "single", primaryTimeframe?: string) => ChartConfig[];
+
+// Types exported by charts.config modules
+export type ChartTimeframeMode = "multi" | "single";
 
 const SCREENSHOT_DIR = join(process.cwd(), "screenshots");
 const VIEWPORT = { width: 1400, height: 900 };
@@ -31,9 +36,9 @@ function getTimeframeRank(timeframe: ChartTimeframe): number {
   }
 }
 
-export function findChartForPair(pair: string, preferredTimeframe: ChartTimeframe = "H4") {
+export function findChartForPair(charts: ChartConfig[], pair: string, preferredTimeframe: ChartTimeframe = "H4") {
   const normalized = pair.replace("/", "").toUpperCase();
-  const matches = CHARTS.filter((chart) => chart.symbol.toUpperCase().includes(normalized));
+  const matches = charts.filter((chart) => chart.symbol.toUpperCase().includes(normalized));
   if (matches.length === 0) {
     return undefined;
   }
@@ -222,7 +227,7 @@ export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Pr
 async function resolveLastPrice(
   page: import("playwright").Page,
   frame: Frame,
-  chart: (typeof CHARTS)[number],
+  chart: ChartConfig,
   timeoutMs: number,
 ): Promise<number | null> {
   const deadline = Date.now() + timeoutMs;
@@ -256,7 +261,7 @@ async function resolveLastPrice(
   return fetchFallbackLastPrice(chart.symbol);
 }
 
-function buildScreenshotPath(chart: (typeof CHARTS)[number]): string {
+function buildScreenshotPath(chart: ChartConfig): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `${chart.symbol.replace(/[:/]/g, "_")}_${chart.timeframe}_${timestamp}.jpg`;
   return join(SCREENSHOT_DIR, filename);
@@ -264,7 +269,7 @@ function buildScreenshotPath(chart: (typeof CHARTS)[number]): string {
 
 async function capturePageScreenshot(
   page: import("playwright").Page,
-  chart: (typeof CHARTS)[number],
+  chart: ChartConfig,
   quality: number,
   lastPrice: number | null,
 ): Promise<ScreenshotResult> {
@@ -280,6 +285,8 @@ async function capturePageScreenshot(
 }
 
 export async function captureAllCharts(
+  getChartsForTimeframeModeFn: GetChartsForTimeframeModeFn,
+  buildChartHtmlFn: BuildChartHtmlFn,
   chartTimeframeMode: ChartTimeframeMode = "multi",
   primaryTimeframe: ChartTimeframe = "M15",
 ): Promise<ScreenshotResult[]> {
@@ -294,10 +301,10 @@ export async function captureAllCharts(
   try {
     const context = await browser.newContext({ viewport: VIEWPORT });
 
-    const runtimeCharts = getChartsForTimeframeMode(chartTimeframeMode, primaryTimeframe);
+    const runtimeCharts = getChartsForTimeframeModeFn(chartTimeframeMode, primaryTimeframe);
     for (let i = 0; i < runtimeCharts.length; i += PARALLEL_TABS) {
       const batch = runtimeCharts.slice(i, i + PARALLEL_TABS);
-      const batchResults = await Promise.allSettled(batch.map((chart) => captureChart(context, chart)));
+      const batchResults = await Promise.allSettled(batch.map((chart) => captureChart(context, chart, buildChartHtmlFn)));
 
       for (const r of batchResults) {
         if (r.status === "fulfilled") {
@@ -316,7 +323,8 @@ export async function captureAllCharts(
 }
 
 export async function captureChartScreenshot(
-  chart: (typeof CHARTS)[number],
+  chart: ChartConfig,
+  buildChartHtmlFn: BuildChartHtmlFn,
   options: CaptureOptions = {},
 ): Promise<ScreenshotResult> {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
@@ -327,14 +335,14 @@ export async function captureChartScreenshot(
 
   try {
     const context = await browser.newContext({ viewport: options.viewport ?? VIEWPORT });
-    return await captureChart(context, chart, options);
+    return await captureChart(context, chart, buildChartHtmlFn, options);
   } finally {
     await browser.close();
   }
 }
 
-export async function captureVerificationChartScreenshot(chart: (typeof CHARTS)[number]): Promise<ScreenshotResult> {
-  return captureChartScreenshot(chart, {
+export async function captureVerificationChartScreenshot(chart: ChartConfig, buildChartHtmlFn: BuildChartHtmlFn): Promise<ScreenshotResult> {
+  return captureChartScreenshot(chart, buildChartHtmlFn, {
     viewport: { width: 1200, height: 750 },
     priceTimeoutMs: 5_000,
     quality: 55,
@@ -343,11 +351,12 @@ export async function captureVerificationChartScreenshot(chart: (typeof CHARTS)[
 
 async function captureChart(
   context: BrowserContext,
-  chart: (typeof CHARTS)[number],
+  chart: ChartConfig,
+  buildChartHtmlFn: BuildChartHtmlFn,
   options: CaptureOptions = {},
 ): Promise<ScreenshotResult> {
   const page = await context.newPage();
-  const html = buildChartHtml(chart);
+  const html = buildChartHtmlFn(chart);
 
   try {
     await page.setContent(html, { waitUntil: "networkidle", timeout: CHART_LOAD_TIMEOUT });

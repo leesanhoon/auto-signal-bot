@@ -1,5 +1,5 @@
 import "../shared/env.js";
-import { setChatMenuButton, setMyCommands } from "../shared/telegram.js";
+import { setChatMenuButton, setMyCommands } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("scripts:setup-telegram-menu");

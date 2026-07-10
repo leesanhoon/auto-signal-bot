@@ -1,30 +1,30 @@
 import "../shared/env.js";
-import { saveOpenPosition /*, savePendingOrder */ } from "./positions-repository.js";
-import { runCheckOpenTrades } from "./check-open-trades-runner.js";
+import { saveOpenPosition /*, savePendingOrder */ } from "./positions-repository-smc.js";
+import { runCheckOpenTrades } from "./check-open-trades-runner-smc.js";
 // import { runCheckPendingOrders } from "./check-pending-orders-runner.js"; // DISABLED: signals-only mode, xem tasks/disable-pending-orders/plan.md
-import { sendAllAnalyses, sendMessage, notifyError } from "../shared/telegram.js";
+import { sendMessage, notifyError } from "../shared/telegram-client.js";
+import { buildHeartbeatMessage, sendAllAnalysesSmc } from "../shared/telegram-smc.js";
 import { createLogger } from "../shared/logger.js";
-import { validateTradeSetupForOpen } from "./position-engine.js";
+import { validateTradeSetupForOpen } from "./position-engine-smc.js";
 import {
   getConfiguredChartPrimaryTimeframe,
   getConfiguredChartRunContext,
-  getConfiguredChartSignalConfidenceThreshold,
   getConfiguredChartTimeframeMode,
   getConfiguredSmcMinSignalConfidence,
   shouldSendHeartbeatOnManualRun,
   shouldSendHeartbeatOutsideCloseWindow,
   shouldUseLatestCacheForManualRun,
-} from "./chart-config-env.js";
-import type { AnalysisResult, TradeSetup } from "./chart-types.js";
+} from "./smc-config-env.js";
+import type { AnalysisResult, TradeSetup } from "./chart-types-smc.js";
 import { getLastClosedCandleKey, isWithinTimeframeCandleCloseWindow } from "./chart-cache.js";
 import {
   loadChartAnalysisCache,
   loadLatestChartAnalysisCache,
   saveChartAnalysisCache,
-} from "./chart-cache-repository.js";
+} from "./chart-cache-repository-smc.js";
 import { analyzeAllChartsSmc } from "./smc/smc-pipeline.js";
-import { CHARTS, getChartsForTimeframeMode } from "./charts.config.js";
-import { buildChartAnalysisCacheKey } from "./analyzer.js";
+import { CHARTS, getChartsForTimeframeMode } from "./smc-charts.config.js";
+import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
 const logger = createLogger("charts:smc-index");
 const CANDLE_CLOSE_WINDOW_MS = 20 * 60 * 1000;
@@ -112,7 +112,7 @@ async function loadAnalysisForRun(
 }
 
 async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrigin): Promise<void> {
-  const threshold = getConfiguredChartSignalConfidenceThreshold();
+  const threshold = getConfiguredSmcMinSignalConfidence();
   for (const setup of result.setups) {
     if (shouldAutoTrackAsOpen(setup, threshold)) {
       try {
@@ -147,28 +147,7 @@ async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrig
   }
 
   logger.info("Sending results to Telegram", { source: origin.source, candleKey: origin.candleKey });
-  await sendAllAnalyses(result, undefined, { source: origin.source, candleKey: origin.candleKey, systemLabel: "smc" });
-}
-
-function buildSmcHeartbeatMessage(
-  runContext: ReturnType<typeof getConfiguredChartRunContext>,
-  reason: "no-cache" | "no-event",
-  candleKey: string,
-  latestCacheCandleKey: string | null,
-): string {
-  const runLabel = runContext === "manual" ? "Manual run" : "Auto run";
-  const reasonLine = reason === "no-cache"
-    ? "Không có cache phân tích hợp lệ để dùng lại trong lượt chạy ngoài cửa sổ đóng nến."
-    : "Không có event trade/pending nào phát sinh trong lượt chạy này.";
-  const lines = [
-    "🚀 *SMC Multi-Timeframe Scanner heartbeat*",
-    `*Run:* ${runLabel}`,
-    `*Last closed candle:* ${candleKey}`,
-    `*Reason:* ${reason}`,
-  ];
-  if (latestCacheCandleKey) lines.push(`*Latest cache:* ${latestCacheCandleKey}`);
-  lines.push(`_${reasonLine}_`);
-  return lines.join("\n");
+  await sendAllAnalysesSmc(result, undefined, { source: origin.source, candleKey: origin.candleKey });
 }
 
 async function maybeSendHeartbeat(
@@ -178,7 +157,15 @@ async function maybeSendHeartbeat(
   latestCacheCandleKey?: string | null,
 ): Promise<void> {
   if (!heartbeatReason) return;
-  await sendMessage(buildSmcHeartbeatMessage(runContext, heartbeatReason, candleKey, latestCacheCandleKey ?? null));
+  await sendMessage(
+    buildHeartbeatMessage({
+      runContext,
+      engineMode: "smc",
+      reason: heartbeatReason,
+      candleKey,
+      latestCacheCandleKey: latestCacheCandleKey ?? null,
+    }),
+  );
 }
 
 export async function main(): Promise<void> {

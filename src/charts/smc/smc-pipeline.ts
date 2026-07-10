@@ -1,9 +1,9 @@
-import type { AnalysisResult, ChartTimeframe, PairSummary, TradeSetup } from "../chart-types.js";
+import type { AnalysisResult, ChartTimeframe, PairSummary, TradeSetup } from "../chart-types-smc.js";
 import { fetchOhlcHistory } from "../ohlc-provider.js";
 import { createLogger } from "../../shared/logger.js";
 import { buildSmcPairSummary, buildTradeSetupFromSmcSignal, gradeFromScore } from "./smc-signal-assembly.js";
 import { checkMultiTimeframeConfluence, detectTimeframeBias } from "./smc-confluence.js";
-import { getConfiguredSmcSignalFreshnessCandles } from "../chart-config-env.js";
+import { getConfiguredSmcSignalFreshnessCandles } from "../smc-config-env.js";
 import {
   calculatePremiumDiscountZone,
   calculatePriorPeriodLevels,

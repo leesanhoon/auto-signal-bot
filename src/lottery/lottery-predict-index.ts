@@ -1,6 +1,6 @@
 import "../shared/env.js";
 import { runLotteryPredict } from "./lottery-predict-runner.js";
-import { notifyError } from "../shared/telegram.js";
+import { notifyError } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { LotteryRegion } from "./lottery-types.js";
 

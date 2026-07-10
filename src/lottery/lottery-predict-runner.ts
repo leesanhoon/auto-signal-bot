@@ -6,7 +6,7 @@ import {
   savePredictions,
 } from "./lottery-predictions-repository.js";
 import { WEEKDAY_LABELS } from "./lottery-schedule.js";
-import { sendMessage } from "../shared/telegram.js";
+import { sendMessage } from "../shared/telegram-client.js";
 import type { LotteryRegion } from "./lottery-types.js";
 import { createLogger } from "../shared/logger.js";
 import type { EnsembleNumberPrediction } from "./lottery-ensemble-predict.js";

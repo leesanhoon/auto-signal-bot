@@ -11,7 +11,7 @@ describe("getConfiguredChartEngineMode", () => {
   });
 
   test("defaults to deterministic when env is not set", async () => {
-    const mod = await import("../../src/charts/chart-config-env.js");
+    const mod = await import("../../src/charts/volman-config-env.js");
     expect(mod.getConfiguredChartEngineMode()).toBe("deterministic");
   });
 
@@ -19,7 +19,7 @@ describe("getConfiguredChartEngineMode", () => {
     "returns deterministic for %s values",
     async (value) => {
       process.env.CHART_ENGINE_MODE = value;
-      const mod = await import("../../src/charts/chart-config-env.js");
+      const mod = await import("../../src/charts/volman-config-env.js");
       expect(mod.getConfiguredChartEngineMode()).toBe("deterministic");
     },
   );

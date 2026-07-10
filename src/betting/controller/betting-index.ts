@@ -6,7 +6,7 @@ import { getDb } from "../../shared/db.js";
 import { createBettingAnalysisRepository } from "../repository/betting-analysis-repository.js";
 import { createMatchRepository } from "../repository/match-repository.js";
 import { createBettingService } from "../service/betting-service.js";
-import { notifyError } from "../../shared/telegram.js";
+import { notifyError } from "../../shared/telegram-client.js";
 import { createLogger } from "../../shared/logger.js";
 import { createTelegramNotifier } from "../../shared/notifier.js";
 

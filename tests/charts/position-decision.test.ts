@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { resolveOpenPositionDecision, resolvePendingOrderDecision } from "../../src/charts/position-decision.js";
+import { resolveOpenPositionDecision, resolvePendingOrderDecision } from "../../src/charts/position-decision-volman.js";
 
 describe("charts/position-decision", () => {
   test("open LONG chạm stop loss → STOP", () => {
