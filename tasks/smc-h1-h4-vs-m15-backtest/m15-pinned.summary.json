@@ -1,0 +1,1275 @@
+{
+  "timeframe": "M15",
+  "bars": 1000,
+  "summary": {
+    "pairs": 64,
+    "signals": 3447,
+    "trades": 1302,
+    "attemptedTrades": 2085,
+    "skippedWhileOpen": 769,
+    "winRatePct": 48.92,
+    "avgRiskReward": -0.55,
+    "avgBarsHeld": 9.02,
+    "outcomes": {
+      "tp1": 198,
+      "tp2": 405,
+      "tp3": 34,
+      "stop": 641,
+      "expired": 774,
+      "expiredHold": 24,
+      "openAtEnd": 9
+    }
+  },
+  "bySetup": {
+    "SMC_CHOCH_OB": {
+      "trades": 417,
+      "winRatePct": 47.24,
+      "avgRiskReward": -0.48
+    },
+    "SMC_FVG_CONTINUATION": {
+      "trades": 321,
+      "winRatePct": 34.58,
+      "avgRiskReward": -1.13
+    },
+    "SMC_BOS_OB": {
+      "trades": 564,
+      "winRatePct": 49.11,
+      "avgRiskReward": -0.27
+    }
+  },
+  "byGrade": {
+    "B": {
+      "trades": 1201,
+      "winRatePct": 44.55,
+      "avgRiskReward": -0.55
+    },
+    "C": {
+      "trades": 20,
+      "winRatePct": 25,
+      "avgRiskReward": -1.17
+    },
+    "A": {
+      "trades": 81,
+      "winRatePct": 55.56,
+      "avgRiskReward": -0.34
+    }
+  },
+  "pairs": [
+    {
+      "pair": "BTC/USDT",
+      "signals": 58,
+      "trades": 21,
+      "winRatePct": 19.05,
+      "avgRiskReward": -2.05,
+      "avgBarsHeld": 6.62,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 14,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 5,
+        "tp3": 0,
+        "stop": 14,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DASH/USDT",
+      "signals": 53,
+      "trades": 25,
+      "winRatePct": 48,
+      "avgRiskReward": -0.56,
+      "avgBarsHeld": 4.32,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 11,
+        "tp3": 0,
+        "stop": 12,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ETH/USDT",
+      "signals": 73,
+      "trades": 28,
+      "winRatePct": 28.57,
+      "avgRiskReward": -1.5,
+      "avgBarsHeld": 4.43,
+      "attemptedTrades": 50,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 9,
+        "tp3": 0,
+        "stop": 18,
+        "expired": 22,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "LTC/USDT",
+      "signals": 49,
+      "trades": 25,
+      "winRatePct": 44,
+      "avgRiskReward": -0.63,
+      "avgBarsHeld": 7.28,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 8,
+        "tp3": 0,
+        "stop": 12,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DOT/USDT",
+      "signals": 46,
+      "trades": 21,
+      "winRatePct": 47.62,
+      "avgRiskReward": -0.2,
+      "avgBarsHeld": 7.71,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 1,
+        "stop": 10,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "XRP/USDT",
+      "signals": 56,
+      "trades": 27,
+      "winRatePct": 33.33,
+      "avgRiskReward": -0.94,
+      "avgBarsHeld": 4.41,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 16,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ADA/USDT",
+      "signals": 72,
+      "trades": 23,
+      "winRatePct": 56.52,
+      "avgRiskReward": 0.18,
+      "avgBarsHeld": 11,
+      "attemptedTrades": 38,
+      "skippedWhileOpen": 21,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 8,
+        "tp3": 1,
+        "stop": 9,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "BCH/USDT",
+      "signals": 64,
+      "trades": 26,
+      "winRatePct": 53.85,
+      "avgRiskReward": -0.35,
+      "avgBarsHeld": 3.31,
+      "attemptedTrades": 44,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 10,
+        "tp3": 0,
+        "stop": 12,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "SOL/USDT",
+      "signals": 55,
+      "trades": 25,
+      "winRatePct": 24,
+      "avgRiskReward": -1.07,
+      "avgBarsHeld": 2.6,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 2,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 0,
+        "stop": 15,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "AVA/USDT",
+      "signals": 75,
+      "trades": 24,
+      "winRatePct": 29.17,
+      "avgRiskReward": -0.53,
+      "avgBarsHeld": 10.42,
+      "attemptedTrades": 29,
+      "skippedWhileOpen": 31,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 5,
+        "tp3": 2,
+        "stop": 12,
+        "expired": 5,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ETC/USDT",
+      "signals": 31,
+      "trades": 16,
+      "winRatePct": 50,
+      "avgRiskReward": -0.47,
+      "avgBarsHeld": 5.13,
+      "attemptedTrades": 23,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 6,
+        "tp2": 4,
+        "tp3": 1,
+        "stop": 5,
+        "expired": 7,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "NEO/USDT",
+      "signals": 57,
+      "trades": 19,
+      "winRatePct": 21.05,
+      "avgRiskReward": -1.85,
+      "avgBarsHeld": 6.21,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 0,
+        "stop": 12,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DOGE/USDT",
+      "signals": 71,
+      "trades": 24,
+      "winRatePct": 41.67,
+      "avgRiskReward": -0.46,
+      "avgBarsHeld": 11.71,
+      "attemptedTrades": 38,
+      "skippedWhileOpen": 23,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 9,
+        "tp3": 0,
+        "stop": 14,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "BNB/USDT",
+      "signals": 65,
+      "trades": 26,
+      "winRatePct": 46.15,
+      "avgRiskReward": -1.2,
+      "avgBarsHeld": 4.15,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 10,
+        "tp3": 1,
+        "stop": 11,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ZEC/USDT",
+      "signals": 53,
+      "trades": 22,
+      "winRatePct": 50,
+      "avgRiskReward": -0.28,
+      "avgBarsHeld": 7.05,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 8,
+        "tp3": 0,
+        "stop": 11,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "TRX/USDT",
+      "signals": 31,
+      "trades": 10,
+      "winRatePct": 20,
+      "avgRiskReward": -1.73,
+      "avgBarsHeld": 15.4,
+      "attemptedTrades": 19,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 0,
+        "stop": 3,
+        "expired": 9,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "XLM/USDT",
+      "signals": 53,
+      "trades": 16,
+      "winRatePct": 62.5,
+      "avgRiskReward": 0.7,
+      "avgBarsHeld": 20.69,
+      "attemptedTrades": 26,
+      "skippedWhileOpen": 24,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 1,
+        "stop": 6,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "AAVE/USDT",
+      "signals": 64,
+      "trades": 32,
+      "winRatePct": 37.5,
+      "avgRiskReward": -0.6,
+      "avgBarsHeld": 2.25,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 8,
+        "tp3": 2,
+        "stop": 20,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "UNI/USDT",
+      "signals": 66,
+      "trades": 22,
+      "winRatePct": 36.36,
+      "avgRiskReward": -0.91,
+      "avgBarsHeld": 4.23,
+      "attemptedTrades": 37,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 6,
+        "tp3": 0,
+        "stop": 14,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ARB/USDT",
+      "signals": 56,
+      "trades": 21,
+      "winRatePct": 57.14,
+      "avgRiskReward": 0.34,
+      "avgBarsHeld": 6.38,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 8,
+        "tp3": 1,
+        "stop": 7,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "NEAR/USDT",
+      "signals": 44,
+      "trades": 21,
+      "winRatePct": 52.38,
+      "avgRiskReward": -0.41,
+      "avgBarsHeld": 5.81,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 8,
+        "tp3": 0,
+        "stop": 10,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "SUI/USDT",
+      "signals": 65,
+      "trades": 27,
+      "winRatePct": 40.74,
+      "avgRiskReward": -0.6,
+      "avgBarsHeld": 3.74,
+      "attemptedTrades": 44,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 8,
+        "tp3": 1,
+        "stop": 14,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PEPE/USDT",
+      "signals": 35,
+      "trades": 6,
+      "winRatePct": 50,
+      "avgRiskReward": 0,
+      "avgBarsHeld": 96,
+      "attemptedTrades": 8,
+      "skippedWhileOpen": 26,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0,
+        "stop": 0,
+        "expired": 1,
+        "expiredHold": 6,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "WLD/USDT",
+      "signals": 57,
+      "trades": 18,
+      "winRatePct": 66.67,
+      "avgRiskReward": 0.11,
+      "avgBarsHeld": 6.11,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 6,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "TAO/USDT",
+      "signals": 62,
+      "trades": 20,
+      "winRatePct": 45,
+      "avgRiskReward": -0.66,
+      "avgBarsHeld": 9.75,
+      "attemptedTrades": 34,
+      "skippedWhileOpen": 16,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 5,
+        "tp3": 0,
+        "stop": 10,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ENA/USDT",
+      "signals": 49,
+      "trades": 25,
+      "winRatePct": 52,
+      "avgRiskReward": -0.2,
+      "avgBarsHeld": 3.28,
+      "attemptedTrades": 34,
+      "skippedWhileOpen": 5,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 8,
+        "tp3": 0,
+        "stop": 12,
+        "expired": 9,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PAXG/USDT",
+      "signals": 64,
+      "trades": 24,
+      "winRatePct": 16.67,
+      "avgRiskReward": -6.29,
+      "avgBarsHeld": 9.42,
+      "attemptedTrades": 36,
+      "skippedWhileOpen": 20,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 8,
+        "tp3": 1,
+        "stop": 12,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "LINK/USDT",
+      "signals": 48,
+      "trades": 18,
+      "winRatePct": 44.44,
+      "avgRiskReward": -0.7,
+      "avgBarsHeld": 7.94,
+      "attemptedTrades": 34,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 8,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "AVAX/USDT",
+      "signals": 59,
+      "trades": 20,
+      "winRatePct": 45,
+      "avgRiskReward": -0.53,
+      "avgBarsHeld": 9.05,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 5,
+        "tp3": 3,
+        "stop": 10,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ICP/USDT",
+      "signals": 39,
+      "trades": 15,
+      "winRatePct": 40,
+      "avgRiskReward": -0.86,
+      "avgBarsHeld": 9,
+      "attemptedTrades": 27,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 3,
+        "tp3": 0,
+        "stop": 9,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "TIA/USDT",
+      "signals": 53,
+      "trades": 22,
+      "winRatePct": 40.91,
+      "avgRiskReward": -0.53,
+      "avgBarsHeld": 6.05,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 4,
+        "tp3": 0,
+        "stop": 13,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ONDO/USDT",
+      "signals": 59,
+      "trades": 27,
+      "winRatePct": 48.15,
+      "avgRiskReward": -0.42,
+      "avgBarsHeld": 4.3,
+      "attemptedTrades": 38,
+      "skippedWhileOpen": 12,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 11,
+        "tp3": 0,
+        "stop": 11,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "FIL/USDT",
+      "signals": 41,
+      "trades": 21,
+      "winRatePct": 52.38,
+      "avgRiskReward": 0.05,
+      "avgBarsHeld": 7.48,
+      "attemptedTrades": 30,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 8,
+        "tp3": 0,
+        "stop": 9,
+        "expired": 9,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "SEI/USDT",
+      "signals": 57,
+      "trades": 25,
+      "winRatePct": 32,
+      "avgRiskReward": -0.81,
+      "avgBarsHeld": 4.64,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 13,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 1,
+        "stop": 17,
+        "expired": 6,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "FET/USDT",
+      "signals": 50,
+      "trades": 19,
+      "winRatePct": 63.16,
+      "avgRiskReward": 0.29,
+      "avgBarsHeld": 7.53,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 9,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 9,
+        "tp3": 1,
+        "stop": 5,
+        "expired": 13,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "HBAR/USDT",
+      "signals": 69,
+      "trades": 21,
+      "winRatePct": 52.38,
+      "avgRiskReward": -0.11,
+      "avgBarsHeld": 16.14,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 30,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 10,
+        "tp3": 0,
+        "stop": 10,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "IOTA/USDT",
+      "signals": 45,
+      "trades": 14,
+      "winRatePct": 50,
+      "avgRiskReward": -0.12,
+      "avgBarsHeld": 16.14,
+      "attemptedTrades": 24,
+      "skippedWhileOpen": 18,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 3,
+        "tp3": 2,
+        "stop": 7,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "BONK/USDT",
+      "signals": 46,
+      "trades": 7,
+      "winRatePct": 85.71,
+      "avgRiskReward": 0,
+      "avgBarsHeld": 96,
+      "attemptedTrades": 13,
+      "skippedWhileOpen": 31,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0,
+        "stop": 0,
+        "expired": 5,
+        "expiredHold": 7,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "LDO/USDT",
+      "signals": 81,
+      "trades": 31,
+      "winRatePct": 45.16,
+      "avgRiskReward": -0.37,
+      "avgBarsHeld": 4.06,
+      "attemptedTrades": 50,
+      "skippedWhileOpen": 11,
+      "outcomes": {
+        "tp1": 6,
+        "tp2": 9,
+        "tp3": 0,
+        "stop": 16,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "INJ/USDT",
+      "signals": 56,
+      "trades": 24,
+      "winRatePct": 45.83,
+      "avgRiskReward": -0.5,
+      "avgBarsHeld": 3.92,
+      "attemptedTrades": 39,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 1,
+        "stop": 13,
+        "expired": 15,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "EIGEN/USDT",
+      "signals": 50,
+      "trades": 18,
+      "winRatePct": 38.89,
+      "avgRiskReward": -0.2,
+      "avgBarsHeld": 1.94,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 2,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 11,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "POL/USDT",
+      "signals": 65,
+      "trades": 24,
+      "winRatePct": 50,
+      "avgRiskReward": -0.41,
+      "avgBarsHeld": 3.42,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 11,
+        "tp3": 0,
+        "stop": 12,
+        "expired": 18,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "APT/USDT",
+      "signals": 42,
+      "trades": 18,
+      "winRatePct": 61.11,
+      "avgRiskReward": -0.08,
+      "avgBarsHeld": 10.39,
+      "attemptedTrades": 24,
+      "skippedWhileOpen": 14,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 5,
+        "tp3": 1,
+        "stop": 7,
+        "expired": 6,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "OP/USDT",
+      "signals": 47,
+      "trades": 17,
+      "winRatePct": 52.94,
+      "avgRiskReward": -0.35,
+      "avgBarsHeld": 3.24,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 1,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 6,
+        "tp3": 0,
+        "stop": 8,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PENGU/USDT",
+      "signals": 66,
+      "trades": 13,
+      "winRatePct": 46.15,
+      "avgRiskReward": 0.26,
+      "avgBarsHeld": 47.62,
+      "attemptedTrades": 18,
+      "skippedWhileOpen": 40,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 3,
+        "tp3": 0,
+        "stop": 7,
+        "expired": 4,
+        "expiredHold": 1,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "ORDI/USDT",
+      "signals": 56,
+      "trades": 26,
+      "winRatePct": 50,
+      "avgRiskReward": -0.03,
+      "avgBarsHeld": 11.69,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 19,
+      "outcomes": {
+        "tp1": 6,
+        "tp2": 6,
+        "tp3": 1,
+        "stop": 13,
+        "expired": 7,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ALGO/USDT",
+      "signals": 40,
+      "trades": 16,
+      "winRatePct": 56.25,
+      "avgRiskReward": 0.04,
+      "avgBarsHeld": 4.88,
+      "attemptedTrades": 29,
+      "skippedWhileOpen": 4,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 6,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "JTO/USDT",
+      "signals": 73,
+      "trades": 20,
+      "winRatePct": 60,
+      "avgRiskReward": -0.03,
+      "avgBarsHeld": 9.5,
+      "attemptedTrades": 34,
+      "skippedWhileOpen": 25,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 8,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PENDLE/USDT",
+      "signals": 59,
+      "trades": 28,
+      "winRatePct": 28.57,
+      "avgRiskReward": -0.84,
+      "avgBarsHeld": 5.57,
+      "attemptedTrades": 42,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 4,
+        "tp3": 2,
+        "stop": 20,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "APE/USDT",
+      "signals": 53,
+      "trades": 16,
+      "winRatePct": 56.25,
+      "avgRiskReward": 0.1,
+      "avgBarsHeld": 9.88,
+      "attemptedTrades": 28,
+      "skippedWhileOpen": 13,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 2,
+        "stop": 7,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ETHFI/USDT",
+      "signals": 43,
+      "trades": 19,
+      "winRatePct": 52.63,
+      "avgRiskReward": -0.15,
+      "avgBarsHeld": 3.79,
+      "attemptedTrades": 31,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 9,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "PYTH/USDT",
+      "signals": 62,
+      "trades": 21,
+      "winRatePct": 66.67,
+      "avgRiskReward": 0.67,
+      "avgBarsHeld": 13,
+      "attemptedTrades": 31,
+      "skippedWhileOpen": 26,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 9,
+        "tp3": 1,
+        "stop": 7,
+        "expired": 10,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "SHIB/USDT",
+      "signals": 32,
+      "trades": 6,
+      "winRatePct": 16.67,
+      "avgRiskReward": 0,
+      "avgBarsHeld": 96,
+      "attemptedTrades": 12,
+      "skippedWhileOpen": 19,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0,
+        "stop": 0,
+        "expired": 5,
+        "expiredHold": 6,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "GALA/USDT",
+      "signals": 50,
+      "trades": 7,
+      "winRatePct": 28.57,
+      "avgRiskReward": -0.37,
+      "avgBarsHeld": 80.14,
+      "attemptedTrades": 15,
+      "skippedWhileOpen": 27,
+      "outcomes": {
+        "tp1": 0,
+        "tp2": 0,
+        "tp3": 0,
+        "stop": 3,
+        "expired": 7,
+        "expiredHold": 4,
+        "openAtEnd": 1
+      }
+    },
+    {
+      "pair": "ZRO/USDT",
+      "signals": 58,
+      "trades": 26,
+      "winRatePct": 46.15,
+      "avgRiskReward": -0.21,
+      "avgBarsHeld": 3.65,
+      "attemptedTrades": 40,
+      "skippedWhileOpen": 5,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 8,
+        "tp3": 1,
+        "stop": 14,
+        "expired": 14,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "RENDER/USDT",
+      "signals": 48,
+      "trades": 26,
+      "winRatePct": 38.46,
+      "avgRiskReward": -0.56,
+      "avgBarsHeld": 6.77,
+      "attemptedTrades": 33,
+      "skippedWhileOpen": 8,
+      "outcomes": {
+        "tp1": 5,
+        "tp2": 8,
+        "tp3": 0,
+        "stop": 13,
+        "expired": 7,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "CAKE/USDT",
+      "signals": 36,
+      "trades": 17,
+      "winRatePct": 35.29,
+      "avgRiskReward": -0.98,
+      "avgBarsHeld": 14.18,
+      "attemptedTrades": 24,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 0,
+        "stop": 10,
+        "expired": 7,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "CRV/USDT",
+      "signals": 53,
+      "trades": 17,
+      "winRatePct": 52.94,
+      "avgRiskReward": -0.51,
+      "avgBarsHeld": 6.18,
+      "attemptedTrades": 34,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 2,
+        "stop": 8,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "CHZ/USDT",
+      "signals": 44,
+      "trades": 13,
+      "winRatePct": 38.46,
+      "avgRiskReward": -0.47,
+      "avgBarsHeld": 14.15,
+      "attemptedTrades": 29,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 0,
+        "tp3": 2,
+        "stop": 8,
+        "expired": 16,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "RUNE/USDT",
+      "signals": 36,
+      "trades": 15,
+      "winRatePct": 60,
+      "avgRiskReward": -0.13,
+      "avgBarsHeld": 3.6,
+      "attemptedTrades": 26,
+      "skippedWhileOpen": 3,
+      "outcomes": {
+        "tp1": 2,
+        "tp2": 7,
+        "tp3": 0,
+        "stop": 6,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "ATOM/USDT",
+      "signals": 53,
+      "trades": 21,
+      "winRatePct": 33.33,
+      "avgRiskReward": -1.13,
+      "avgBarsHeld": 7.33,
+      "attemptedTrades": 32,
+      "skippedWhileOpen": 14,
+      "outcomes": {
+        "tp1": 1,
+        "tp2": 6,
+        "tp3": 1,
+        "stop": 13,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "DYDX/USDT",
+      "signals": 64,
+      "trades": 32,
+      "winRatePct": 53.13,
+      "avgRiskReward": 0.09,
+      "avgBarsHeld": 3.53,
+      "attemptedTrades": 43,
+      "skippedWhileOpen": 7,
+      "outcomes": {
+        "tp1": 4,
+        "tp2": 14,
+        "tp3": 0,
+        "stop": 14,
+        "expired": 11,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "STRK/USDT",
+      "signals": 32,
+      "trades": 10,
+      "winRatePct": 70,
+      "avgRiskReward": 0.5,
+      "avgBarsHeld": 12,
+      "attemptedTrades": 22,
+      "skippedWhileOpen": 6,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 4,
+        "tp3": 0,
+        "stop": 3,
+        "expired": 12,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    },
+    {
+      "pair": "WIF/USDT",
+      "signals": 58,
+      "trades": 18,
+      "winRatePct": 50,
+      "avgRiskReward": -0.31,
+      "avgBarsHeld": 7.89,
+      "attemptedTrades": 35,
+      "skippedWhileOpen": 10,
+      "outcomes": {
+        "tp1": 3,
+        "tp2": 5,
+        "tp3": 1,
+        "stop": 9,
+        "expired": 17,
+        "expiredHold": 0,
+        "openAtEnd": 0
+      }
+    }
+  ]
+}

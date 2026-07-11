@@ -14,10 +14,11 @@ export type HtfContext = {
 
 /**
  * Map timeframe entry (LTF) sang timeframe HTF tương ứng dùng làm bias/dealing-range.
- * M15 -> H4, H4 -> D1, D1 -> null (không có khung cao hơn cấu hình sẵn).
+ * M15 -> H4, H1 -> H4, H4 -> D1, D1 -> null (không có khung cao hơn cấu hình sẵn).
  */
 export function getHtfTimeframeFor(entryTimeframe: ChartTimeframe): ChartTimeframe | null {
   if (entryTimeframe === "M15") return "H4";
+  if (entryTimeframe === "H1") return "H4";
   if (entryTimeframe === "H4") return "D1";
   return null;
 }

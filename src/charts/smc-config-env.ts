@@ -97,3 +97,10 @@ export function getConfiguredSmcMinSignalConfidence(): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : 65;
 }
+
+export function getConfiguredSmcMinRiskPct(): number {
+  const raw = process.env.SMC_MIN_RISK_PCT?.trim();
+  if (!raw) return 0.5;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 5 ? parsed : 0.5;
+}

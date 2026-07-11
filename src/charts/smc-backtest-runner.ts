@@ -9,7 +9,7 @@ import type { ChartTimeframe } from "./chart-types-common.js";
 import type { SmcBacktestReport } from "./smc/smc-backtest.js";
 
 const logger = createLogger("charts:smc-backtest-runner");
-const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H4", "D1"];
+const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H1", "H4", "D1"];
 
 function parseBacktestTimeframe(value: string | undefined): ChartTimeframe {
   const normalized = value?.trim().toUpperCase();

@@ -16,6 +16,25 @@ const TOTAL_COST_RATE = isNaN(FEE_RATE) || FEE_RATE < 0 ? 0.001 : FEE_RATE;
 const TOTAL_SLIPPAGE_RATE = isNaN(SLIPPAGE_RATE) || SLIPPAGE_RATE < 0 ? 0.0002 : SLIPPAGE_RATE;
 const COST_PER_DIRECTION = Math.max(0, TOTAL_COST_RATE + TOTAL_SLIPPAGE_RATE);
 
+const EXCLUDED_SETUPS = new Set(
+  (process.env.BACKTEST_EXCLUDE_SETUPS ?? "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => s.length > 0),
+);
+
+const MIN_RISK_PCT = (() => {
+  const parsed = Number(process.env.BACKTEST_MIN_RISK_PCT ?? "0");
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+})();
+
+function passesMinRisk(signal: SmcSignal): boolean {
+  if (MIN_RISK_PCT === 0) return true;
+  if (signal.entry === 0) return false;
+  const riskPct = (Math.abs(signal.entry - signal.stopLoss) / Math.abs(signal.entry)) * 100;
+  return riskPct >= MIN_RISK_PCT;
+}
+
 export type SmcBacktestOutcomeCounts = {
   tp1: number;
   tp2: number;
@@ -401,7 +420,10 @@ export function runSmcBacktest(candles: Candle[], pair: string, timeframe: Chart
   const lastTakenFingerprintBySetup = new Map<string, string>();
 
   for (let index = 30; index < candles.length; index += 1) {
-    const windowSignals = analyzeSmcSignalsAtIndex(candles, pair, timeframe, index, htfContexts?.[index] ?? null);
+    const allWindowSignals = analyzeSmcSignalsAtIndex(candles, pair, timeframe, index, htfContexts?.[index] ?? null);
+    const windowSignals = allWindowSignals.filter(
+      (s) => !EXCLUDED_SETUPS.has(s.setup) && passesMinRisk(s),
+    );
     if (windowSignals.length === 0) continue;
 
     signalsCount += windowSignals.length;

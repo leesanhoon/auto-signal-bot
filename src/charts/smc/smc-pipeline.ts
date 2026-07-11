@@ -2,6 +2,8 @@ import type { AnalysisResult, ChartTimeframe, PairSummary, TradeSetup } from "..
 import { fetchOhlcHistory } from "../ohlc-provider.js";
 import { createLogger } from "../../shared/logger.js";
 import { buildSmcPairSummary, buildTradeSetupFromSmcSignal, gradeFromScore } from "./smc-signal-assembly.js";
+import { computeSetupScore } from "./smc-scoring.js";
+import type { PremiumDiscountAssessment } from "./smc-scoring.js";
 import { checkMultiTimeframeConfluence, detectTimeframeBias } from "./smc-confluence.js";
 import { getConfiguredSmcSignalFreshnessCandles } from "../smc-config-env.js";
 import {
@@ -190,7 +192,14 @@ function buildSmcCandidatesAtIndex(
         );
         const baseConfidence = structure.kind === "CHOCH" ? 72 : 80;
         const confidence = isWrongPremiumDiscountZone ? baseConfidence - 15 : baseConfidence;
-        const score = isWrongPremiumDiscountZone ? baseConfidence - 15 : baseConfidence;
+        const pdAssessment: PremiumDiscountAssessment = pdZone === null
+          ? "UNKNOWN"
+          : isWrongPremiumDiscountZone
+            ? "WRONG"
+            : (structure.direction === "LONG" && pdZone.zone === "DISCOUNT")
+                || (structure.direction === "SHORT" && pdZone.zone === "PREMIUM")
+              ? "CORRECT"
+              : "UNKNOWN";
         const premiumDiscountTrace = pdZone
           ? isWrongPremiumDiscountZone
             ? `Canh bao: vao lenh ${structure.direction} tai vung ${pdZone.zone} - nguoc nguyen tac premium/discount, da ha diem.`
@@ -247,7 +256,7 @@ function buildSmcCandidatesAtIndex(
         const sessionAdjusted = applySessionPenalty(
           detectSession(scopedCandles[index].time),
           confidence,
-          score,
+          confidence,
           [
             `${structure.kind} ${structure.direction} tại ${structure.level.toFixed(2)}`,
             "Order block trùng vùng cấu trúc.",
@@ -255,6 +264,14 @@ function buildSmcCandidatesAtIndex(
             ...liquidityTargetTrace,
           ],
         );
+        const factorScore = computeSetupScore({
+          setup: structure.kind === "BOS" ? "SMC_BOS_OB" : "SMC_CHOCH_OB",
+          premiumDiscount: pdAssessment,
+          session: sessionAdjusted.session ?? "OFF_HOURS",
+          rvol: rvol ?? null,
+          hasRejectionWick: rejection.hasRejectionWick,
+          htfBiasAligned: htfContext?.bias != null && htfContext.bias === structure.direction,
+        });
         const signal = buildSignal(
           pair,
           timeframe,
@@ -267,8 +284,8 @@ function buildSmcCandidatesAtIndex(
           takeProfit2,
           {
             confidence: sessionAdjusted.confidence,
-            grade: sessionAdjusted.grade,
-            score: sessionAdjusted.score,
+            grade: gradeFromScore(factorScore),
+            score: factorScore,
             ruleTrace: sessionAdjusted.ruleTrace,
             takeProfit3,
             structureEvent: structure,
@@ -302,6 +319,26 @@ function buildSmcCandidatesAtIndex(
           ["FVG cùng hướng cấu trúc đang mở rộng."],
         );
         const entry = fvg.midpoint;
+        const fvgPdZone = htfContext
+          ? calculatePremiumDiscountZone(entry, htfContext.swings, htfContext.candlesLength)
+          : calculatePremiumDiscountZone(entry, swings, index);
+        const fvgPdAssessment: PremiumDiscountAssessment = fvgPdZone === null
+          ? "UNKNOWN"
+          : (dir === "LONG" && fvgPdZone.zone === "PREMIUM") || (dir === "SHORT" && fvgPdZone.zone === "DISCOUNT")
+            ? "WRONG"
+            : (dir === "LONG" && fvgPdZone.zone === "DISCOUNT") || (dir === "SHORT" && fvgPdZone.zone === "PREMIUM")
+              ? "CORRECT"
+              : "UNKNOWN";
+        const fvgRvol = calculateRvol(scopedCandles, index);
+        const fvgRejection = detectRejectionWick(scopedCandles[index], dir);
+        const factorScore = computeSetupScore({
+          setup: "SMC_FVG_CONTINUATION",
+          premiumDiscount: fvgPdAssessment,
+          session: sessionAdjusted.session ?? "OFF_HOURS",
+          rvol: fvgRvol ?? null,
+          hasRejectionWick: fvgRejection.hasRejectionWick,
+          htfBiasAligned: htfContext?.bias != null && htfContext.bias === dir,
+        });
         const atrProxy = calculateLocalAtr(scopedCandles, index);
         const gapSize = Math.max(fvg.high - fvg.low, 0);
         const stopBuffer = Math.max(atrProxy * 0.2, gapSize * 0.25, Math.abs(entry) * 0.00002, 0.0001);
@@ -321,11 +358,14 @@ function buildSmcCandidatesAtIndex(
           takeProfit2,
           {
             confidence: sessionAdjusted.confidence,
-            grade: sessionAdjusted.grade,
-            score: sessionAdjusted.score,
+            grade: gradeFromScore(factorScore),
+            score: factorScore,
             ruleTrace: sessionAdjusted.ruleTrace,
             structureEvent: structure,
             fairValueGap: fvg,
+            premiumDiscountZone: fvgPdZone ?? undefined,
+            rvol: fvgRvol ?? undefined,
+            hasRejectionWick: fvgRejection.hasRejectionWick,
             entryZone: { low: fvg.low, high: fvg.high },
             session: sessionAdjusted.session,
             sessionLabel: sessionAdjusted.sessionLabel,
@@ -399,10 +439,12 @@ export async function analyzeAllChartsSmc(
     timeframeMode?: "multi" | "single";
     primaryTimeframe?: ChartTimeframe;
     minSignalConfidence?: number;
+    minRiskPct?: number;
   } = {},
 ): Promise<AnalysisResult> {
   const timeframe = analysisTimeframe(options);
   const minSignalConfidence = options.minSignalConfidence ?? 0;
+  const minRiskPct = options.minRiskPct ?? 0;
   const summaries: PairSummary[] = [];
   const setups: TradeSetup[] = [];
   const noSetupReasons: string[] = [];
@@ -435,6 +477,17 @@ export async function analyzeAllChartsSmc(
         reason: `Setup SMC bi loai do confidence ${signals[0].confidence} < nguong ${minSignalConfidence}`,
         summaries: [buildSmcPairSummary(pair, gradeToTrend(signals[0].direction), 0, false)],
       };
+    }
+    if (minRiskPct > 0 && signals[0].entry !== 0) {
+      const riskPct = (Math.abs(signals[0].entry - signals[0].stopLoss) / Math.abs(signals[0].entry)) * 100;
+      if (riskPct < minRiskPct) {
+        return {
+          kind: "no_setup" as const,
+          pair,
+          reason: `Setup SMC bi loai do risk ${riskPct.toFixed(2)}% < nguong ${minRiskPct}% (stop qua hep, phi an het edge)`,
+          summaries: [buildSmcPairSummary(pair, gradeToTrend(signals[0].direction), 0, false)],
+        };
+      }
     }
     const confluence = await checkMultiTimeframeConfluence(symbol, signals[0].direction);
     signals[0].confluence = {

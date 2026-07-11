@@ -53,21 +53,20 @@ function Register-BotTask([string]$job, $triggers) {
 
 # === Charts ===
 
-# analyze (Volman) — UTC 00:05,04:05,...,20:05 T2-T6
-# = VN 07:05,11:05,15:05,19:05,23:05 (T2-T6) + 03:05 (T3-T7)
+# analyze (Volman) — đóng cửa nến H4 mỗi ngày từ T2 đến CN.
+# = VN 03:05,07:05,11:05,15:05,19:05,23:05
 Register-BotTask "analyze" @(
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "07:05"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "11:05"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "15:05"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "19:05"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "23:05"),
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek @("Tuesday", "Wednesday", "Thursday", "Friday", "Saturday") -At "03:05")
+    (New-ScheduledTaskTrigger -Daily -At "03:05"),
+    (New-ScheduledTaskTrigger -Daily -At "07:05"),
+    (New-ScheduledTaskTrigger -Daily -At "11:05"),
+    (New-ScheduledTaskTrigger -Daily -At "15:05"),
+    (New-ScheduledTaskTrigger -Daily -At "19:05"),
+    (New-ScheduledTaskTrigger -Daily -At "23:05")
 )
 
-# analyze-smc — mỗi 15 phút, T2-T6 theo UTC = VN từ T2 07:00 đến T7 06:45.
-# Trigger T2-T6 lúc 07:00, lặp 15 phút trong ~24h (phủ đến 06:45 sáng hôm sau).
+# analyze-smc — mỗi 15 phút, chạy từ thứ 2 đến chủ nhật, bắt đầu từ 00:00 và lặp 15 phút suốt ngày
 Register-BotTask "analyze-smc" @(
-    (Add-Repetition (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekdays -At "07:00") 15 (New-TimeSpan -Hours 23 -Minutes 59))
+    (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 15 (New-TimeSpan -Days 1))
 )
 
 # === Betting ===
@@ -77,29 +76,29 @@ Register-BotTask "fetch-matches-list" @(
     (New-ScheduledTaskTrigger -Daily -At "07:00")
 )
 
-# match-odds — 05:00 UTC = 12:00 VN hằng ngày
+# match-odds — 05:00 UTC = 20:00 VN hằng ngày
 Register-BotTask "match-odds" @(
-    (New-ScheduledTaskTrigger -Daily -At "12:00")
+    (New-ScheduledTaskTrigger -Daily -At "20:00")
 )
 
 # === Reports ===
 
 # performance-report weekly — T2 01:15 UTC = T2 08:15 VN
-Register-BotTask "performance-report-weekly" @(
-    (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At "08:15")
-)
+# Register-BotTask "performance-report-weekly" @(
+#     (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At "08:15")
+# )
 
 # performance-report monthly — ngày 1 lúc 01:20 UTC = 08:20 VN.
 # PS5.1 không tạo được trigger monthly -> trigger daily, run-job.ps1 tự guard ngày 1.
-Register-BotTask "performance-report-monthly" @(
-    (New-ScheduledTaskTrigger -Daily -At "08:20")
-)
+# Register-BotTask "performance-report-monthly" @(
+#     (New-ScheduledTaskTrigger -Daily -At "08:20")
+# )
 
 # === Lottery ===
 
 # lottery history scanner — 12:00 UTC = 19:00 VN hằng ngày
 Register-BotTask "lottery" @(
-    (New-ScheduledTaskTrigger -Daily -At "19:00")
+    (New-ScheduledTaskTrigger -Daily -At "18:50")
 )
 
 # lottery-predict — 09:45/10:45/11:45 UTC = 16:45/17:45/18:45 VN
@@ -114,7 +113,7 @@ Register-BotTask "lottery-verify-mien-bac"    @((New-ScheduledTaskTrigger -Daily
 
 # === Auto-update ===
 
-# Tự pull code mới mỗi đêm lúc 02:00 VN (giờ có ít job trùng lịch nhất).
+# Tự pull code mới mỗi 15 phút.
 # Chỉ git pull + (nếu package-lock.json đổi) npm ci — xem auto-update.ps1.
 $autoUpdate = (Resolve-Path (Join-Path $PSScriptRoot "auto-update.ps1")).Path
 $autoUpdateAction = New-ScheduledTaskAction `
@@ -124,7 +123,7 @@ Register-ScheduledTask `
     -TaskName "auto-update" `
     -TaskPath $taskPath `
     -Action $autoUpdateAction `
-    -Trigger (New-ScheduledTaskTrigger -Daily -At "02:00") `
+    -Trigger (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 15 (New-TimeSpan -Days 1)) `
     -Settings $settings `
     -Principal $principal `
     -Force | Out-Null

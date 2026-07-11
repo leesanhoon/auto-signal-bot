@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   calculateRvol: vi.fn(),
   getConfiguredSmcSignalFreshnessCandles: vi.fn(() => 1),
   getConfiguredSmcMinSignalConfidence: vi.fn(() => 0),
+  getConfiguredSmcMinRiskPct: vi.fn(() => 0),
   checkMultiTimeframeConfluence: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ vi.mock("../../../src/charts/ohlc-provider.js", () => ({
 vi.mock("../../../src/charts/smc-config-env.js", () => ({
   getConfiguredSmcSignalFreshnessCandles: mocks.getConfiguredSmcSignalFreshnessCandles,
   getConfiguredSmcMinSignalConfidence: mocks.getConfiguredSmcMinSignalConfidence,
+  getConfiguredSmcMinRiskPct: mocks.getConfiguredSmcMinRiskPct,
 }));
 
 vi.mock("../../../src/charts/smc/smc-structure.js", async () => {
@@ -264,10 +266,11 @@ describe("analyzeAllChartsSmc", () => {
     const signals = analyzeSmcSignalsAtIndex(candles, "XAUTUSDT", "M15", 4);
     const fvgSignal = signals.find((signal) => signal.setup === "SMC_FVG_CONTINUATION");
 
+    // Score mới (factor-based): base 40 + FVG 8 + P/D UNKNOWN 5 + overlap session 10 = 63
     expect(fvgSignal).toMatchObject({
       confidence: 74,
       grade: "B",
-      score: 74,
+      score: 63,
       direction: "LONG",
       structureEvent: {
         direction: "LONG",
@@ -383,10 +386,11 @@ describe("analyzeAllChartsSmc", () => {
     const signals = analyzeSmcSignalsAtIndex(candles, "XAUTUSDT", "M15", 6);
     const obSignal = signals.find((signal) => signal.setup === "SMC_BOS_OB");
 
+    // Score mới: base 40 + BOS 15 + P/D WRONG (-10) + overlap session 10 = 55
     expect(obSignal).toMatchObject({
       confidence: 65,
-      grade: gradeFromScore(65),
-      score: 65,
+      grade: gradeFromScore(55),
+      score: 55,
       premiumDiscountZone: {
         zone: "PREMIUM",
         percentInRange: 65,
@@ -461,10 +465,11 @@ describe("analyzeAllChartsSmc", () => {
     const signals = analyzeSmcSignalsAtIndex(candles, "XAUTUSDT", "M15", 6);
     const obSignal = signals.find((signal) => signal.setup === "SMC_BOS_OB");
 
+    // Score mới: base 40 + BOS 15 + EQUILIBRIUM là trung tính (UNKNOWN, +5) + overlap session 10 = 70
     expect(obSignal).toMatchObject({
       confidence: 80,
-      grade: "A",
-      score: 80,
+      grade: "B",
+      score: 70,
       premiumDiscountZone: {
         zone: "EQUILIBRIUM",
         percentInRange: 50,
@@ -915,9 +920,10 @@ test("HTF context with wide dealing range results in EQUILIBRIUM zone (vs PREMIU
 
     expect(chochSignal).toBeDefined();
     expect(chochSignal?.setup).toBe("SMC_CHOCH_OB");
+    // Score mới: base 40 + CHOCH 8 + P/D UNKNOWN 5 + overlap session 10 = 63
     expect(chochSignal?.confidence).toBe(72);
-    expect(chochSignal?.grade).toBe(gradeFromScore(72));
-    expect(chochSignal?.score).toBe(72);
+    expect(chochSignal?.grade).toBe(gradeFromScore(63));
+    expect(chochSignal?.score).toBe(63);
     expect(chochSignal?.structureEvent?.kind).toBe("CHOCH");
     expect(chochSignal?.structureEvent?.direction).toBe("SHORT");
     expect(chochSignal?.structureEvent?.previousBias).toBe("LONG");
@@ -946,9 +952,10 @@ test("HTF context with wide dealing range results in EQUILIBRIUM zone (vs PREMIU
 
     expect(bosSignal).toBeDefined();
     expect(bosSignal?.setup).toBe("SMC_BOS_OB");
+    // Score mới: base 40 + BOS 15 + P/D UNKNOWN 5 + overlap session 10 = 70
     expect(bosSignal?.confidence).toBe(80);
-    expect(bosSignal?.grade).toBe("A");
-    expect(bosSignal?.score).toBe(80);
+    expect(bosSignal?.grade).toBe("B");
+    expect(bosSignal?.score).toBe(70);
     expect(bosSignal?.structureEvent?.kind).toBe("BOS");
     expect(bosSignal?.structureEvent?.direction).toBe("LONG");
     expect(bosSignal?.structureEvent?.previousBias).toBe("LONG");
@@ -1258,6 +1265,52 @@ describe("analyzeAllChartsSmc with minimum confidence threshold", () => {
     });
     expect(result.setups).toHaveLength(0);
     expect(result.noSetupReason).toMatch(/confidence \d+ < nguong 100/);
+  });
+
+  test("filters out signal with risk below minRiskPct threshold (stop too tight)", async () => {
+    mocks.detectFairValueGap.mockReturnValue(null);
+    mocks.detectStructureBreak.mockReturnValue({
+      kind: "BOS",
+      direction: "LONG",
+      breakIndex: 6,
+      level: 1000,
+    });
+    mocks.findRecentOrderBlock.mockReturnValue({
+      direction: "LONG",
+      startIndex: 4,
+      endIndex: 4,
+      high: 1000.5,
+      low: 999.5,
+      midpoint: 1000,
+    });
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }], {
+      minRiskPct: 0.5,
+    });
+    expect(result.setups).toHaveLength(0);
+    expect(result.noSetupReason).toContain("bi loai do risk");
+    expect(result.noSetupReason).toContain("< nguong 0.5%");
+  });
+
+  test("includes signal when risk is above minRiskPct threshold", async () => {
+    mocks.detectFairValueGap.mockReturnValue(null);
+    mocks.detectStructureBreak.mockReturnValue({
+      kind: "BOS",
+      direction: "LONG",
+      breakIndex: 6,
+      level: 105,
+    });
+    mocks.findRecentOrderBlock.mockReturnValue({
+      direction: "LONG",
+      startIndex: 4,
+      endIndex: 4,
+      high: 106,
+      low: 96,
+      midpoint: 101,
+    });
+    const result = await analyzeAllChartsSmc([{ pair: "XAUTUSDT", symbol: "OANDA:XAUUSD" }], {
+      minRiskPct: 0.5,
+    });
+    expect(result.setups.length).toBeGreaterThanOrEqual(1);
   });
 });
 

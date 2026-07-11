@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   getConfiguredChartPrimaryTimeframe: vi.fn(),
   getConfiguredSmcSignalFreshnessCandles: vi.fn(() => 1),
   getConfiguredSmcMinSignalConfidence: vi.fn(() => 65),
+  getConfiguredSmcMinRiskPct: vi.fn(() => 0.5),
   shouldUseLatestCacheForManualRun: vi.fn(),
   shouldSendHeartbeatOutsideCloseWindow: vi.fn(),
   shouldSendHeartbeatOnManualRun: vi.fn(),
@@ -120,6 +121,7 @@ vi.mock("../../src/charts/smc-config-env.js", () => ({
     mocks.getConfiguredSmcSignalFreshnessCandles,
   getConfiguredSmcMinSignalConfidence:
     mocks.getConfiguredSmcMinSignalConfidence,
+  getConfiguredSmcMinRiskPct: mocks.getConfiguredSmcMinRiskPct,
   shouldUseLatestCacheForManualRun: mocks.shouldUseLatestCacheForManualRun,
   shouldSendHeartbeatOutsideCloseWindow:
     mocks.shouldSendHeartbeatOutsideCloseWindow,
@@ -261,6 +263,7 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
       timeframeMode: "multi",
       primaryTimeframe: "M15",
       minSignalConfidence: expect.any(Number),
+      minRiskPct: expect.any(Number),
     });
   });
 
