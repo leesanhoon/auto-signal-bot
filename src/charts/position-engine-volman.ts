@@ -280,7 +280,6 @@ export function buildOpenPositionInsertRow(
     take_profit_1: setup.takeProfit1,
     take_profit_2: setup.takeProfit2,
     reasons: setup.reasons,
-    system: "volman",
     status: "open",
     trade_stage: "open",
     tp1_close_percent: validation.plan.partialClosePercent,
