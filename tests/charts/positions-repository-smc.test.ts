@@ -314,6 +314,111 @@ describe("charts/positions-repository-smc", () => {
       }),
     );
   });
+
+  test("saveBinanceExecutionDetails updates the correct binance_* columns", async () => {
+    repoState.updateResult = { error: null };
+
+    await positionsRepository.saveBinanceExecutionDetails(42, {
+      binanceSymbol: "BTCUSDT",
+      binanceLeverage: 5,
+      binanceQuantity: 0.01,
+      binanceEntryOrderId: 111,
+      binanceSlOrderId: 222,
+      binanceTp1OrderId: 333,
+      binanceTp2OrderId: 444,
+      binanceExecutionStatus: "placed",
+    });
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_smc");
+    expect(repoState.from().update).toHaveBeenCalledWith({
+      binance_symbol: "BTCUSDT",
+      binance_leverage: 5,
+      binance_quantity: 0.01,
+      binance_entry_order_id: 111,
+      binance_sl_order_id: 222,
+      binance_tp1_order_id: 333,
+      binance_tp2_order_id: 444,
+      binance_execution_status: "placed",
+    });
+  });
+
+  test("saveBinanceExecutionDetails throws when update fails", async () => {
+    repoState.chainResult = { data: null, error: { message: "db down" } };
+
+    await expect(
+      positionsRepository.saveBinanceExecutionDetails(42, {
+        binanceSymbol: "BTCUSDT",
+        binanceLeverage: 5,
+        binanceQuantity: 0.01,
+        binanceEntryOrderId: 111,
+        binanceSlOrderId: null,
+        binanceTp1OrderId: null,
+        binanceTp2OrderId: null,
+        binanceExecutionStatus: "failed",
+      }),
+    ).rejects.toThrow("saveBinanceExecutionDetails failed");
+  });
+
+  test("loadOpenPositions maps binance_* columns onto OpenPosition", async () => {
+    repoState.chainResult = {
+      data: [
+        {
+          id: 1,
+          pair: "BTC/USDT",
+          direction: "LONG",
+          setup: "RB",
+          entry: "50000",
+          stop_loss: "49000",
+          take_profit_1: "51000",
+          take_profit_2: "52000",
+          reasons: ["test"],
+          opened_at: "2026-01-01T00:00:00Z",
+          status: "open",
+          last_decision: null,
+          last_decision_confidence: null,
+          last_decision_comment: null,
+          last_checked_at: null,
+          closed_at: null,
+          trade_stage: "open",
+          tp1_close_percent: 50,
+          tp1_closed_percent: null,
+          tp1_closed_at: null,
+          trailing_stop_loss: null,
+          trailing_started_at: null,
+          risk_reward_ratio: 3,
+          tp1_risk_reward_ratio: 2,
+          tp2_risk_reward_ratio: 3,
+          min_risk_reward_ratio: 1.5,
+          last_management_action: null,
+          last_management_comment: null,
+          last_management_at: null,
+          close_reason: null,
+          realized_risk_reward_ratio: null,
+          realized_exit_price: null,
+          binance_symbol: "BTCUSDT",
+          binance_leverage: 5,
+          binance_quantity: 0.01,
+          binance_entry_order_id: 111,
+          binance_sl_order_id: 222,
+          binance_tp1_order_id: 333,
+          binance_tp2_order_id: 444,
+          binance_execution_status: "placed",
+        },
+      ],
+      error: null,
+    };
+
+    const positions = await positionsRepository.loadOpenPositions();
+
+    expect(positions[0].binanceSymbol).toBe("BTCUSDT");
+    expect(positions[0].binanceLeverage).toBe(5);
+    expect(positions[0].binanceQuantity).toBe(0.01);
+    expect(positions[0].binanceEntryOrderId).toBe(111);
+    expect(positions[0].binanceSlOrderId).toBe(222);
+    expect(positions[0].binanceTp1OrderId).toBe(333);
+    expect(positions[0].binanceTp2OrderId).toBe(444);
+    expect(positions[0].binanceExecutionStatus).toBe("placed");
+  });
 });
 
 describe("savePendingOrder", () => {

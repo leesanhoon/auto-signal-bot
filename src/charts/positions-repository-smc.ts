@@ -46,6 +46,14 @@ export type OpenPosition = {
   closeReason: "stop_loss" | "take_profit_2" | "manual_close" | null;
   realizedRiskRewardRatio: number | null;
   realizedExitPrice: string | null;
+  binanceSymbol: string | null;
+  binanceLeverage: number | null;
+  binanceQuantity: number | null;
+  binanceEntryOrderId: number | null;
+  binanceSlOrderId: number | null;
+  binanceTp1OrderId: number | null;
+  binanceTp2OrderId: number | null;
+  binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed" | null;
 };
 
 export type PendingOrderUpdate = {
@@ -212,7 +220,7 @@ export async function findOpenPositionIdByPair(pair: string): Promise<number | n
 export async function loadOpenPositions(): Promise<OpenPosition[]> {
   const { data, error } = await (getDb().from("open_positions_smc") as any)
     .select(
-      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price",
+      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_tp2_order_id, binance_execution_status",
     )
     .eq("status", "open")
     .order("opened_at", { ascending: true });
@@ -252,6 +260,14 @@ export async function loadOpenPositions(): Promise<OpenPosition[]> {
       close_reason?: "stop_loss" | "take_profit_2" | "manual_close" | null;
       realized_risk_reward_ratio?: number | null;
       realized_exit_price?: string | null;
+      binance_symbol: string | null;
+      binance_leverage: number | null;
+      binance_quantity: number | null;
+      binance_entry_order_id: number | null;
+      binance_sl_order_id: number | null;
+      binance_tp1_order_id: number | null;
+      binance_tp2_order_id: number | null;
+      binance_execution_status: "pending" | "placed" | "failed" | "close_failed" | null;
     }>
   ).map((row) => ({
     id: row.id,
@@ -286,6 +302,14 @@ export async function loadOpenPositions(): Promise<OpenPosition[]> {
     closeReason: row.close_reason ?? null,
     realizedRiskRewardRatio: row.realized_risk_reward_ratio ?? null,
     realizedExitPrice: row.realized_exit_price ?? null,
+    binanceSymbol: row.binance_symbol ?? null,
+    binanceLeverage: row.binance_leverage ?? null,
+    binanceQuantity: row.binance_quantity ?? null,
+    binanceEntryOrderId: row.binance_entry_order_id ?? null,
+    binanceSlOrderId: row.binance_sl_order_id ?? null,
+    binanceTp1OrderId: row.binance_tp1_order_id ?? null,
+    binanceTp2OrderId: row.binance_tp2_order_id ?? null,
+    binanceExecutionStatus: row.binance_execution_status ?? null,
   }));
 }
 
@@ -433,4 +457,50 @@ export async function closePosition(
     .eq("id", position.id);
 
   if (error) throw new Error(`closePosition failed: ${error.message}`);
+}
+
+export type BinanceExecutionDetails = {
+  binanceSymbol: string;
+  binanceLeverage: number;
+  binanceQuantity: number;
+  binanceEntryOrderId: number;
+  binanceSlOrderId: number | null;
+  binanceTp1OrderId: number | null;
+  binanceTp2OrderId: number | null;
+  binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed";
+};
+
+export async function saveBinanceExecutionDetails(
+  positionId: number,
+  details: BinanceExecutionDetails,
+): Promise<void> {
+  const { error } = await (getDb().from("open_positions_smc") as any)
+    .update({
+      binance_symbol: details.binanceSymbol,
+      binance_leverage: details.binanceLeverage,
+      binance_quantity: details.binanceQuantity,
+      binance_entry_order_id: details.binanceEntryOrderId,
+      binance_sl_order_id: details.binanceSlOrderId,
+      binance_tp1_order_id: details.binanceTp1OrderId,
+      binance_tp2_order_id: details.binanceTp2OrderId,
+      binance_execution_status: details.binanceExecutionStatus,
+    })
+    .eq("id", positionId);
+
+  if (error) throw new Error(`saveBinanceExecutionDetails failed: ${error.message}`);
+}
+
+export async function updateBinanceSlOrder(
+  positionId: number,
+  newSlOrderId: number,
+  newStopLoss: string,
+): Promise<void> {
+  const { error } = await (getDb().from("open_positions_smc") as any)
+    .update({
+      binance_sl_order_id: newSlOrderId,
+      stop_loss: newStopLoss,
+    })
+    .eq("id", positionId);
+
+  if (error) throw new Error(`updateBinanceSlOrder failed: ${error.message}`);
 }

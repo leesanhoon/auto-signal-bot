@@ -52,3 +52,7 @@ export function getConfiguredBinanceApiKey(): string | undefined {
 export function getConfiguredBinanceApiSecret(): string | undefined {
   return process.env.BINANCE_API_SECRET?.trim();
 }
+
+export function isBinanceLiveTradingEnabledSmc(): boolean {
+  return readBooleanEnv("BINANCE_LIVE_TRADING_ENABLED_SMC", false);
+}

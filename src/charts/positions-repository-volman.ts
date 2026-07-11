@@ -53,7 +53,7 @@ export type OpenPosition = {
   binanceSlOrderId: number | null;
   binanceTp1OrderId: number | null;
   binanceTp2OrderId: number | null;
-  binanceExecutionStatus: "pending" | "placed" | "failed" | null;
+  binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed" | null;
 };
 
 export type PendingOrderUpdate = {
@@ -267,7 +267,7 @@ export async function loadOpenPositions(): Promise<OpenPosition[]> {
       binance_sl_order_id: number | null;
       binance_tp1_order_id: number | null;
       binance_tp2_order_id: number | null;
-      binance_execution_status: "pending" | "placed" | "failed" | null;
+      binance_execution_status: "pending" | "placed" | "failed" | "close_failed" | null;
     }>
   ).map((row) => ({
     id: row.id,
@@ -467,7 +467,7 @@ export type BinanceExecutionDetails = {
   binanceSlOrderId: number | null;
   binanceTp1OrderId: number | null;
   binanceTp2OrderId: number | null;
-  binanceExecutionStatus: "pending" | "placed" | "failed";
+  binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed";
 };
 
 export async function saveBinanceExecutionDetails(

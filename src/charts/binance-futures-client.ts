@@ -31,7 +31,13 @@ export type BinanceOrderResult = {
 // Goi qua /fapi/v1/order cu se bi tu choi voi loi -4120 "Order type not supported for
 // this endpoint. Please use the Algo Order API endpoints instead."
 // Tap hop cac trang thai "da kich hoat" cua algo order — tuong duong FILLED cua order thuong.
-const ALGO_TRIGGERED_STATUSES = new Set(["TRIGGERED"]);
+// Verify thuc te tren testnet 2026-07-11: mot TAKE_PROFIT_MARKET algo order da khop that
+// (positionAmt giam dung bang quantity dat) tra ve algoStatus "FINISHED", KHONG PHAI
+// "TRIGGERED" — ban goc chi co "TRIGGERED" nen reconcileBinancePosition/reconcileBinancePosition
+// (Volman) khong bao gio phat hien duoc fill that, vi the treo o HOLD vinh vien du da
+// khop that tren san. Da verify rieng: lenh bi CANCEL tra ve "CANCELED" (khac han
+// "FINISHED"), khong co rui ro nham lenh huy thanh lenh khop.
+const ALGO_TRIGGERED_STATUSES = new Set(["TRIGGERED", "FINISHED"]);
 
 function buildQueryString(
   params: Record<string, string | number | boolean>,

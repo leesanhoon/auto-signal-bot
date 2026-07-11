@@ -1,5 +1,5 @@
 import "../shared/env.js";
-import { saveOpenPosition /*, savePendingOrder */ } from "./positions-repository-smc.js";
+import { saveOpenPosition, findOpenPositionIdByPair /*, savePendingOrder */ } from "./positions-repository-smc.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner-smc.js";
 // import { runCheckPendingOrders } from "./check-pending-orders-runner.js"; // DISABLED: signals-only mode, xem tasks/disable-pending-orders/plan.md
 import { sendMessage, notifyError } from "../shared/telegram-client.js";
@@ -26,6 +26,8 @@ import {
 } from "./chart-cache-repository-smc.js";
 import { analyzeAllChartsSmc } from "./smc/smc-pipeline.js";
 import { CHARTS, getChartsForTimeframeMode } from "./smc-charts.config.js";
+import { openBinanceFuturesPosition } from "./binance-execution-smc.js";
+import { isBinanceLiveTradingEnabled, isBinanceLiveTradingEnabledSmc } from "./binance-futures-config-env.js";
 import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
 const logger = createLogger("charts:smc-index");
@@ -156,6 +158,15 @@ async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrig
         if (saved) {
           setup.autoTracked = true;
           logger.info("Auto-saved open position", { pair: setup.pair });
+          if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledSmc()) {
+            const chartSymbol = symbolByPair.get(setup.pair);
+            if (chartSymbol) {
+              const positionId = await findOpenPositionIdByPair(setup.pair);
+              if (positionId !== null) {
+                await openBinanceFuturesPosition(setup, positionId, chartSymbol);
+              }
+            }
+          }
         } else {
           logger.info("Skipped duplicate open position", { pair: setup.pair });
         }
