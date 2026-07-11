@@ -17,6 +17,7 @@
     "performance-report:smc": "tsx src/charts/performance-report-runner-smc.ts",
     "test-analyze": "tsx src/charts/test-analyze.ts",
     "backtest:setups": "tsx src/charts/setup-backtest-runner.ts",
+    "backtest:compare": "tsx src/charts/setup-backtest-compare-runner.ts",
     "backtest:smc": "tsx src/charts/smc-backtest-runner.ts",
     "preflight:fetch": "tsx src/scripts/preflight-fetch.ts",
     "setup:telegram-menu": "tsx src/scripts/setup-telegram-menu-v2.ts",

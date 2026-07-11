@@ -1,25 +1,11 @@
-# Task 03: Tính khối lượng lệnh (position sizing) theo risk 1% + rounding helpers
-
-## Bối cảnh
-
-Mỗi lệnh Binance Futures phải size theo **1% rủi ro tài khoản** (`getConfiguredBinanceRiskPercentPerTrade()` từ task 01, mặc định 1): `risk_usdt = balance * risk% / 100`, `quantity = risk_usdt / |entry - stopLoss|`, sau đó làm tròn xuống theo `stepSize` của symbol (từ `getExchangeInfoFilters()` — task 01) và kiểm tra `minQty`/`minNotional`.
-
-Ngoài ra file này chứa 2 helper thuần mà task 04 bắt buộc phải dùng:
-- `roundToTickSize(price, tickSize)` — **mọi giá `stopPrice` gửi lên Binance (SL/TP1/TP2) phải làm tròn theo `tickSize`**, nếu không Binance từ chối với lỗi -1111/-4014 (price precision). Giá SL/TP từ Volman engine có số thập phân tùy ý, KHÔNG được gửi thẳng.
-- `splitTpQuantities(totalQuantity, partialClosePercent, stepSize)` — chia khối lượng TP1/TP2, **mỗi phần phải khớp `stepSize`** (nếu không sẽ lỗi LOT_SIZE), phần dư sau làm tròn dồn hết về TP2 để tổng luôn bằng `totalQuantity`.
-
-**Phụ thuộc:** task 01 phải xong trước (cần export `BinanceSymbolFilters` type từ `src/charts/binance-futures-client.ts`).
-
-## Việc cần làm
-
-Tạo file `src/charts/binance-position-sizing.ts`:
-
-```ts
 import type { BinanceSymbolFilters } from "./binance-futures-client.js";
 
 export type PositionSizingInput = {
   balanceUsdt: number;
   riskPercent: number;
+  // Neu co gia tri, dung so USDT co dinh nay lam risk moi lenh thay vi tinh
+  // theo riskPercent * balanceUsdt (phu hop von nho, risk khong doi theo balance).
+  riskUsdt?: number;
   entry: number;
   stopLoss: number;
   leverage: number;
@@ -72,12 +58,12 @@ export function splitTpQuantities(
 export function computeOrderQuantity(
   input: PositionSizingInput,
 ): PositionSizingResult | Error {
-  const { balanceUsdt, riskPercent, entry, stopLoss, leverage, filters } = input;
+  const { balanceUsdt, riskPercent, riskUsdt: fixedRiskUsdt, entry, stopLoss, leverage, filters } = input;
 
   if (!(balanceUsdt > 0)) {
     return new Error("Balance USDT khong hop le (<= 0)");
   }
-  if (!(riskPercent > 0)) {
+  if (fixedRiskUsdt === undefined && !(riskPercent > 0)) {
     return new Error("Risk percent khong hop le (<= 0)");
   }
   if (!Number.isFinite(entry) || !Number.isFinite(stopLoss)) {
@@ -89,7 +75,8 @@ export function computeOrderQuantity(
     return new Error("Khoang cach entry-stopLoss bang 0, khong the tinh size");
   }
 
-  const riskUsdt = (balanceUsdt * riskPercent) / 100;
+  const riskUsdt =
+    fixedRiskUsdt !== undefined ? fixedRiskUsdt : (balanceUsdt * riskPercent) / 100;
   const rawQuantity = riskUsdt / riskDistance;
   const quantity = roundDownToStep(rawQuantity, filters.stepSize);
 
@@ -115,26 +102,3 @@ export function computeOrderQuantity(
 
   return { quantity, notional, marginRequired };
 }
-```
-
-## Ràng buộc
-
-- Đây là hàm THUẦN (pure function) — không gọi network, không import DB/logger/Binance client thật ngoại trừ type `BinanceSymbolFilters`.
-- KHÔNG sửa file nào khác ngoài tạo file mới này.
-- Không throw — mọi lỗi trả về qua `Error` object, đúng convention repo.
-
-## Cách verify
-
-```bash
-npm run build
-```
-
-## Output
-
-Ghi vào `tasks/binance-futures-execution/03-position-sizing/result.md`:
-- Đường dẫn file đã tạo
-- Kết quả `npm run build`
-- Tự tính tay 1 ví dụ minh hoạ (vd balance=1000, risk=1%, entry=100, stopLoss=98, leverage=5, stepSize=0.001, minQty=0.001, minNotional=5) và ghi ra kết quả mong đợi để dễ review.
-- Tự tính tay 1 ví dụ cho `roundToTickSize` (vd price=64123.4567, tickSize=0.1 → 64123.5) và 1 ví dụ cho `splitTpQuantities` (vd total=0.007, percent=50, stepSize=0.001 → tp1=0.003, tp2=0.004).
-
-Nếu bị chặn (ví dụ task 01 chưa có `BinanceSymbolFilters` export đúng tên) → ghi `blocked.md`.

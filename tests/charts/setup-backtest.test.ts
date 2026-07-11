@@ -144,3 +144,279 @@ describe("runSetupBacktest", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// runSetupBacktest — pending fill mode
+// ---------------------------------------------------------------------------
+
+describe("runSetupBacktest — pending fill mode", () => {
+  test("immediate mode unchanged when fillMode not specified", () => {
+    const candles = [
+      ...buildImmediateRbCandles(),
+      ...Array.from({ length: 5 }, (_, i) => ({
+        time: 1700000000000 + (32 + i) * 3600000,
+        open: 100.5,
+        high: 101.0,
+        low: 99.9,
+        close: 100.0,
+        volume: 100,
+      })),
+    ];
+
+    // Run without explicit fillMode (default "immediate")
+    const reportDefault = runSetupBacktest(candles, "EUR/USD", "H4");
+
+    // Run with explicit fillMode="immediate"
+    const reportExplicit = runSetupBacktest(
+      candles,
+      "EUR/USD",
+      "H4",
+      "fixed",
+      0,
+      3,
+      "immediate",
+    );
+
+    // Both should be identical (including trades array structure)
+    expect(reportDefault.overall.trades).toBe(reportExplicit.overall.trades);
+    expect(reportDefault.trades.length).toBe(reportExplicit.trades.length);
+
+    if (reportDefault.trades.length > 0) {
+      for (let i = 0; i < reportDefault.trades.length; i++) {
+        expect(reportDefault.trades[i].entryIndex).toBe(
+          reportExplicit.trades[i].entryIndex,
+        );
+        expect(reportDefault.trades[i].entryPrice).toBe(
+          reportExplicit.trades[i].entryPrice,
+        );
+        expect(reportDefault.trades[i].exitIndex).toBe(
+          reportExplicit.trades[i].exitIndex,
+        );
+        expect(reportDefault.trades[i].outcome).toBe(
+          reportExplicit.trades[i].outcome,
+        );
+      }
+    }
+  });
+
+  test("pending mode fills only when price touches entry on bar after trigger", () => {
+    // Start with base RB setup (trigger at index 31)
+    const baseCandles = buildImmediateRbCandles();
+
+    // Add candles after trigger:
+    // Create a sequence where entry is not touched for multiple bars, then is touched
+    const candles = [
+      ...baseCandles,
+      {
+        time: 1700000000000 + 32 * 3600000,
+        open: 100.3,
+        high: 100.5, // Staying low to avoid entry trigger
+        low: 99.9,
+        close: 100.2,
+        volume: 100,
+      },
+      {
+        time: 1700000000000 + 33 * 3600000,
+        open: 100.4,
+        high: 100.6, // Still not quite at entry
+        low: 99.95,
+        close: 100.3,
+        volume: 100,
+      },
+      {
+        time: 1700000000000 + 34 * 3600000,
+        open: 100.5,
+        high: 101.4, // Now touches entry level
+        low: 100.2,
+        close: 101.0,
+        volume: 100,
+      },
+      ...Array.from({ length: 5 }, (_, i) => ({
+        time: 1700000000000 + (35 + i) * 3600000,
+        open: 101.0,
+        high: 101.5,
+        low: 100.5,
+        close: 101.0,
+        volume: 100,
+      })),
+    ];
+
+    const report = runSetupBacktest(
+      candles,
+      "EUR/USD",
+      "H4",
+      "fixed",
+      0,
+      3,
+      "pending",
+      10,
+    );
+
+    // Should have exactly 1 trade from pending fill
+    expect(report.trades.length).toBe(1);
+    const trade = report.trades[0];
+
+    // Entry index should be AFTER triggerIndex (31), showing deferred fill
+    expect(trade.entryIndex).toBeGreaterThan(31);
+
+    // Entry index should NOT be the trigger itself (showing it's pending, not immediate)
+    expect(trade.entryIndex).not.toBe(31);
+
+    // Pending stats: should show fill and one signal seen
+    expect(report.pendingStats).toBeDefined();
+    expect(report.pendingStats!.signalsSeen).toBe(1);
+    expect(report.pendingStats!.filled).toBe(1);
+    expect(report.pendingStats!.cancelledBeforeFill).toBe(0);
+    expect(report.pendingStats!.expired).toBe(0);
+  });
+
+  test("pending mode invalidates when SL touches before entry", () => {
+    const baseCandles = buildImmediateRbCandles();
+
+    // Assume RB has entry ~101.1 and stopLoss ~99.1
+    // Add candle after trigger with low <= stopLoss
+    const candles = [
+      ...baseCandles,
+      {
+        time: 1700000000000 + 32 * 3600000,
+        open: 100.5,
+        high: 101.0,
+        low: 99.0, // Touches/crosses stopLoss (~99.1)
+        close: 99.5,
+        volume: 100,
+      },
+      ...Array.from({ length: 5 }, (_, i) => ({
+        time: 1700000000000 + (33 + i) * 3600000,
+        open: 100.0,
+        high: 101.0,
+        low: 99.0,
+        close: 100.0,
+        volume: 100,
+      })),
+    ];
+
+    const report = runSetupBacktest(
+      candles,
+      "EUR/USD",
+      "H4",
+      "fixed",
+      0,
+      3,
+      "pending",
+      5,
+    );
+
+    // No trades should be created
+    expect(report.trades).toHaveLength(0);
+
+    // Pending stats: order was seen but cancelled before fill
+    expect(report.pendingStats).toBeDefined();
+    expect(report.pendingStats!.signalsSeen).toBe(1);
+    expect(report.pendingStats!.filled).toBe(0);
+    expect(report.pendingStats!.cancelledBeforeFill).toBe(1);
+    expect(report.pendingStats!.expired).toBe(0);
+  });
+
+  test("pending mode expires after pendingExpiryBars without fill or cancel", () => {
+    const baseCandles = buildImmediateRbCandles();
+
+    // Add candles that don't touch entry or SL
+    // With pendingExpiryBars=2, expires after 2 bars from orderStartIndex (index 32)
+    // Deadline is index 31 + 2 = 33, so it should expire when we reach index 33
+    const candles = [
+      ...baseCandles,
+      {
+        time: 1700000000000 + 32 * 3600000,
+        open: 100.5,
+        high: 101.0,
+        low: 99.9, // Doesn't touch entry (~101.1) or SL (~99.1)
+        close: 100.0,
+        volume: 100,
+      },
+      {
+        time: 1700000000000 + 33 * 3600000,
+        open: 100.5,
+        high: 101.0,
+        low: 99.95, // Still doesn't touch either level
+        close: 100.0,
+        volume: 100,
+      },
+      ...Array.from({ length: 3 }, (_, i) => ({
+        time: 1700000000000 + (34 + i) * 3600000,
+        open: 100.5,
+        high: 101.0,
+        low: 99.9,
+        close: 100.0,
+        volume: 100,
+      })),
+    ];
+
+    const report = runSetupBacktest(
+      candles,
+      "EUR/USD",
+      "H4",
+      "fixed",
+      0,
+      3,
+      "pending",
+      2, // pendingExpiryBars = 2
+    );
+
+    // No trades (order expired without fill)
+    expect(report.trades).toHaveLength(0);
+
+    // Pending stats
+    expect(report.pendingStats).toBeDefined();
+    expect(report.pendingStats!.signalsSeen).toBe(1);
+    expect(report.pendingStats!.filled).toBe(0);
+    expect(report.pendingStats!.cancelledBeforeFill).toBe(0);
+    expect(report.pendingStats!.expired).toBe(1);
+  });
+
+  test("pending mode prioritizes invalidation over fill when SL and entry touched same candle", () => {
+    const baseCandles = buildImmediateRbCandles();
+
+    // Add one candle with both high >= entry AND low <= stopLoss
+    // Assume entry ~101.1, stopLoss ~99.1
+    const candles = [
+      ...baseCandles,
+      {
+        time: 1700000000000 + 32 * 3600000,
+        open: 100.0,
+        high: 101.3, // Touches entry
+        low: 99.0, // Touches stopLoss (crosses it)
+        close: 100.5,
+        volume: 100,
+      },
+      ...Array.from({ length: 5 }, (_, i) => ({
+        time: 1700000000000 + (33 + i) * 3600000,
+        open: 100.0,
+        high: 101.0,
+        low: 99.0,
+        close: 100.0,
+        volume: 100,
+      })),
+    ];
+
+    const report = runSetupBacktest(
+      candles,
+      "EUR/USD",
+      "H4",
+      "fixed",
+      0,
+      3,
+      "pending",
+      5,
+    );
+
+    // No trades (invalidation takes priority)
+    expect(report.trades).toHaveLength(0);
+
+    // Pending stats: cancelled, not filled
+    expect(report.pendingStats).toBeDefined();
+    expect(report.pendingStats!.signalsSeen).toBe(1);
+    expect(report.pendingStats!.filled).toBe(0);
+    expect(report.pendingStats!.cancelledBeforeFill).toBe(1);
+    expect(report.pendingStats!.expired).toBe(0);
+  });
+});

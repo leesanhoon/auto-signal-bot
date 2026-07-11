@@ -5,7 +5,7 @@ import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { runSetupBacktest } from "./setup-backtest.js";
 import type { Candle } from "./ohlc-provider.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
-import type { ExitMode } from "./setup-backtest.js";
+import type { ExitMode, FillMode } from "./setup-backtest.js";
 
 const logger = createLogger("charts:setup-backtest");
 const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H4", "D1"];
@@ -27,6 +27,17 @@ function parseSwingLookback(value: string | undefined): number {
   if (value === undefined || value.trim() === "") return 3;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1 ? parsed : 3;
+}
+
+function parseFillMode(value: string | undefined): FillMode {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "pending" ? "pending" : "immediate";
+}
+
+function parsePendingExpiryBars(value: string | undefined): number {
+  if (value === undefined || value.trim() === "") return 2;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 2;
 }
 
 function parseBacktestTimeframe(value: string | undefined): ChartTimeframe {
@@ -70,12 +81,15 @@ async function main(): Promise<void> {
   const exitMode = parseExitMode(process.env.BACKTEST_EXIT_MODE);
   const trailBufferR = parseTrailBufferR(process.env.BACKTEST_TRAIL_BUFFER_R);
   const swingLookback = parseSwingLookback(process.env.BACKTEST_SWING_LOOKBACK);
+  const fillMode = parseFillMode(process.env.BACKTEST_FILL_MODE);
+  const pendingExpiryBars = parsePendingExpiryBars(process.env.BACKTEST_PENDING_EXPIRY_BARS);
   const startingCapital = parsePositiveNumber(process.env.BACKTEST_CAPITAL, 10000);
   const riskPerTrade = parsePositiveNumber(process.env.BACKTEST_RISK_PER_TRADE, 50);
   logger.info(
     `Exit mode: ${exitMode}` +
       (exitMode === "trailing" ? `, buffer=${trailBufferR}R` : "") +
-      (exitMode === "swing_trail" ? `, lookback=${swingLookback}` : ""),
+      (exitMode === "swing_trail" ? `, lookback=${swingLookback}` : "") +
+      `, fill=${fillMode}${fillMode === "pending" ? ` (expiry=${pendingExpiryBars} bars)` : ""}`,
   );
 
   // Collect unique pairs
@@ -121,12 +135,14 @@ async function main(): Promise<void> {
       exitMode,
       trailBufferR,
       swingLookback,
+      fillMode,
+      pendingExpiryBars,
     );
     allReports.push({ pair, report });
   }
 
   // Print summary
-  printReport(allReports, timeframe, exitMode);
+  printReport(allReports, timeframe, exitMode, fillMode);
   printEquityCurve(allReports, startingCapital, riskPerTrade);
 }
 
@@ -137,9 +153,10 @@ function printReport(
   }>,
   timeframe: ChartTimeframe,
   exitMode: ExitMode,
+  fillMode: FillMode,
 ): void {
   console.log("\n" + "=".repeat(70));
-  console.log(`SETUP BACKTEST REPORT (${timeframe}, exit=${exitMode})`);
+  console.log(`SETUP BACKTEST REPORT (${timeframe}, exit=${exitMode}, fill=${fillMode})`);
   console.log("=".repeat(70));
 
   if (exitMode === "trailing" || exitMode === "swing_trail") {
@@ -196,6 +213,22 @@ function printReport(
       if (trade.realizedRiskReward > 0) totalWins++;
       totalRr += trade.realizedRiskReward;
     }
+  }
+
+  if (fillMode === "pending") {
+    let signalsSeen = 0, filled = 0, cancelledBeforeFill = 0, expired = 0;
+    for (const { report } of reports) {
+      if (!report.pendingStats) continue;
+      signalsSeen += report.pendingStats.signalsSeen;
+      filled += report.pendingStats.filled;
+      cancelledBeforeFill += report.pendingStats.cancelledBeforeFill;
+      expired += report.pendingStats.expired;
+    }
+    console.log(`\n📥 PENDING ORDER STATS`);
+    console.log(`   Signals seen: ${signalsSeen}`);
+    console.log(`   Filled: ${filled} (${signalsSeen > 0 ? ((filled / signalsSeen) * 100).toFixed(1) : "0.0"}%)`);
+    console.log(`   Cancelled before fill (SL touched first): ${cancelledBeforeFill} (${signalsSeen > 0 ? ((cancelledBeforeFill / signalsSeen) * 100).toFixed(1) : "0.0"}%)`);
+    console.log(`   Expired (no touch within window): ${expired} (${signalsSeen > 0 ? ((expired / signalsSeen) * 100).toFixed(1) : "0.0"}%)`);
   }
 
   // Overall

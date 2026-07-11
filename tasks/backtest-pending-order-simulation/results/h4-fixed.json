@@ -1,0 +1,849 @@
+{
+  "timeframe": "M15",
+  "bars": 500,
+  "exitMode": "fixed",
+  "trailBufferR": 0,
+  "swingLookback": 3,
+  "pendingExpiryBars": 2,
+  "overall": {
+    "immediate": {
+      "trades": 573,
+      "winRate": 0.7661,
+      "avgR": 0.72
+    },
+    "pending": {
+      "trades": 859,
+      "winRate": 0.6217,
+      "avgR": 0.38
+    },
+    "deltaWinRatePct": -14.45,
+    "deltaAvgR": -0.33,
+    "deltaTrades": 286
+  },
+  "bySetup": {
+    "RB": {
+      "immediate": {
+        "trades": 311,
+        "winRate": 0.8167,
+        "avgR": 0.75
+      },
+      "pending": {
+        "trades": 555,
+        "winRate": 0.6252,
+        "avgR": 0.33
+      }
+    },
+    "ARB": {
+      "immediate": {
+        "trades": 157,
+        "winRate": 0.7452,
+        "avgR": 0.57
+      },
+      "pending": {
+        "trades": 146,
+        "winRate": 0.7397,
+        "avgR": 0.57
+      }
+    },
+    "IRB": {
+      "immediate": {
+        "trades": 85,
+        "winRate": 0.6353,
+        "avgR": 0.81
+      },
+      "pending": {
+        "trades": 136,
+        "winRate": 0.4706,
+        "avgR": 0.32
+      }
+    },
+    "BB": {
+      "immediate": {
+        "trades": 20,
+        "winRate": 0.7,
+        "avgR": 0.95
+      },
+      "pending": {
+        "trades": 22,
+        "winRate": 0.6818,
+        "avgR": 0.93
+      }
+    }
+  },
+  "byPair": {
+    "BTC/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.6667,
+        "avgR": 0.58
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.4118,
+        "avgR": -0.01
+      }
+    },
+    "DASH/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 0.875,
+        "avgR": 0.98
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.7333,
+        "avgR": 0.7
+      }
+    },
+    "ETH/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.8333,
+        "avgR": 0.83
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.3333,
+        "avgR": -0.29
+      }
+    },
+    "LTC/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.6,
+        "avgR": 0.49
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.5,
+        "avgR": 0.21
+      }
+    },
+    "DOT/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.5714,
+        "avgR": 0.43
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.4667,
+        "avgR": 0.05
+      }
+    },
+    "XRP/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.8333,
+        "avgR": 0.88
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6667,
+        "avgR": 0.5
+      }
+    },
+    "ADA/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.9,
+        "avgR": 0.96
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.7143,
+        "avgR": 0.57
+      }
+    },
+    "BCH/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.8889,
+        "avgR": 1.11
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.7273,
+        "avgR": 0.68
+      }
+    },
+    "SOL/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.6923,
+        "avgR": 0.6
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.5625,
+        "avgR": 0.27
+      }
+    },
+    "AVA/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 0.375,
+        "avgR": -0.19
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.4167,
+        "avgR": -0.04
+      }
+    },
+    "ETC/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.8333,
+        "avgR": 0.87
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.5333,
+        "avgR": 0.15
+      }
+    },
+    "NEO/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.7,
+        "avgR": 0.76
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.7857,
+        "avgR": 0.97
+      }
+    },
+    "DOGE/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.7778,
+        "avgR": 0.92
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.5385,
+        "avgR": 0.27
+      }
+    },
+    "BNB/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.8571,
+        "avgR": 1.08
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 1,
+        "avgR": 1.31
+      }
+    },
+    "ZEC/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 0.875,
+        "avgR": 1.04
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.7692,
+        "avgR": 0.76
+      }
+    },
+    "TRX/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.6667,
+        "avgR": 0.42
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.4286,
+        "avgR": -0.08
+      }
+    },
+    "XLM/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 1,
+        "avgR": 1.19
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.7143,
+        "avgR": 0.54
+      }
+    },
+    "AAVE/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 0.75,
+        "avgR": 0.62
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.5385,
+        "avgR": 0.2
+      }
+    },
+    "UNI/USDT": {
+      "immediate": {
+        "trades": 16,
+        "winRate": 0.9375,
+        "avgR": 1.07
+      },
+      "pending": {
+        "trades": 19,
+        "winRate": 0.7368,
+        "avgR": 0.68
+      }
+    },
+    "ARB/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 1,
+        "avgR": 1.41
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.6154,
+        "avgR": 0.45
+      }
+    },
+    "NEAR/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.6154,
+        "avgR": 0.36
+      },
+      "pending": {
+        "trades": 18,
+        "winRate": 0.5556,
+        "avgR": 0.27
+      }
+    },
+    "SUI/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.7143,
+        "avgR": 0.73
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.5714,
+        "avgR": 0.37
+      }
+    },
+    "PEPE/USDT": {
+      "immediate": {
+        "trades": 4,
+        "winRate": 1,
+        "avgR": 1.69
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.6,
+        "avgR": 0.47
+      }
+    },
+    "WLD/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.8889,
+        "avgR": 0.94
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.6923,
+        "avgR": 0.5
+      }
+    },
+    "TAO/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.5556,
+        "avgR": 0.31
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.5625,
+        "avgR": 0.25
+      }
+    },
+    "ENA/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.7143,
+        "avgR": 0.57
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.75,
+        "avgR": 0.58
+      }
+    },
+    "PAXG/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 1,
+        "avgR": 1.19
+      },
+      "pending": {
+        "trades": 18,
+        "winRate": 0.6111,
+        "avgR": 0.36
+      }
+    },
+    "LINK/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 1,
+        "avgR": 1.26
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.6154,
+        "avgR": 0.39
+      }
+    },
+    "AVAX/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.6667,
+        "avgR": 0.33
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.4615,
+        "avgR": -0.04
+      }
+    },
+    "ICP/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.8333,
+        "avgR": 0.84
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.625,
+        "avgR": 0.4
+      }
+    },
+    "TIA/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.7,
+        "avgR": 0.55
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.5333,
+        "avgR": 0.2
+      }
+    },
+    "ONDO/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.8333,
+        "avgR": 0.78
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.6667,
+        "avgR": 0.47
+      }
+    },
+    "FIL/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.5714,
+        "avgR": 0.21
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.6364,
+        "avgR": 0.36
+      }
+    },
+    "SEI/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.75,
+        "avgR": 0.76
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.5625,
+        "avgR": 0.41
+      }
+    },
+    "FET/USDT": {
+      "immediate": {
+        "trades": 14,
+        "winRate": 0.6429,
+        "avgR": 0.39
+      },
+      "pending": {
+        "trades": 18,
+        "winRate": 0.6111,
+        "avgR": 0.33
+      }
+    },
+    "HBAR/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.6667,
+        "avgR": 0.41
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.6667,
+        "avgR": 0.37
+      }
+    },
+    "IOTA/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.6364,
+        "avgR": 0.59
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.6875,
+        "avgR": 0.5
+      }
+    },
+    "BONK/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 0.75,
+        "avgR": 0.7
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.4545,
+        "avgR": 0.05
+      }
+    },
+    "LDO/USDT": {
+      "immediate": {
+        "trades": 5,
+        "winRate": 0.8,
+        "avgR": 1.04
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.6667,
+        "avgR": 0.63
+      }
+    },
+    "INJ/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.4444,
+        "avgR": -0.06
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.5833,
+        "avgR": 0.23
+      }
+    },
+    "EIGEN/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.9,
+        "avgR": 0.94
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.7692,
+        "avgR": 0.58
+      }
+    },
+    "POL/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.8571,
+        "avgR": 0.91
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.5833,
+        "avgR": 0.3
+      }
+    },
+    "APT/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.6667,
+        "avgR": 0.42
+      },
+      "pending": {
+        "trades": 8,
+        "winRate": 0.875,
+        "avgR": 0.88
+      }
+    },
+    "OP/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.8182,
+        "avgR": 0.77
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6,
+        "avgR": 0.31
+      }
+    },
+    "PENGU/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 1,
+        "avgR": 1.21
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.5833,
+        "avgR": 0.24
+      }
+    },
+    "ORDI/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.8333,
+        "avgR": 0.75
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.75,
+        "avgR": 0.62
+      }
+    },
+    "ALGO/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.6,
+        "avgR": 0.25
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.5294,
+        "avgR": 0.09
+      }
+    },
+    "JTO/USDT": {
+      "immediate": {
+        "trades": 19,
+        "winRate": 0.8421,
+        "avgR": 0.84
+      },
+      "pending": {
+        "trades": 21,
+        "winRate": 0.8095,
+        "avgR": 0.78
+      }
+    },
+    "PENDLE/USDT": {
+      "immediate": {
+        "trades": 14,
+        "winRate": 0.7143,
+        "avgR": 0.55
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.6429,
+        "avgR": 0.4
+      }
+    },
+    "APE/USDT": {
+      "immediate": {
+        "trades": 16,
+        "winRate": 0.8125,
+        "avgR": 0.72
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.75,
+        "avgR": 0.59
+      }
+    },
+    "ETHFI/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 1,
+        "avgR": 1.29
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.7,
+        "avgR": 0.6
+      }
+    },
+    "PYTH/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.7143,
+        "avgR": 0.57
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.7273,
+        "avgR": 0.5
+      }
+    },
+    "SHIB/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 1,
+        "avgR": 1.19
+      },
+      "pending": {
+        "trades": 7,
+        "winRate": 0.7143,
+        "avgR": 0.6
+      }
+    },
+    "GALA/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.8333,
+        "avgR": 0.84
+      },
+      "pending": {
+        "trades": 9,
+        "winRate": 0.7778,
+        "avgR": 0.73
+      }
+    },
+    "ZRO/USDT": {
+      "immediate": {
+        "trades": 15,
+        "winRate": 0.8,
+        "avgR": 0.73
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.6875,
+        "avgR": 0.5
+      }
+    },
+    "RENDER/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.8889,
+        "avgR": 0.89
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.8333,
+        "avgR": 0.71
+      }
+    },
+    "CAKE/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.8,
+        "avgR": 0.65
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.75,
+        "avgR": 0.56
+      }
+    },
+    "CRV/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.5,
+        "avgR": 0.08
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.3,
+        "avgR": -0.35
+      }
+    },
+    "CHZ/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.5714,
+        "avgR": 0.36
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.5,
+        "avgR": 0.07
+      }
+    },
+    "RUNE/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 1,
+        "avgR": 1.17
+      },
+      "pending": {
+        "trades": 8,
+        "winRate": 0.875,
+        "avgR": 0.94
+      }
+    },
+    "ATOM/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.2857,
+        "avgR": -0.43
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.4,
+        "avgR": -0.2
+      }
+    },
+    "DYDX/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 0.5,
+        "avgR": 0.27
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.4286,
+        "avgR": 0.01
+      }
+    },
+    "STRK/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.8571,
+        "avgR": 0.86
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.5833,
+        "avgR": 0.31
+      }
+    },
+    "WIF/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 1,
+        "avgR": 1.11
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.5455,
+        "avgR": 0.18
+      }
+    }
+  },
+  "pendingStats": {
+    "signalsSeen": 881,
+    "filled": 871,
+    "cancelledBeforeFill": 9,
+    "expired": 0
+  }
+}

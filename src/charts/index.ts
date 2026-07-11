@@ -1,5 +1,5 @@
 import "../shared/env.js";
-import { saveOpenPosition /*, savePendingOrder */ } from "./positions-repository-volman.js";
+import { saveOpenPosition, findOpenPositionIdByPair /*, savePendingOrder */ } from "./positions-repository-volman.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
 // import { runCheckPendingOrders } from "./check-pending-orders-runner.js"; // DISABLED: signals-only mode, xem tasks/disable-pending-orders/plan.md
 import {
@@ -35,6 +35,8 @@ import {
 } from "./chart-cache-repository-volman.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
 import { CHARTS, getChartsForTimeframeMode } from "./volman-charts.config.js";
+import { openBinanceFuturesPosition } from "./binance-execution-volman.js";
+import { isBinanceLiveTradingEnabled } from "./binance-futures-config-env.js";
 import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
 const logger = createLogger("charts:index");
@@ -213,6 +215,15 @@ async function handleAnalysisResult(
         if (saved) {
           setup.autoTracked = true;
           logger.info("Auto-saved open position", { pair: setup.pair });
+          if (isBinanceLiveTradingEnabled()) {
+            const chartSymbol = symbolByPair.get(setup.pair);
+            if (chartSymbol) {
+              const positionId = await findOpenPositionIdByPair(setup.pair);
+              if (positionId !== null) {
+                await openBinanceFuturesPosition(setup, positionId, chartSymbol);
+              }
+            }
+          }
         } else {
           logger.info("Skipped duplicate open position", { pair: setup.pair });
         }

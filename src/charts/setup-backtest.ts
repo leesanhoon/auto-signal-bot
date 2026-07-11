@@ -17,6 +17,8 @@ const logger = createLogger("charts:setup-backtest");
 
 export type ExitMode = "fixed" | "trailing" | "swing_trail";
 
+export type FillMode = "immediate" | "pending";
+
 export type SetupBacktestTrade = {
   setup: SetupKind;
   pair: string;
@@ -45,6 +47,12 @@ export type SetupBacktestReport = {
   byPair: Record<string, { trades: number; winRate: number; avgRiskReward: number }>;
   overall: { trades: number; winRate: number; avgRiskReward: number };
   trades: SetupBacktestTrade[];
+  pendingStats?: {
+    signalsSeen: number;
+    filled: number;
+    cancelledBeforeFill: number;
+    expired: number;
+  };
 };
 
 type OpenTradeState = {
@@ -57,6 +65,20 @@ type OpenTradeState = {
 type PendingFalseBreak = {
   signal: DetectedSignal;
   triggerIndex: number;
+};
+
+type PendingOrderState = {
+  signal: DetectedSignal;
+  triggerIndex: number;
+  orderStartIndex: number;
+  deadlineIndex: number;
+};
+
+type PendingModeStats = {
+  signalsSeen: number;
+  filled: number;
+  cancelledBeforeFill: number;
+  expired: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -75,6 +97,8 @@ export function runSetupBacktest(
   exitMode: ExitMode = "fixed",
   trailBufferR = 0,
   swingLookback = 3,
+  fillMode: FillMode = "immediate",
+  pendingExpiryBars = 2,
 ): SetupBacktestReport {
   const ema20 = calculateEma(candles, 20);
   const atr14 = calculateAtr(candles, 14);
@@ -82,6 +106,8 @@ export function runSetupBacktest(
   const trades: SetupBacktestTrade[] = [];
   let openTrade: OpenTradeState | null = null;
   let watchingFalseBreak: PendingFalseBreak | null = null;
+  let pendingOrder: PendingOrderState | null = null;
+  const pendingStats: PendingModeStats = { signalsSeen: 0, filled: 0, cancelledBeforeFill: 0, expired: 0 };
 
   const detectors: Array<(c: Candle[], i: number, ctx: DetectionContext) => DetectedSignal | null> = [
     detectBb,
@@ -108,7 +134,31 @@ export function runSetupBacktest(
       openTrade = null;
     }
 
-    if (watchingFalseBreak !== null && index >= watchingFalseBreak.triggerIndex + 2) {
+    // Handle pending order resolution (pending mode only)
+    if (fillMode === "pending" && pendingOrder !== null && index >= pendingOrder.orderStartIndex) {
+      const { high, low } = candles[index];
+      const { entry, stopLoss, direction } = pendingOrder.signal;
+
+      const invalidated = direction === "LONG" ? low <= stopLoss : high >= stopLoss;
+      if (invalidated) {
+        pendingStats.cancelledBeforeFill++;
+        pendingOrder = null;
+      } else {
+        const triggered = direction === "LONG" ? high >= entry : low <= entry;
+        if (triggered) {
+          const trade = buildTrade(candles, pendingOrder.signal, exitMode, trailBufferR, swingLookback, index);
+          trades.push(trade);
+          pendingStats.filled++;
+          openTrade = { signal: pendingOrder.signal, trade, triggerIndex: pendingOrder.triggerIndex, committed: true };
+          pendingOrder = null;
+        } else if (index >= pendingOrder.deadlineIndex) {
+          pendingStats.expired++;
+          pendingOrder = null;
+        }
+      }
+    }
+
+    if (fillMode === "immediate" && watchingFalseBreak !== null && index >= watchingFalseBreak.triggerIndex + 2) {
       const entry = watchingFalseBreak.signal.entry;
       const stop = watchingFalseBreak.signal.stopLoss;
       const levelHigh = Math.max(entry, stop);
@@ -139,7 +189,11 @@ export function runSetupBacktest(
     }
 
     const freshSignals: DetectedSignal[] = [];
-    if (openTrade === null) {
+    const canDetectSignal = fillMode === "pending"
+      ? (openTrade === null && pendingOrder === null)
+      : (openTrade === null);
+
+    if (canDetectSignal) {
       for (const detector of detectors) {
         try {
           const signal = detector(candles, index, ctx);
@@ -158,21 +212,38 @@ export function runSetupBacktest(
     }
 
     const signal = resolvedSignals[0];
-    const trade = buildTrade(candles, signal, exitMode, trailBufferR, swingLookback);
 
-    openTrade = {
-      signal,
-      trade,
-      triggerIndex: signal.triggerIndex,
-      committed: false,
-    };
-    watchingFalseBreak = {
-      signal,
-      triggerIndex: signal.triggerIndex,
-    };
+    if (fillMode === "pending") {
+      // In pending mode: create a pending order instead of immediately filling
+      pendingStats.signalsSeen++;
+      pendingOrder = {
+        signal,
+        triggerIndex: signal.triggerIndex,
+        orderStartIndex: signal.triggerIndex + 1,
+        deadlineIndex: signal.triggerIndex + pendingExpiryBars,
+      };
+    } else {
+      // In immediate mode: fill trade immediately (original behavior)
+      const trade = buildTrade(candles, signal, exitMode, trailBufferR, swingLookback);
+
+      openTrade = {
+        signal,
+        trade,
+        triggerIndex: signal.triggerIndex,
+        committed: false,
+      };
+      watchingFalseBreak = {
+        signal,
+        triggerIndex: signal.triggerIndex,
+      };
+    }
   }
 
-  return computeReport(trades);
+  const report = computeReport(trades);
+  if (fillMode === "pending") {
+    report.pendingStats = { ...pendingStats };
+  }
+  return report;
 }
 
 function buildTrade(
@@ -181,8 +252,9 @@ function buildTrade(
   exitMode: ExitMode,
   trailBufferR: number,
   swingLookback: number,
+  entryIndexOverride?: number,
 ): SetupBacktestTrade {
-  const entryIndex = signal.triggerIndex;
+  const entryIndex = entryIndexOverride ?? signal.triggerIndex;
   const outcome =
     exitMode === "trailing"
       ? scanOutcomeTrailing(candles, signal, entryIndex, trailBufferR)

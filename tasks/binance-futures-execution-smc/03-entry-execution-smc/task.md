@@ -1,16 +1,39 @@
-# Task 04: Đặt lệnh entry+SL+TP1+TP2 khi mở vị thế + wiring vào `index.ts`
+# Task 03: Tạo `binance-execution-smc.ts` (entry + guard) + wiring vào `smc-index.ts`
 
 ## Bối cảnh
 
-**Phụ thuộc: task 01, 02, 03 phải xong trước** (cần `binance-futures-client.ts`, `binance-futures-config-env.ts`, `binance-position-sizing.ts`, và cột/hàm mới trong `positions-repository-volman.ts`).
+**Phụ thuộc: task 01, 02 phải xong trước** (cần cột/hàm mới trong `positions-repository-smc.ts` từ task 01, và `isBinanceLiveTradingEnabledSmc()` từ `binance-futures-config-env.ts` ở task 02).
 
-Vị thế Volman "mở" trong DB tại `src/charts/index.ts:212` (`const saved = await saveOpenPosition(setup);`), bên trong hàm `handleAnalysisResult()`, nhánh `shouldAutoTrackAsOpen(setup, threshold)` (dòng ~200-224). Biến `symbolByPair: Map<string, string>` đã tồn tại sẵn trong scope của hàm này (dòng 170-174), map `setup.pair` → chart symbol dạng `"BINANCE:BTCUSDT"` hoặc `"OANDA:EURUSD"`.
+Vị thế SMC "mở" trong DB tại `src/charts/smc-index.ts` (hàm `handleAnalysisResult()`, nhánh `if (shouldAutoTrackAsOpen(setup, threshold))`, khoảng dòng 147-164):
+```ts
+  for (const setup of result.setups) {
+    if (shouldAutoTrackAsOpen(setup, threshold)) {
+      try {
+        const validation = validateTradeSetupForOpen(setup);
+        if (!validation.accepted) {
+          logger.info("Skipped open position due to risk/reward gate", { pair: setup.pair, reason: validation.reason });
+          continue;
+        }
+        const saved = await saveOpenPosition(setup);
+        if (saved) {
+          setup.autoTracked = true;
+          logger.info("Auto-saved open position", { pair: setup.pair });
+        } else {
+          logger.info("Skipped duplicate open position", { pair: setup.pair });
+        }
+      } catch (error) {
+        logger.error("Failed to auto-save open position", { pair: setup.pair, error });
+      }
+    } else if (...) { ... }
+  }
+```
+Biến `symbolByPair: Map<string, string>` đã tồn tại sẵn trong scope hàm này (khai báo `const symbolByPair = new Map(getPairs().map((p) => [p.pair, p.symbol]));` ở đầu `handleAnalysisResult`), map `setup.pair` → chart symbol dạng `"BINANCE:BTCUSDT"` hoặc `"OANDA:EURUSD"`.
 
-Task này: (1) viết hàm `openBinanceFuturesPosition()` orchestrate toàn bộ việc đặt lệnh thật, (2) gọi hàm đó ngay sau khi `saveOpenPosition` thành công, CHỈ với symbol Binance.
+File này (`binance-execution-smc.ts`) là bản song song của `binance-execution-volman.ts` (đã APPROVED, test kỹ trên testnet) — copy đúng kiến trúc, đổi import sang module `-smc`, và **thêm guard cross-system** (task 02 đã làm phần guard cho Volman; task này làm phần guard cho SMC, dùng chung `getPositionAmount`).
 
 ## Việc cần làm
 
-### File 1: `src/charts/binance-execution-volman.ts` (tạo mới — chỉ phần entry, KHÔNG viết `reconcileBinancePosition` ở task này, để task 05 làm)
+### File 1: `src/charts/binance-execution-smc.ts` (tạo mới — chỉ phần entry, KHÔNG viết `reconcileBinancePosition` ở task này, để task 04 làm)
 
 ```ts
 import { toBinanceSymbol } from "./ohlc-provider.js";
@@ -36,13 +59,13 @@ import {
   roundToTickSize,
   splitTpQuantities,
 } from "./binance-position-sizing.js";
-import { calculateRiskRewardPlan } from "./position-engine-volman.js";
-import { saveBinanceExecutionDetails } from "./positions-repository-volman.js";
+import { calculateRiskRewardPlan } from "./position-engine-smc.js";
+import { saveBinanceExecutionDetails } from "./positions-repository-smc.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
-import type { TradeSetup } from "./chart-types-volman.js";
+import type { TradeSetup } from "./chart-types-smc.js";
 
-const logger = createLogger("charts:binance-execution");
+const logger = createLogger("charts:binance-execution-smc");
 
 export async function openBinanceFuturesPosition(
   setup: TradeSetup,
@@ -84,11 +107,28 @@ export async function openBinanceFuturesPosition(
       );
     }
 
+    // Guard cross-system: 1 symbol chi 1 vi the tai 1 thoi diem, he nao mo truoc
+    // thi giu. SL/TP dat closePosition=true se dong toan bo net position cua symbol
+    // tren san — neu he khac (Volman) da co vi the mo tren cung symbol, KHONG duoc
+    // mo them (xem plan.md muc "Kien truc quyet dinh #1").
+    const existingPositionAmt = await getPositionAmount(binanceSymbol);
+    if (!(existingPositionAmt instanceof Error) && existingPositionAmt !== 0) {
+      logger.warn("Bo qua entry Binance — symbol da co vi the mo (co the do he khac)", {
+        pair: setup.pair,
+        binanceSymbol,
+        existingPositionAmt,
+      });
+      await sendMessage(
+        `⚠️ *Binance Futures (SMC)* — Bỏ qua mở vị thế thật ${binanceSymbol}: symbol này đã có vị thế đang mở trên sàn (có thể do hệ khác đặt). Signal vẫn được track trong hệ thống, không có lệnh thật trên sàn.`,
+      );
+      return;
+    }
+
     const filters = await getExchangeInfoFilters(binanceSymbol);
     if (filters instanceof Error) throw filters;
 
     // Moi gia stopPrice gui len Binance PHAI lam tron theo tickSize — gia tho tu
-    // Volman engine se bi Binance tu choi (loi price precision -1111/-4014).
+    // SMC engine se bi Binance tu choi (loi price precision -1111/-4014).
     const slPrice = roundToTickSize(plan.stopLoss, filters.tickSize);
     const tp1Price = roundToTickSize(plan.takeProfit1, filters.tickSize);
     const tp2Price =
@@ -127,8 +167,6 @@ export async function openBinanceFuturesPosition(
 
     // Tu day tro di, vi the DA THAT SU MO tren Binance — moi loi khi dat SL/TP
     // phai duoc fail-safe dong lai ngay, khong duoc de vi the "tran" (khong co SL).
-    // placedProtectionOrders: luu order id da dat de fail-safe huy het lenh treo
-    // (SL closePosition=true con treo se dong nham vi the tuong lai cua cung symbol).
     const placedProtectionOrders: number[] = [];
     let slOrderId: number | null = null;
     let tp1OrderId: number | null = null;
@@ -169,7 +207,6 @@ export async function openBinanceFuturesPosition(
         error: protectionError,
       });
 
-      // 1. Huy moi lenh conditional da dat duoc (cancelOrder da tolerant -2011)
       for (const orderId of placedProtectionOrders) {
         const cancelResult = await cancelOrder(binanceSymbol, orderId);
         if (cancelResult instanceof Error) {
@@ -181,7 +218,6 @@ export async function openBinanceFuturesPosition(
         }
       }
 
-      // 2. Dong vi the — PHAI kiem tra ket qua, khong duoc bao "da dong" khi chua chac
       const positionAmt = await getPositionAmount(binanceSymbol);
       const qtyToClose =
         !(positionAmt instanceof Error) && positionAmt !== 0
@@ -191,7 +227,6 @@ export async function openBinanceFuturesPosition(
         reduceOnly: true,
       });
 
-      // 3. Ghi DB status failed — boc try/catch rieng de loi DB khong nuot mat alert
       try {
         await saveBinanceExecutionDetails(positionId, {
           binanceSymbol,
@@ -210,18 +245,17 @@ export async function openBinanceFuturesPosition(
         });
       }
 
-      // 4. Alert dung su that
       const protectionMessage =
         protectionError instanceof Error
           ? protectionError.message
           : String(protectionError);
       if (closeResult instanceof Error) {
         await sendMessage(
-          `🚨🚨 *Binance Futures — KHẨN CẤP* — ${binanceSymbol}: đặt SL/TP thất bại VÀ lệnh đóng khẩn cấp CŨNG THẤT BẠI.\n⚠️ VỊ THẾ ĐANG MỞ KHÔNG CÓ SL — mở Binance app và ĐÓNG TAY NGAY.\nLỗi đặt SL/TP: ${protectionMessage}\nLỗi đóng: ${closeResult.message}`,
+          `🚨🚨 *Binance Futures (SMC) — KHẨN CẤP* — ${binanceSymbol}: đặt SL/TP thất bại VÀ lệnh đóng khẩn cấp CŨNG THẤT BẠI.\n⚠️ VỊ THẾ ĐANG MỞ KHÔNG CÓ SL — mở Binance app và ĐÓNG TAY NGAY.\nLỗi đặt SL/TP: ${protectionMessage}\nLỗi đóng: ${closeResult.message}`,
         );
       } else {
         await sendMessage(
-          `🚨 *Binance Futures* — LỖI khi đặt SL/TP cho ${binanceSymbol}, đã hủy các lệnh treo và đóng khẩn cấp vị thế.\nLỗi: ${protectionMessage}`,
+          `🚨 *Binance Futures (SMC)* — LỖI khi đặt SL/TP cho ${binanceSymbol}, đã hủy các lệnh treo và đóng khẩn cấp vị thế.\nLỗi: ${protectionMessage}`,
         );
       }
       return;
@@ -246,45 +280,45 @@ export async function openBinanceFuturesPosition(
         error: dbError,
       });
       await sendMessage(
-        `⚠️ *Binance Futures* — Vị thế ${binanceSymbol} ĐÃ MỞ và CÓ ĐỦ SL/TP trên sàn, nhưng KHÔNG ghi được thông tin execution vào DB (position #${positionId}).\nBot sẽ không tự quản lý vị thế này (reconcile cần order id trong DB) — theo dõi tay trên Binance app cho tới khi SL/TP tự khớp.\nLỗi DB: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+        `⚠️ *Binance Futures (SMC)* — Vị thế ${binanceSymbol} ĐÃ MỞ và CÓ ĐỦ SL/TP trên sàn, nhưng KHÔNG ghi được thông tin execution vào DB (position #${positionId}).\nBot sẽ không tự quản lý vị thế này (reconcile cần order id trong DB) — theo dõi tay trên Binance app cho tới khi SL/TP tự khớp.\nLỗi DB: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
       );
       return;
     }
 
     await sendMessage(
-      `✅ *Binance Futures* — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
+      `✅ *Binance Futures (SMC)* — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
     );
   } catch (error) {
-    // Loi TRUOC khi entry fill (hedge mode / filters / balance / sizing / margin /
-    // leverage / entry order) — chua co vi the that nao tren san.
-    logger.error("Khong the mo vi the Binance Futures", {
+    // Loi TRUOC khi entry fill (hedge mode / guard / filters / balance / sizing /
+    // margin / leverage / entry order) — chua co vi the that nao tren san.
+    logger.error("Khong the mo vi the Binance Futures (SMC)", {
       pair: setup.pair,
       positionId,
       error,
     });
     await sendMessage(
-      `❌ *Binance Futures* — Không thể mở vị thế thật cho ${binanceSymbol} (${setup.direction}).\nLỗi: ${error instanceof Error ? error.message : String(error)}\nVị thế vẫn được track trong hệ thống (chỉ signal), không có lệnh thật trên sàn.`,
+      `❌ *Binance Futures (SMC)* — Không thể mở vị thế thật cho ${binanceSymbol} (${setup.direction}).\nLỗi: ${error instanceof Error ? error.message : String(error)}\nVị thế vẫn được track trong hệ thống (chỉ signal), không có lệnh thật trên sàn.`,
     );
   }
 }
 ```
 
-### File 2: `src/charts/index.ts` (sửa)
+### File 2: `src/charts/smc-index.ts` (sửa)
 
-1. Thêm import ở đầu file (cạnh các import khác, sau dòng `import { CHARTS, getChartsForTimeframeMode } from "./volman-charts.config.js";`):
+1. Thêm import ở đầu file (cạnh các import khác, sau dòng `import { CHARTS, getChartsForTimeframeMode } from "./smc-charts.config.js";`):
 
 ```ts
-import { openBinanceFuturesPosition } from "./binance-execution-volman.js";
-import { isBinanceLiveTradingEnabled } from "./binance-futures-config-env.js";
-import { findOpenPositionIdByPair } from "./positions-repository-volman.js";
+import { openBinanceFuturesPosition } from "./binance-execution-smc.js";
+import { isBinanceLiveTradingEnabled, isBinanceLiveTradingEnabledSmc } from "./binance-futures-config-env.js";
+import { findOpenPositionIdByPair } from "./positions-repository-smc.js";
 ```
 
-Lưu ý: `saveOpenPosition` đã được import từ `positions-repository-volman.js` ở dòng 2 — thêm `findOpenPositionIdByPair` vào CÙNG import đó (gộp lại thành 1 dòng import, không tạo 2 dòng import riêng từ cùng 1 file):
+Lưu ý: `saveOpenPosition` đã được import từ `positions-repository-smc.js` ở dòng 2 — thêm `findOpenPositionIdByPair` vào CÙNG import đó (gộp lại thành 1 dòng, không tạo 2 dòng import riêng từ cùng 1 file):
 ```ts
-import { saveOpenPosition, findOpenPositionIdByPair /*, savePendingOrder */ } from "./positions-repository-volman.js";
+import { saveOpenPosition /*, savePendingOrder */, findOpenPositionIdByPair } from "./positions-repository-smc.js";
 ```
 
-2. Trong nhánh `if (shouldAutoTrackAsOpen(setup, threshold))` (khoảng dòng 202-224), ngay sau đoạn:
+2. Trong nhánh `if (shouldAutoTrackAsOpen(setup, threshold))` (khoảng dòng 148-164), ngay sau đoạn:
 ```ts
         const saved = await saveOpenPosition(setup);
         if (saved) {
@@ -292,10 +326,10 @@ import { saveOpenPosition, findOpenPositionIdByPair /*, savePendingOrder */ } fr
           logger.info("Auto-saved open position", { pair: setup.pair });
         } else {
 ```
-Thêm code gọi Binance execution vào NGAY sau `logger.info("Auto-saved open position", ...)` (bên trong khối `if (saved) { ... }`, thêm dòng mới sau logger.info, TRƯỚC dấu `}` đóng khối if):
+Thêm code gọi Binance execution vào NGAY sau `logger.info("Auto-saved open position", ...)` (bên trong khối `if (saved) { ... }`, TRƯỚC dấu `}` đóng khối if). **Lưu ý: cả 2 kill-switch phải `true` mới trade thật** (master `isBinanceLiveTradingEnabled()` VÀ riêng SMC `isBinanceLiveTradingEnabledSmc()` — xem plan.md mục "Kiến trúc quyết định #5"):
 
 ```ts
-          if (isBinanceLiveTradingEnabled()) {
+          if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledSmc()) {
             const chartSymbol = symbolByPair.get(setup.pair);
             if (chartSymbol) {
               const positionId = await findOpenPositionIdByPair(setup.pair);
@@ -311,7 +345,7 @@ Kết quả khối `if (saved) { ... }` sau khi sửa:
         if (saved) {
           setup.autoTracked = true;
           logger.info("Auto-saved open position", { pair: setup.pair });
-          if (isBinanceLiveTradingEnabled()) {
+          if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledSmc()) {
             const chartSymbol = symbolByPair.get(setup.pair);
             if (chartSymbol) {
               const positionId = await findOpenPositionIdByPair(setup.pair);
@@ -325,10 +359,11 @@ Kết quả khối `if (saved) { ... }` sau khi sửa:
 
 ## Ràng buộc
 
-- KHÔNG sửa logic `shouldAutoTrackAsOpen`, `validateTradeSetupForOpen`, hay bất kỳ điều kiện auto-track nào khác.
-- KHÔNG đụng vào nhánh `else if` (pending order, đang bị disable có chủ đích — xem `tasks/disable-pending-orders/plan.md`).
-- `openBinanceFuturesPosition` PHẢI không bao giờ throw ra ngoài (đã có try/catch bọc toàn bộ trong code mẫu) — nếu lỗi Binance xảy ra, KHÔNG được làm crash hay dừng vòng lặp xử lý các setup khác trong `handleAnalysisResult`.
-- Tuân thủ "Quy tắc fail-safe bất biến" trong `plan.md`: mọi `stopPrice` phải qua `roundToTickSize`; qty TP1/TP2 phải qua `splitTpQuantities`; fail-safe phải hủy lệnh treo + kiểm tra kết quả lệnh đóng; lỗi DB không được kích hoạt đóng khẩn cấp.
+- KHÔNG sửa logic `shouldAutoTrackAsOpen`, `validateTradeSetupForOpen`, hay bất kỳ điều kiện auto-track/freshness-guard nào khác trong `smc-index.ts`.
+- KHÔNG đụng vào nhánh `else if` (pending order, đang disable có chủ đích).
+- `openBinanceFuturesPosition` PHẢI không bao giờ throw ra ngoài (try/catch đã bọc toàn bộ trong code mẫu) — không được làm crash hay dừng vòng lặp xử lý các setup khác.
+- Tuân thủ "Quy tắc fail-safe bất biến" trong `tasks/binance-futures-execution-smc/plan.md`: mọi `stopPrice` qua `roundToTickSize`; qty TP1/TP2 qua `splitTpQuantities`; fail-safe hủy lệnh treo + kiểm tra kết quả lệnh đóng; lỗi DB không kích hoạt đóng khẩn cấp; check one-way mode trước mọi lệnh; guard cross-system trước filters.
+- KHÔNG sửa `binance-execution-volman.ts`, `smc-charts.config.ts`, `position-engine-smc.ts` trong task này.
 - Không thêm cấu hình/feature ngoài scope liệt kê ở trên.
 
 ## Cách verify
@@ -337,12 +372,12 @@ Kết quả khối `if (saved) { ... }` sau khi sửa:
 npm run build
 npm run test
 ```
-`tests/charts/index.test.ts` (nếu có) không được fail — nếu test mock `saveOpenPosition`/`findOpenPositionIdByPair`, cần đảm bảo `isBinanceLiveTradingEnabled()` mặc định `false` trong môi trường test (không set env `BINANCE_LIVE_TRADING_ENABLED`) nên nhánh Binance sẽ không chạy, không cần mock thêm gì mới.
+`tests/charts/smc-index.test.ts` (nếu có) không được fail — nếu test mock `saveOpenPosition`/`findOpenPositionIdByPair`, đảm bảo `isBinanceLiveTradingEnabled()`/`isBinanceLiveTradingEnabledSmc()` mặc định `false` trong môi trường test (không set env tương ứng) nên nhánh Binance sẽ không chạy, không cần mock thêm gì mới.
 
 ## Output
 
-Ghi vào `tasks/binance-futures-execution/04-entry-execution/result.md`:
-- Đường dẫn file mới + đoạn diff đã sửa trong `index.ts`
+Ghi vào `tasks/binance-futures-execution-smc/03-entry-execution-smc/result.md`:
+- Đường dẫn file mới + đoạn diff đã sửa trong `smc-index.ts`
 - Kết quả `npm run build && npm run test`
 
-Nếu bị chặn (ví dụ không tìm thấy đúng đoạn code dòng 200-224 như mô tả do file đã đổi khác) → đọc lại file thực tế, tìm đúng vị trí tương đương (nhánh `if (shouldAutoTrackAsOpen(...))` gọi `saveOpenPosition`), áp dụng đúng logic mô tả. Nếu vẫn không xác định được → ghi `blocked.md`.
+Nếu bị chặn (ví dụ không tìm thấy đúng đoạn code dòng 148-164 như mô tả do file đã đổi khác) → đọc lại file thực tế, tìm đúng vị trí tương đương (nhánh `if (shouldAutoTrackAsOpen(...))` gọi `saveOpenPosition`), áp dụng đúng logic mô tả. Nếu vẫn không xác định được → ghi `blocked.md`.

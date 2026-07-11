@@ -1,18 +1,3 @@
-# Task 04: Đặt lệnh entry+SL+TP1+TP2 khi mở vị thế + wiring vào `index.ts`
-
-## Bối cảnh
-
-**Phụ thuộc: task 01, 02, 03 phải xong trước** (cần `binance-futures-client.ts`, `binance-futures-config-env.ts`, `binance-position-sizing.ts`, và cột/hàm mới trong `positions-repository-volman.ts`).
-
-Vị thế Volman "mở" trong DB tại `src/charts/index.ts:212` (`const saved = await saveOpenPosition(setup);`), bên trong hàm `handleAnalysisResult()`, nhánh `shouldAutoTrackAsOpen(setup, threshold)` (dòng ~200-224). Biến `symbolByPair: Map<string, string>` đã tồn tại sẵn trong scope của hàm này (dòng 170-174), map `setup.pair` → chart symbol dạng `"BINANCE:BTCUSDT"` hoặc `"OANDA:EURUSD"`.
-
-Task này: (1) viết hàm `openBinanceFuturesPosition()` orchestrate toàn bộ việc đặt lệnh thật, (2) gọi hàm đó ngay sau khi `saveOpenPosition` thành công, CHỈ với symbol Binance.
-
-## Việc cần làm
-
-### File 1: `src/charts/binance-execution-volman.ts` (tạo mới — chỉ phần entry, KHÔNG viết `reconcileBinancePosition` ở task này, để task 05 làm)
-
-```ts
 import { toBinanceSymbol } from "./ohlc-provider.js";
 import {
   getExchangeInfoFilters,
@@ -25,11 +10,13 @@ import {
   getPositionAmount,
   cancelOrder,
   isHedgeModeEnabled,
+  getOrderStatus,
 } from "./binance-futures-client.js";
 import {
   getConfiguredBinanceLeverage,
   getConfiguredBinanceMarginType,
   getConfiguredBinanceRiskPercentPerTrade,
+  getConfiguredBinanceRiskUsdPerTrade,
 } from "./binance-futures-config-env.js";
 import {
   computeOrderQuantity,
@@ -37,7 +24,9 @@ import {
   splitTpQuantities,
 } from "./binance-position-sizing.js";
 import { calculateRiskRewardPlan } from "./position-engine-volman.js";
-import { saveBinanceExecutionDetails } from "./positions-repository-volman.js";
+import { saveBinanceExecutionDetails, updateBinanceSlOrder } from "./positions-repository-volman.js";
+import type { PositionDecisionOutcome } from "./position-engine-volman.js";
+import type { OpenPosition } from "./positions-repository-volman.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { TradeSetup } from "./chart-types-volman.js";
@@ -70,6 +59,7 @@ export async function openBinanceFuturesPosition(
   const leverage = getConfiguredBinanceLeverage();
   const marginType = getConfiguredBinanceMarginType();
   const riskPercent = getConfiguredBinanceRiskPercentPerTrade();
+  const riskUsdt = getConfiguredBinanceRiskUsdPerTrade();
   const side: "BUY" | "SELL" = setup.direction === "LONG" ? "BUY" : "SELL";
   const closeSide: "BUY" | "SELL" = side === "BUY" ? "SELL" : "BUY";
 
@@ -102,6 +92,7 @@ export async function openBinanceFuturesPosition(
     const sizing = computeOrderQuantity({
       balanceUsdt: balance,
       riskPercent,
+      riskUsdt,
       entry: plan.entry,
       stopLoss: plan.stopLoss,
       leverage,
@@ -267,82 +258,147 @@ export async function openBinanceFuturesPosition(
     );
   }
 }
-```
 
-### File 2: `src/charts/index.ts` (sửa)
+export async function reconcileBinancePosition(
+  position: OpenPosition,
+): Promise<PositionDecisionOutcome> {
+  const symbol = position.binanceSymbol as string;
+  const alreadyPartial = (position.tp1ClosedPercent ?? 0) > 0;
 
-1. Thêm import ở đầu file (cạnh các import khác, sau dòng `import { CHARTS, getChartsForTimeframeMode } from "./volman-charts.config.js";`):
+  // Execution "failed" = fail-safe cua task 04 da dong khan cap vi the tren san
+  // (khong con lenh nao, moi order id deu null). Neu de HOLD, position DB se treo
+  // mai mai (khong roi ve luong candle vi binanceSymbol da set). Dong DB luon.
+  if (position.binanceExecutionStatus === "failed") {
+    return {
+      decision: "CLOSE",
+      confidence: 100,
+      comment:
+        "Execution Binance thất bại — vị thế đã được fail-safe đóng khẩn cấp trên sàn, đóng bản ghi DB tương ứng",
+      managementAction: "NONE",
+      partialClosePercent: 0,
+      newStopLoss: null,
+      tp1Reached: false,
+      tp2Reached: false,
+      riskReward: null,
+      tp1RiskReward: null,
+      tp2RiskReward: null,
+    };
+  }
 
-```ts
-import { openBinanceFuturesPosition } from "./binance-execution-volman.js";
-import { isBinanceLiveTradingEnabled } from "./binance-futures-config-env.js";
-import { findOpenPositionIdByPair } from "./positions-repository-volman.js";
-```
+  if (position.binanceSlOrderId) {
+    const slStatus = await getOrderStatus(symbol, position.binanceSlOrderId);
+    if (!(slStatus instanceof Error) && slStatus.status === "FILLED") {
+      if (position.binanceTp1OrderId) {
+        await cancelOrder(symbol, position.binanceTp1OrderId);
+      }
+      if (position.binanceTp2OrderId) {
+        await cancelOrder(symbol, position.binanceTp2OrderId);
+      }
+      return {
+        decision: "STOP",
+        confidence: 100,
+        comment: "SL đã khớp trên Binance Futures",
+        managementAction: "NONE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: alreadyPartial,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+  }
 
-Lưu ý: `saveOpenPosition` đã được import từ `positions-repository-volman.js` ở dòng 2 — thêm `findOpenPositionIdByPair` vào CÙNG import đó (gộp lại thành 1 dòng import, không tạo 2 dòng import riêng từ cùng 1 file):
-```ts
-import { saveOpenPosition, findOpenPositionIdByPair /*, savePendingOrder */ } from "./positions-repository-volman.js";
-```
+  if (position.binanceTp2OrderId) {
+    const tp2Status = await getOrderStatus(symbol, position.binanceTp2OrderId);
+    if (!(tp2Status instanceof Error) && tp2Status.status === "FILLED") {
+      if (position.binanceSlOrderId) {
+        await cancelOrder(symbol, position.binanceSlOrderId);
+      }
+      return {
+        decision: "CLOSE",
+        confidence: 100,
+        comment: "TP2 đã khớp trên Binance Futures",
+        managementAction: "TP2_CLOSE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: true,
+        tp2Reached: true,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+  }
 
-2. Trong nhánh `if (shouldAutoTrackAsOpen(setup, threshold))` (khoảng dòng 202-224), ngay sau đoạn:
-```ts
-        const saved = await saveOpenPosition(setup);
-        if (saved) {
-          setup.autoTracked = true;
-          logger.info("Auto-saved open position", { pair: setup.pair });
-        } else {
-```
-Thêm code gọi Binance execution vào NGAY sau `logger.info("Auto-saved open position", ...)` (bên trong khối `if (saved) { ... }`, thêm dòng mới sau logger.info, TRƯỚC dấu `}` đóng khối if):
+  if (!alreadyPartial && position.binanceTp1OrderId) {
+    const tp1Status = await getOrderStatus(symbol, position.binanceTp1OrderId);
+    if (!(tp1Status instanceof Error) && tp1Status.status === "FILLED") {
+      const closeSide: "BUY" | "SELL" =
+        position.direction === "LONG" ? "SELL" : "BUY";
 
-```ts
-          if (isBinanceLiveTradingEnabled()) {
-            const chartSymbol = symbolByPair.get(setup.pair);
-            if (chartSymbol) {
-              const positionId = await findOpenPositionIdByPair(setup.pair);
-              if (positionId !== null) {
-                await openBinanceFuturesPosition(setup, positionId, chartSymbol);
-              }
-            }
-          }
-```
+      // THU TU BAT BUOC: dat SL moi o breakeven TRUOC, huy SL cu SAU.
+      // Neu dat SL moi fail -> SL cu van con, vi the luon co bao ve
+      // (Binance cho phep 2 lenh STOP_MARKET closePosition=true cung ton tai).
+      // Gia breakeven cung phai lam tron tickSize nhu moi stopPrice khac.
+      const filters = await getExchangeInfoFilters(symbol);
+      const entryPrice = Number(position.entry);
+      const bePrice =
+        filters instanceof Error
+          ? entryPrice
+          : roundToTickSize(entryPrice, filters.tickSize);
 
-Kết quả khối `if (saved) { ... }` sau khi sửa:
-```ts
-        if (saved) {
-          setup.autoTracked = true;
-          logger.info("Auto-saved open position", { pair: setup.pair });
-          if (isBinanceLiveTradingEnabled()) {
-            const chartSymbol = symbolByPair.get(setup.pair);
-            if (chartSymbol) {
-              const positionId = await findOpenPositionIdByPair(setup.pair);
-              if (positionId !== null) {
-                await openBinanceFuturesPosition(setup, positionId, chartSymbol);
-              }
-            }
-          }
-        } else {
-```
+      const newSl = await placeStopMarketOrder(symbol, closeSide, bePrice);
+      if (!(newSl instanceof Error)) {
+        if (position.binanceSlOrderId) {
+          await cancelOrder(symbol, position.binanceSlOrderId);
+        }
+        await updateBinanceSlOrder(position.id, newSl.orderId, String(bePrice));
+      } else {
+        // SL cu van con nguyen tren san — vi the van co bao ve o SL goc,
+        // lan check sau se thu dat lai BE. Chi log, khong lam gi them.
+        logger.error(
+          "Khong the dat SL breakeven sau TP1 — giu nguyen SL cu, thu lai lan sau",
+          {
+            pair: position.pair,
+            id: position.id,
+            error: newSl,
+          },
+        );
+      }
+      // newStopLoss chi duoc bao ve BE khi lenh SL moi THAT SU dat thanh cong —
+      // neu fail, SL that tren san van o gia goc, DB khong duoc ghi sai.
+      const slMovedToBe = !(newSl instanceof Error);
+      return {
+        decision: "HOLD",
+        confidence: 90,
+        comment: slMovedToBe
+          ? "TP1 đã khớp trên Binance Futures, dời SL về breakeven"
+          : "TP1 đã khớp trên Binance Futures, dời SL về breakeven THẤT BẠI — SL vẫn ở giá gốc, sẽ thử lại lần check sau",
+        managementAction: "PARTIAL_TP1",
+        partialClosePercent: position.tp1ClosePercent ?? 50,
+        newStopLoss: slMovedToBe ? String(bePrice) : null,
+        tp1Reached: true,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+  }
 
-## Ràng buộc
-
-- KHÔNG sửa logic `shouldAutoTrackAsOpen`, `validateTradeSetupForOpen`, hay bất kỳ điều kiện auto-track nào khác.
-- KHÔNG đụng vào nhánh `else if` (pending order, đang bị disable có chủ đích — xem `tasks/disable-pending-orders/plan.md`).
-- `openBinanceFuturesPosition` PHẢI không bao giờ throw ra ngoài (đã có try/catch bọc toàn bộ trong code mẫu) — nếu lỗi Binance xảy ra, KHÔNG được làm crash hay dừng vòng lặp xử lý các setup khác trong `handleAnalysisResult`.
-- Tuân thủ "Quy tắc fail-safe bất biến" trong `plan.md`: mọi `stopPrice` phải qua `roundToTickSize`; qty TP1/TP2 phải qua `splitTpQuantities`; fail-safe phải hủy lệnh treo + kiểm tra kết quả lệnh đóng; lỗi DB không được kích hoạt đóng khẩn cấp.
-- Không thêm cấu hình/feature ngoài scope liệt kê ở trên.
-
-## Cách verify
-
-```bash
-npm run build
-npm run test
-```
-`tests/charts/index.test.ts` (nếu có) không được fail — nếu test mock `saveOpenPosition`/`findOpenPositionIdByPair`, cần đảm bảo `isBinanceLiveTradingEnabled()` mặc định `false` trong môi trường test (không set env `BINANCE_LIVE_TRADING_ENABLED`) nên nhánh Binance sẽ không chạy, không cần mock thêm gì mới.
-
-## Output
-
-Ghi vào `tasks/binance-futures-execution/04-entry-execution/result.md`:
-- Đường dẫn file mới + đoạn diff đã sửa trong `index.ts`
-- Kết quả `npm run build && npm run test`
-
-Nếu bị chặn (ví dụ không tìm thấy đúng đoạn code dòng 200-224 như mô tả do file đã đổi khác) → đọc lại file thực tế, tìm đúng vị trí tương đương (nhánh `if (shouldAutoTrackAsOpen(...))` gọi `saveOpenPosition`), áp dụng đúng logic mô tả. Nếu vẫn không xác định được → ghi `blocked.md`.
+  return {
+    decision: "HOLD",
+    confidence: 100,
+    comment: "Vị thế đang mở trên Binance Futures, chưa có lệnh SL/TP nào khớp",
+    managementAction: "NONE",
+    partialClosePercent: 0,
+    newStopLoss: null,
+    tp1Reached: alreadyPartial,
+    tp2Reached: false,
+    riskReward: null,
+    tp1RiskReward: null,
+    tp2RiskReward: null,
+  };
+}

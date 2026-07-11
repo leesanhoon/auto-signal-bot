@@ -1,78 +1,3 @@
-# Task 01: Binance Futures REST client + env config
-
-> **CẬP NHẬT SAU KHI TEST TESTNET (đã áp dụng thẳng vào code thật, xem `src/charts/binance-futures-client.ts`):**
-> Từ 2025-12-09, Binance đã migrate các lệnh điều kiện (`STOP_MARKET`, `TAKE_PROFIT_MARKET`, `STOP`, `TAKE_PROFIT`, `TRAILING_STOP_MARKET`) sang **Algo Order API** (`/fapi/v1/algoOrder`) — gọi qua `/fapi/v1/order` cũ như code mẫu gốc dưới đây sẽ bị từ chối với lỗi `-4120 "Order type not supported for this endpoint. Please use the Algo Order API endpoints instead."`. Đây là breaking change thật của Binance, ảnh hưởng **cả production lẫn testnet**. Code mẫu bên dưới đã LỖI THỜI cho `placeStopMarketOrder`/`placeTakeProfitMarketOrder`/`cancelOrder`/`getOrderStatus` — xem bản đã fix thực tế trong source, tóm tắt thay đổi:
-> - `placeStopMarketOrder`/`placeTakeProfitMarketOrder`: đổi `POST /fapi/v1/order` → `POST /fapi/v1/algoOrder`, thêm `algoType: "CONDITIONAL"`, đổi tham số `stopPrice` → `triggerPrice`, response field `orderId`/`status` → `algoId`/`algoStatus` (map lại về `{orderId, status}` để interface không đổi).
-> - `cancelOrder`: đổi `DELETE /fapi/v1/order` → `DELETE /fapi/v1/algoOrder`, tham số `orderId` → `algoId`.
-> - `getOrderStatus`: đổi `GET /fapi/v1/order` → `GET /fapi/v1/algoOrder`, tham số `orderId` → `algoId`, và **chuẩn hoá** `algoStatus === "TRIGGERED"` thành `"FILLED"` trong giá trị trả về (vì algo order khi khớp không trả `status: "FILLED"` như order thường mà trả `algoStatus: "TRIGGERED"`) — để code downstream (`reconcileBinancePosition` so sánh `status.status === "FILLED"`) không cần sửa.
-> - `placeMarketOrder` (entry + lệnh đóng khẩn cấp) KHÔNG đổi — vẫn dùng `/fapi/v1/order` vì MARKET không phải lệnh điều kiện, không nằm trong danh sách bị migrate.
-> - Đã verify end-to-end trên Binance Futures Testnet: đặt entry+SL+TP1+TP2 thành công, query status + cancel hoạt động đúng, không còn lỗi -4120.
-> - Ghi nhận thêm (không chặn, chỉ để biết): ngay sau khi đặt algo order, gọi `getOrderStatus` gần như tức thời đôi khi trả lỗi `-2013 "Order does not exist"` dù order đã tồn tại thật (cancel ngay sau đó vẫn thành công) — có vẻ là độ trễ đồng bộ nội bộ của Binance. Vì `reconcileBinancePosition` chạy theo cron cách nhau vài phút (không phải ngay sau khi đặt lệnh), độ trễ này không ảnh hưởng thực tế; code đã xử lý an toàn khi gặp `Error` (coi là "chưa khớp", không crash).
->
-
-## Bối cảnh
-
-Repo hiện chỉ có 1 chỗ gọi Binance: `src/charts/ohlc-provider.ts` (dòng 376-479) fetch **public spot klines** (`api.binance.com`, không cần API key) để lấy dữ liệu nến. Task này tạo **client mới, hoàn toàn tách biệt**, gọi **USDS-M Futures REST API** (`fapi.binance.com`), có ký HMAC bằng API key/secret, để đặt lệnh thật. KHÔNG sửa `ohlc-provider.ts`.
-
-## Việc cần làm
-
-### File 1: `src/charts/binance-futures-config-env.ts` (tạo mới)
-
-Copy chính xác nội dung sau:
-
-```ts
-function readBooleanEnv(key: string, defaultValue: boolean): boolean {
-  const raw = process.env[key]?.trim().toLowerCase();
-  if (!raw) return defaultValue;
-  if (["1", "true", "yes", "on"].includes(raw)) return true;
-  if (["0", "false", "no", "off"].includes(raw)) return false;
-  return defaultValue;
-}
-
-export function isBinanceLiveTradingEnabled(): boolean {
-  return readBooleanEnv("BINANCE_LIVE_TRADING_ENABLED", false);
-}
-
-export function getConfiguredBinanceLeverage(): number {
-  const raw = process.env.BINANCE_LEVERAGE?.trim();
-  if (!raw) return 5;
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 5;
-}
-
-export function getConfiguredBinanceMarginType(): "ISOLATED" | "CROSSED" {
-  const raw = process.env.BINANCE_MARGIN_TYPE?.trim().toUpperCase();
-  return raw === "CROSSED" ? "CROSSED" : "ISOLATED";
-}
-
-export function getConfiguredBinanceRiskPercentPerTrade(): number {
-  const raw = process.env.BINANCE_RISK_PERCENT_PER_TRADE?.trim();
-  if (!raw) return 1;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-}
-
-// Khuyến nghị test end-to-end với testnet trước khi live:
-// BINANCE_FUTURES_BASE_URL=https://testnet.binancefuture.com (API key testnet riêng)
-export function getConfiguredBinanceFuturesBaseUrl(): string {
-  const raw = process.env.BINANCE_FUTURES_BASE_URL?.trim();
-  return raw && raw.length > 0 ? raw : "https://fapi.binance.com";
-}
-
-export function getConfiguredBinanceApiKey(): string | undefined {
-  return process.env.BINANCE_API_KEY?.trim();
-}
-
-export function getConfiguredBinanceApiSecret(): string | undefined {
-  return process.env.BINANCE_API_SECRET?.trim();
-}
-```
-
-### File 2: `src/charts/binance-futures-client.ts` (tạo mới)
-
-Copy chính xác nội dung sau (client ký HMAC-SHA256, tái dùng `withRetry`/`withConfiguredRateLimit`/`formatFetchErrorDetails`/`createLogger` — 4 helper này đã tồn tại sẵn trong repo, import đúng path như dưới):
-
-```ts
 import { createHmac } from "node:crypto";
 import { withRetry } from "../shared/retry.js";
 import { withConfiguredRateLimit } from "../shared/rate-limit.js";
@@ -100,6 +25,13 @@ export type BinanceOrderResult = {
   status: string;
   symbol: string;
 };
+
+// Tu 2025-12-09 Binance migrate cac lenh dieu kien (STOP_MARKET, TAKE_PROFIT_MARKET,
+// STOP, TAKE_PROFIT, TRAILING_STOP_MARKET) sang Algo Order API rieng (/fapi/v1/algoOrder).
+// Goi qua /fapi/v1/order cu se bi tu choi voi loi -4120 "Order type not supported for
+// this endpoint. Please use the Algo Order API endpoints instead."
+// Tap hop cac trang thai "da kich hoat" cua algo order — tuong duong FILLED cua order thuong.
+const ALGO_TRIGGERED_STATUSES = new Set(["TRIGGERED"]);
 
 function buildQueryString(
   params: Record<string, string | number | boolean>,
@@ -301,24 +233,28 @@ export async function placeMarketOrder(
   return { orderId: result.orderId, status: result.status, symbol: result.symbol };
 }
 
+// STOP_MARKET/TAKE_PROFIT_MARKET la lenh dieu kien -> phai dat qua Algo Order API.
+// orderId tra ve o day thuc chat la algoId (dung chung field name de downstream
+// (DB, reconcile) khong can biet phan biet order thuong vs algo order).
 export async function placeStopMarketOrder(
   symbol: string,
   side: BinanceOrderSide,
   stopPrice: number,
 ): Promise<BinanceOrderResult | Error> {
   const result = await signedRequest<{
-    orderId: number;
-    status: string;
+    algoId: number;
+    algoStatus: string;
     symbol: string;
-  }>("POST", "/fapi/v1/order", {
+  }>("POST", "/fapi/v1/algoOrder", {
+    algoType: "CONDITIONAL",
     symbol,
     side,
     type: "STOP_MARKET",
-    stopPrice,
+    triggerPrice: stopPrice,
     closePosition: true,
   });
   if (result instanceof Error) return result;
-  return { orderId: result.orderId, status: result.status, symbol: result.symbol };
+  return { orderId: result.algoId, status: result.algoStatus, symbol: result.symbol };
 }
 
 export async function placeTakeProfitMarketOrder(
@@ -328,28 +264,32 @@ export async function placeTakeProfitMarketOrder(
   quantity: number,
 ): Promise<BinanceOrderResult | Error> {
   const result = await signedRequest<{
-    orderId: number;
-    status: string;
+    algoId: number;
+    algoStatus: string;
     symbol: string;
-  }>("POST", "/fapi/v1/order", {
+  }>("POST", "/fapi/v1/algoOrder", {
+    algoType: "CONDITIONAL",
     symbol,
     side,
     type: "TAKE_PROFIT_MARKET",
-    stopPrice,
+    triggerPrice: stopPrice,
     quantity,
     reduceOnly: true,
   });
   if (result instanceof Error) return result;
-  return { orderId: result.orderId, status: result.status, symbol: result.symbol };
+  return { orderId: result.algoId, status: result.algoStatus, symbol: result.symbol };
 }
 
+// CHI dung cho algo order (SL/TP dat qua placeStopMarketOrder/placeTakeProfitMarketOrder
+// o tren) — orderId truyen vao thuc chat la algoId. Entry/close order (MARKET thuong)
+// khong bao gio can cancel (khong phai lenh cho khop).
 export async function cancelOrder(
   symbol: string,
   orderId: number,
 ): Promise<true | Error> {
-  const result = await signedRequest("DELETE", "/fapi/v1/order", {
+  const result = await signedRequest("DELETE", "/fapi/v1/algoOrder", {
     symbol,
-    orderId,
+    algoId: orderId,
   });
   if (result instanceof Error) {
     if (result.message.includes("code -2011")) return true; // "Unknown order sent" = da huy/khop roi
@@ -358,17 +298,24 @@ export async function cancelOrder(
   return true;
 }
 
+// CHI dung cho algo order (SL/TP) — orderId truyen vao thuc chat la algoId.
+// algoStatus khac status cua order thuong: khi trigger, algoStatus chuyen thanh
+// "TRIGGERED" (KHONG phai "FILLED"). Chuan hoa ve "FILLED" o day de code downstream
+// (reconcileBinancePosition, check status.status === "FILLED") khong can sua.
 export async function getOrderStatus(
   symbol: string,
   orderId: number,
 ): Promise<{ status: string; avgPrice: string } | Error> {
-  const result = await signedRequest<{ status: string; avgPrice: string }>(
+  const result = await signedRequest<{ algoStatus: string; symbol: string }>(
     "GET",
-    "/fapi/v1/order",
-    { symbol, orderId },
+    "/fapi/v1/algoOrder",
+    { symbol, algoId: orderId },
   );
   if (result instanceof Error) return result;
-  return result;
+  const status = ALGO_TRIGGERED_STATUSES.has(result.algoStatus)
+    ? "FILLED"
+    : result.algoStatus;
+  return { status, avgPrice: "" };
 }
 
 // Trả về true nếu account đang ở Hedge mode (dualSidePosition) — plan này CHỈ hỗ trợ
@@ -396,26 +343,3 @@ export async function getPositionAmount(
   const amt = Number(row.positionAmt);
   return Number.isFinite(amt) ? amt : new Error("Khong parse duoc positionAmt");
 }
-```
-
-## Ràng buộc
-
-- KHÔNG sửa `src/charts/ohlc-provider.ts` hay bất kỳ file nào khác.
-- KHÔNG thêm dependency npm mới (`node:crypto` là built-in Node, không cần cài).
-- Mọi hàm public phải trả `T | Error`, KHÔNG throw ra ngoài (đúng convention toàn repo — xem `ohlc-provider.ts`).
-- Không tự ý đổi tên export hay signature khác với liệt kê ở trên (subtask 03/04/05 sẽ import đúng các tên này).
-
-## Cách verify
-
-```bash
-npm run build
-```
-Phải pass không lỗi TypeScript (chú ý: `tsconfig` dùng strict mode, để ý các cast `as any` chỉ dùng ở chỗ đã ghi trong code mẫu).
-
-## Output
-
-Ghi vào `tasks/binance-futures-execution/01-binance-client-config/result.md`:
-- Đường dẫn 2 file đã tạo
-- Kết quả `npm run build`
-
-Nếu bị chặn (ví dụ thiếu helper `formatFetchErrorDetails`/`withRetry`/`withConfiguredRateLimit`/`createLogger` không đúng path như trên) → ghi `blocked.md`, không tự đoán path khác.

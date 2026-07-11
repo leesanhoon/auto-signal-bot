@@ -1,0 +1,1359 @@
+
+> auto-signal-bot@1.0.0 backtest:compare
+> tsx src/charts/setup-backtest-compare-runner.ts
+
+[2026-07-11 18:35:29.918 +0700] [32mINFO[39m: [36mSetup backtest compare starting[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:29.918 +0700] [32mINFO[39m: [36mConfig: H4, 500 bars, exit=fixed, pendingExpiryBars=2[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:29.918 +0700] [32mINFO[39m: [36mPairs to backtest: 64[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:29.918 +0700] [32mINFO[39m: [36mFetching H4 data for BTC/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:30.322 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:30.327 +0700] [32mINFO[39m: [36mFetching H4 data for DASH/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:30.611 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:30.613 +0700] [32mINFO[39m: [36mFetching H4 data for ETH/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:30.845 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:30.847 +0700] [32mINFO[39m: [36mFetching H4 data for LTC/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.079 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.081 +0700] [32mINFO[39m: [36mFetching H4 data for DOT/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.311 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.313 +0700] [32mINFO[39m: [36mFetching H4 data for XRP/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.544 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.545 +0700] [32mINFO[39m: [36mFetching H4 data for ADA/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.777 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:31.779 +0700] [32mINFO[39m: [36mFetching H4 data for BCH/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.008 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.010 +0700] [32mINFO[39m: [36mFetching H4 data for SOL/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.243 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.244 +0700] [32mINFO[39m: [36mFetching H4 data for AVA/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.475 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.476 +0700] [32mINFO[39m: [36mFetching H4 data for ETC/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.708 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.709 +0700] [32mINFO[39m: [36mFetching H4 data for NEO/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.939 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:32.940 +0700] [32mINFO[39m: [36mFetching H4 data for DOGE/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.170 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.171 +0700] [32mINFO[39m: [36mFetching H4 data for BNB/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.402 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.403 +0700] [32mINFO[39m: [36mFetching H4 data for ZEC/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.635 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.636 +0700] [32mINFO[39m: [36mFetching H4 data for TRX/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.868 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:33.869 +0700] [32mINFO[39m: [36mFetching H4 data for XLM/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.100 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.100 +0700] [32mINFO[39m: [36mFetching H4 data for AAVE/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.330 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.331 +0700] [32mINFO[39m: [36mFetching H4 data for UNI/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.561 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.562 +0700] [32mINFO[39m: [36mFetching H4 data for ARB/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.790 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:34.791 +0700] [32mINFO[39m: [36mFetching H4 data for NEAR/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.021 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.022 +0700] [32mINFO[39m: [36mFetching H4 data for SUI/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.251 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.252 +0700] [32mINFO[39m: [36mFetching H4 data for PEPE/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.483 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.484 +0700] [32mINFO[39m: [36mFetching H4 data for WLD/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.715 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.716 +0700] [32mINFO[39m: [36mFetching H4 data for TAO/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.948 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:35.949 +0700] [32mINFO[39m: [36mFetching H4 data for ENA/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.184 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.185 +0700] [32mINFO[39m: [36mFetching H4 data for PAXG/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.417 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.418 +0700] [32mINFO[39m: [36mFetching H4 data for LINK/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.647 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.648 +0700] [32mINFO[39m: [36mFetching H4 data for AVAX/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.878 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:36.879 +0700] [32mINFO[39m: [36mFetching H4 data for ICP/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.110 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.111 +0700] [32mINFO[39m: [36mFetching H4 data for TIA/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.344 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.345 +0700] [32mINFO[39m: [36mFetching H4 data for ONDO/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.737 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.738 +0700] [32mINFO[39m: [36mFetching H4 data for FIL/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.972 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:37.973 +0700] [32mINFO[39m: [36mFetching H4 data for SEI/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.203 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.204 +0700] [32mINFO[39m: [36mFetching H4 data for FET/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.431 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.432 +0700] [32mINFO[39m: [36mFetching H4 data for HBAR/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.662 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.663 +0700] [32mINFO[39m: [36mFetching H4 data for IOTA/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.892 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:38.893 +0700] [32mINFO[39m: [36mFetching H4 data for BONK/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.120 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.121 +0700] [32mINFO[39m: [36mFetching H4 data for LDO/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.352 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.352 +0700] [32mINFO[39m: [36mFetching H4 data for INJ/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.586 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.587 +0700] [32mINFO[39m: [36mFetching H4 data for EIGEN/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.817 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:39.818 +0700] [32mINFO[39m: [36mFetching H4 data for POL/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.048 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.049 +0700] [32mINFO[39m: [36mFetching H4 data for APT/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.278 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.278 +0700] [32mINFO[39m: [36mFetching H4 data for OP/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.510 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.511 +0700] [32mINFO[39m: [36mFetching H4 data for PENGU/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.760 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.761 +0700] [32mINFO[39m: [36mFetching H4 data for ORDI/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:40.999 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.000 +0700] [32mINFO[39m: [36mFetching H4 data for ALGO/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.233 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.234 +0700] [32mINFO[39m: [36mFetching H4 data for JTO/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.466 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.467 +0700] [32mINFO[39m: [36mFetching H4 data for PENDLE/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.698 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.699 +0700] [32mINFO[39m: [36mFetching H4 data for APE/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.929 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:41.930 +0700] [32mINFO[39m: [36mFetching H4 data for ETHFI/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:42.161 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:42.162 +0700] [32mINFO[39m: [36mFetching H4 data for PYTH/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:42.391 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:42.392 +0700] [32mINFO[39m: [36mFetching H4 data for SHIB/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:42.625 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:42.626 +0700] [32mINFO[39m: [36mFetching H4 data for GALA/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.014 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.015 +0700] [32mINFO[39m: [36mFetching H4 data for ZRO/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.245 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.246 +0700] [32mINFO[39m: [36mFetching H4 data for RENDER/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.476 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.477 +0700] [32mINFO[39m: [36mFetching H4 data for CAKE/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.708 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.709 +0700] [32mINFO[39m: [36mFetching H4 data for CRV/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.939 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:43.941 +0700] [32mINFO[39m: [36mFetching H4 data for CHZ/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:44.176 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:44.177 +0700] [32mINFO[39m: [36mFetching H4 data for RUNE/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:44.410 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:44.411 +0700] [32mINFO[39m: [36mFetching H4 data for ATOM/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:44.961 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:44.962 +0700] [32mINFO[39m: [36mFetching H4 data for DYDX/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:45.430 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:45.431 +0700] [32mINFO[39m: [36mFetching H4 data for STRK/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:45.661 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+[2026-07-11 18:35:45.662 +0700] [32mINFO[39m: [36mFetching H4 data for WIF/USDT...[39m
+    [35msource[39m: "charts:setup-backtest-compare"
+
+====================================================================================================
+BACKTEST A/B COMPARISON: IMMEDIATE vs PENDING
+====================================================================================================
+Label           Trades (i/p)    Win Rate (i/p, Δ pp)      Avg R (i/p, Δ)           
+----------------------------------------------------------------------------------------------------
+OVERALL         706/964         80.7%/68.5%, -12.3 pp     0.78R/0.52R, -0.27       
+  ARB           157/142         82.2%/81.7%, -0.5 pp      0.73R/0.71R, -0.01       
+  BB            13/18           92.3%/77.8%, -14.5 pp     1.38R/1.00R, -0.38       
+  IRB           114/156         61.4%/53.2%, -8.2 pp      0.72R/0.51R, -0.21       
+  RB            422/648         85.1%/69.0%, -16.1 pp     0.80R/0.46R, -0.34       
+
+  AAVE/USDT     12/17           83.3%/52.9%, -30.4 pp     0.97R/0.27R, -0.70       
+  ADA/USDT      12/15           100.0%/80.0%, -20.0 pp    1.08R/0.77R, -0.31       
+  ALGO/USDT     14/20           78.6%/75.0%, -3.6 pp      0.57R/0.50R, -0.07       
+  APE/USDT      11/14           63.6%/50.0%, -13.6 pp     0.39R/0.12R, -0.26       
+  APT/USDT      10/17           90.0%/64.7%, -25.3 pp     1.01R/0.41R, -0.59       
+  ARB/USDT      13/19           92.3%/68.4%, -23.9 pp     0.91R/0.42R, -0.49       
+  ATOM/USDT     10/13           90.0%/76.9%, -13.1 pp     0.85R/0.68R, -0.17       
+  AVA/USDT      7/11            71.4%/63.6%, -7.8 pp      0.67R/0.42R, -0.24       
+  AVAX/USDT     6/8             83.3%/75.0%, -8.3 pp      0.75R/0.56R, -0.19       
+  BCH/USDT      13/15           100.0%/100.0%, +0.0 pp    1.20R/1.13R, -0.07       
+  BNB/USDT      13/16           76.9%/81.3%, +4.3 pp      0.65R/0.81R, +0.16       
+  BONK/USDT     11/14           90.9%/78.6%, -12.3 pp     1.14R/0.90R, -0.24       
+  BTC/USDT      11/15           81.8%/80.0%, -1.8 pp      0.88R/0.84R, -0.03       
+  CAKE/USDT     6/10            100.0%/80.0%, -20.0 pp    1.13R/0.68R, -0.45       
+  CHZ/USDT      13/18           92.3%/66.7%, -25.6 pp     1.06R/0.54R, -0.53       
+  CRV/USDT      5/12            80.0%/50.0%, -30.0 pp     0.77R/0.07R, -0.70       
+  DASH/USDT     11/15           81.8%/60.0%, -21.8 pp     0.75R/0.29R, -0.47       
+  DOGE/USDT     6/13            83.3%/61.5%, -21.8 pp     0.92R/0.35R, -0.57       
+  DOT/USDT      12/17           75.0%/58.8%, -16.2 pp     0.64R/0.32R, -0.32       
+  DYDX/USDT     6/11            66.7%/54.5%, -12.1 pp     0.42R/0.25R, -0.17       
+  EIGEN/USDT    12/19           66.7%/63.2%, -3.5 pp      0.50R/0.39R, -0.10       
+  ENA/USDT      12/15           75.0%/60.0%, -15.0 pp     0.58R/0.26R, -0.32       
+  ETC/USDT      13/16           76.9%/75.0%, -1.9 pp      0.58R/0.66R, +0.09       
+  ETH/USDT      12/15           91.7%/80.0%, -11.7 pp     1.00R/0.73R, -0.27       
+  ETHFI/USDT    12/18           66.7%/66.7%, +0.0 pp      0.49R/0.54R, +0.05       
+  FET/USDT      14/19           71.4%/68.4%, -3.0 pp      0.51R/0.49R, -0.03       
+  FIL/USDT      15/17           80.0%/70.6%, -9.4 pp      0.81R/0.60R, -0.21       
+  GALA/USDT     16/19           87.5%/78.9%, -8.6 pp      0.92R/0.73R, -0.19       
+  HBAR/USDT     10/15           70.0%/66.7%, -3.3 pp      0.48R/0.39R, -0.09       
+  ICP/USDT      7/15            85.7%/66.7%, -19.0 pp     0.86R/0.43R, -0.42       
+  INJ/USDT      12/17           75.0%/58.8%, -16.2 pp     0.50R/0.21R, -0.29       
+  IOTA/USDT     17/19           88.2%/68.4%, -19.8 pp     0.93R/0.50R, -0.43       
+  JTO/USDT      12/15           66.7%/53.3%, -13.3 pp     0.42R/0.13R, -0.28       
+  LDO/USDT      6/10            66.7%/60.0%, -6.7 pp      0.42R/0.25R, -0.17       
+  LINK/USDT     10/15           80.0%/60.0%, -20.0 pp     0.60R/0.30R, -0.30       
+  LTC/USDT      14/17           78.6%/64.7%, -13.9 pp     0.84R/0.52R, -0.33       
+  NEAR/USDT     11/17           72.7%/64.7%, -8.0 pp      0.55R/0.38R, -0.16       
+  NEO/USDT      12/17           83.3%/64.7%, -18.6 pp     0.83R/0.44R, -0.39       
+  ONDO/USDT     11/16           72.7%/43.8%, -29.0 pp     0.70R/-0.02R, -0.72      
+  OP/USDT       14/16           85.7%/81.3%, -4.5 pp      0.96R/0.81R, -0.15       
+  ORDI/USDT     6/11            66.7%/63.6%, -3.0 pp      0.58R/0.37R, -0.21       
+  PAXG/USDT     11/10           45.5%/50.0%, +4.5 pp      0.10R/0.10R, +0.00       
+  PENDLE/USDT   8/10            87.5%/70.0%, -17.5 pp     1.04R/0.64R, -0.41       
+  PENGU/USDT    9/15            88.9%/66.7%, -22.2 pp     0.83R/0.40R, -0.43       
+  PEPE/USDT     7/11            71.4%/54.5%, -16.9 pp     0.53R/0.26R, -0.27       
+  POL/USDT      16/17           56.3%/76.5%, +20.2 pp     0.21R/0.70R, +0.50       
+  PYTH/USDT     13/20           100.0%/65.0%, -35.0 pp    1.12R/0.38R, -0.74       
+  RENDER/USDT   11/16           72.7%/62.5%, -10.2 pp     0.59R/0.34R, -0.25       
+  RUNE/USDT     11/14           100.0%/92.9%, -7.1 pp     1.22R/1.20R, -0.02       
+  SEI/USDT      13/16           84.6%/68.8%, -15.9 pp     0.93R/0.54R, -0.39       
+  SHIB/USDT     9/14            77.8%/64.3%, -13.5 pp     0.56R/0.43R, -0.13       
+  SOL/USDT      13/17           92.3%/82.4%, -10.0 pp     0.92R/0.71R, -0.22       
+  STRK/USDT     6/9             100.0%/77.8%, -22.2 pp    1.14R/0.84R, -0.30       
+  SUI/USDT      9/13            88.9%/76.9%, -12.0 pp     1.29R/0.89R, -0.40       
+  TAO/USDT      11/15           90.9%/73.3%, -17.6 pp     1.09R/0.72R, -0.36       
+  TIA/USDT      9/12            100.0%/83.3%, -16.7 pp    1.19R/0.81R, -0.38       
+  TRX/USDT      19/18           89.5%/94.4%, +5.0 pp      1.07R/1.19R, +0.12       
+  UNI/USDT      10/16           70.0%/75.0%, +5.0 pp      0.55R/0.67R, +0.12       
+  WIF/USDT      10/15           80.0%/53.3%, -26.7 pp     0.90R/0.21R, -0.69       
+  WLD/USDT      13/17           76.9%/64.7%, -12.2 pp     0.78R/0.45R, -0.33       
+  XLM/USDT      12/16           58.3%/50.0%, -8.3 pp      0.44R/0.20R, -0.23       
+  XRP/USDT      10/16           80.0%/56.3%, -23.8 pp     0.89R/0.31R, -0.58       
+  ZEC/USDT      12/12           83.3%/75.0%, -8.3 pp      0.84R/0.54R, -0.30       
+  ZRO/USDT      14/17           78.6%/82.4%, +3.8 pp      0.87R/0.89R, +0.02       
+====================================================================================================
+
+====================================================================================================
+BY SETUP
+====================================================================================================
+Label           Trades (i/p)    Win Rate (i/p, Δ pp)      Avg R (i/p, Δ)           
+----------------------------------------------------------------------------------------------------
+OVERALL         706/964         80.7%/68.5%, -12.3 pp     0.78R/0.52R, -0.27       
+  ARB           157/142         82.2%/81.7%, -0.5 pp      0.73R/0.71R, -0.01       
+  BB            13/18           92.3%/77.8%, -14.5 pp     1.38R/1.00R, -0.38       
+  IRB           114/156         61.4%/53.2%, -8.2 pp      0.72R/0.51R, -0.21       
+  RB            422/648         85.1%/69.0%, -16.1 pp     0.80R/0.46R, -0.34       
+
+  AAVE/USDT     12/17           83.3%/52.9%, -30.4 pp     0.97R/0.27R, -0.70       
+  ADA/USDT      12/15           100.0%/80.0%, -20.0 pp    1.08R/0.77R, -0.31       
+  ALGO/USDT     14/20           78.6%/75.0%, -3.6 pp      0.57R/0.50R, -0.07       
+  APE/USDT      11/14           63.6%/50.0%, -13.6 pp     0.39R/0.12R, -0.26       
+  APT/USDT      10/17           90.0%/64.7%, -25.3 pp     1.01R/0.41R, -0.59       
+  ARB/USDT      13/19           92.3%/68.4%, -23.9 pp     0.91R/0.42R, -0.49       
+  ATOM/USDT     10/13           90.0%/76.9%, -13.1 pp     0.85R/0.68R, -0.17       
+  AVA/USDT      7/11            71.4%/63.6%, -7.8 pp      0.67R/0.42R, -0.24       
+  AVAX/USDT     6/8             83.3%/75.0%, -8.3 pp      0.75R/0.56R, -0.19       
+  BCH/USDT      13/15           100.0%/100.0%, +0.0 pp    1.20R/1.13R, -0.07       
+  BNB/USDT      13/16           76.9%/81.3%, +4.3 pp      0.65R/0.81R, +0.16       
+  BONK/USDT     11/14           90.9%/78.6%, -12.3 pp     1.14R/0.90R, -0.24       
+  BTC/USDT      11/15           81.8%/80.0%, -1.8 pp      0.88R/0.84R, -0.03       
+  CAKE/USDT     6/10            100.0%/80.0%, -20.0 pp    1.13R/0.68R, -0.45       
+  CHZ/USDT      13/18           92.3%/66.7%, -25.6 pp     1.06R/0.54R, -0.53       
+  CRV/USDT      5/12            80.0%/50.0%, -30.0 pp     0.77R/0.07R, -0.70       
+  DASH/USDT     11/15           81.8%/60.0%, -21.8 pp     0.75R/0.29R, -0.47       
+  DOGE/USDT     6/13            83.3%/61.5%, -21.8 pp     0.92R/0.35R, -0.57       
+  DOT/USDT      12/17           75.0%/58.8%, -16.2 pp     0.64R/0.32R, -0.32       
+  DYDX/USDT     6/11            66.7%/54.5%, -12.1 pp     0.42R/0.25R, -0.17       
+  EIGEN/USDT    12/19           66.7%/63.2%, -3.5 pp      0.50R/0.39R, -0.10       
+  ENA/USDT      12/15           75.0%/60.0%, -15.0 pp     0.58R/0.26R, -0.32       
+  ETC/USDT      13/16           76.9%/75.0%, -1.9 pp      0.58R/0.66R, +0.09       
+  ETH/USDT      12/15           91.7%/80.0%, -11.7 pp     1.00R/0.73R, -0.27       
+  ETHFI/USDT    12/18           66.7%/66.7%, +0.0 pp      0.49R/0.54R, +0.05       
+  FET/USDT      14/19           71.4%/68.4%, -3.0 pp      0.51R/0.49R, -0.03       
+  FIL/USDT      15/17           80.0%/70.6%, -9.4 pp      0.81R/0.60R, -0.21       
+  GALA/USDT     16/19           87.5%/78.9%, -8.6 pp      0.92R/0.73R, -0.19       
+  HBAR/USDT     10/15           70.0%/66.7%, -3.3 pp      0.48R/0.39R, -0.09       
+  ICP/USDT      7/15            85.7%/66.7%, -19.0 pp     0.86R/0.43R, -0.42       
+  INJ/USDT      12/17           75.0%/58.8%, -16.2 pp     0.50R/0.21R, -0.29       
+  IOTA/USDT     17/19           88.2%/68.4%, -19.8 pp     0.93R/0.50R, -0.43       
+  JTO/USDT      12/15           66.7%/53.3%, -13.3 pp     0.42R/0.13R, -0.28       
+  LDO/USDT      6/10            66.7%/60.0%, -6.7 pp      0.42R/0.25R, -0.17       
+  LINK/USDT     10/15           80.0%/60.0%, -20.0 pp     0.60R/0.30R, -0.30       
+  LTC/USDT      14/17           78.6%/64.7%, -13.9 pp     0.84R/0.52R, -0.33       
+  NEAR/USDT     11/17           72.7%/64.7%, -8.0 pp      0.55R/0.38R, -0.16       
+  NEO/USDT      12/17           83.3%/64.7%, -18.6 pp     0.83R/0.44R, -0.39       
+  ONDO/USDT     11/16           72.7%/43.8%, -29.0 pp     0.70R/-0.02R, -0.72      
+  OP/USDT       14/16           85.7%/81.3%, -4.5 pp      0.96R/0.81R, -0.15       
+  ORDI/USDT     6/11            66.7%/63.6%, -3.0 pp      0.58R/0.37R, -0.21       
+  PAXG/USDT     11/10           45.5%/50.0%, +4.5 pp      0.10R/0.10R, +0.00       
+  PENDLE/USDT   8/10            87.5%/70.0%, -17.5 pp     1.04R/0.64R, -0.41       
+  PENGU/USDT    9/15            88.9%/66.7%, -22.2 pp     0.83R/0.40R, -0.43       
+  PEPE/USDT     7/11            71.4%/54.5%, -16.9 pp     0.53R/0.26R, -0.27       
+  POL/USDT      16/17           56.3%/76.5%, +20.2 pp     0.21R/0.70R, +0.50       
+  PYTH/USDT     13/20           100.0%/65.0%, -35.0 pp    1.12R/0.38R, -0.74       
+  RENDER/USDT   11/16           72.7%/62.5%, -10.2 pp     0.59R/0.34R, -0.25       
+  RUNE/USDT     11/14           100.0%/92.9%, -7.1 pp     1.22R/1.20R, -0.02       
+  SEI/USDT      13/16           84.6%/68.8%, -15.9 pp     0.93R/0.54R, -0.39       
+  SHIB/USDT     9/14            77.8%/64.3%, -13.5 pp     0.56R/0.43R, -0.13       
+  SOL/USDT      13/17           92.3%/82.4%, -10.0 pp     0.92R/0.71R, -0.22       
+  STRK/USDT     6/9             100.0%/77.8%, -22.2 pp    1.14R/0.84R, -0.30       
+  SUI/USDT      9/13            88.9%/76.9%, -12.0 pp     1.29R/0.89R, -0.40       
+  TAO/USDT      11/15           90.9%/73.3%, -17.6 pp     1.09R/0.72R, -0.36       
+  TIA/USDT      9/12            100.0%/83.3%, -16.7 pp    1.19R/0.81R, -0.38       
+  TRX/USDT      19/18           89.5%/94.4%, +5.0 pp      1.07R/1.19R, +0.12       
+  UNI/USDT      10/16           70.0%/75.0%, +5.0 pp      0.55R/0.67R, +0.12       
+  WIF/USDT      10/15           80.0%/53.3%, -26.7 pp     0.90R/0.21R, -0.69       
+  WLD/USDT      13/17           76.9%/64.7%, -12.2 pp     0.78R/0.45R, -0.33       
+  XLM/USDT      12/16           58.3%/50.0%, -8.3 pp      0.44R/0.20R, -0.23       
+  XRP/USDT      10/16           80.0%/56.3%, -23.8 pp     0.89R/0.31R, -0.58       
+  ZEC/USDT      12/12           83.3%/75.0%, -8.3 pp      0.84R/0.54R, -0.30       
+  ZRO/USDT      14/17           78.6%/82.4%, +3.8 pp      0.87R/0.89R, +0.02       
+====================================================================================================
+
+====================================================================================================
+BY PAIR
+====================================================================================================
+Label           Trades (i/p)    Win Rate (i/p, Δ pp)      Avg R (i/p, Δ)           
+----------------------------------------------------------------------------------------------------
+OVERALL         706/964         80.7%/68.5%, -12.3 pp     0.78R/0.52R, -0.27       
+  ARB           157/142         82.2%/81.7%, -0.5 pp      0.73R/0.71R, -0.01       
+  BB            13/18           92.3%/77.8%, -14.5 pp     1.38R/1.00R, -0.38       
+  IRB           114/156         61.4%/53.2%, -8.2 pp      0.72R/0.51R, -0.21       
+  RB            422/648         85.1%/69.0%, -16.1 pp     0.80R/0.46R, -0.34       
+
+  AAVE/USDT     12/17           83.3%/52.9%, -30.4 pp     0.97R/0.27R, -0.70       
+  ADA/USDT      12/15           100.0%/80.0%, -20.0 pp    1.08R/0.77R, -0.31       
+  ALGO/USDT     14/20           78.6%/75.0%, -3.6 pp      0.57R/0.50R, -0.07       
+  APE/USDT      11/14           63.6%/50.0%, -13.6 pp     0.39R/0.12R, -0.26       
+  APT/USDT      10/17           90.0%/64.7%, -25.3 pp     1.01R/0.41R, -0.59       
+  ARB/USDT      13/19           92.3%/68.4%, -23.9 pp     0.91R/0.42R, -0.49       
+  ATOM/USDT     10/13           90.0%/76.9%, -13.1 pp     0.85R/0.68R, -0.17       
+  AVA/USDT      7/11            71.4%/63.6%, -7.8 pp      0.67R/0.42R, -0.24       
+  AVAX/USDT     6/8             83.3%/75.0%, -8.3 pp      0.75R/0.56R, -0.19       
+  BCH/USDT      13/15           100.0%/100.0%, +0.0 pp    1.20R/1.13R, -0.07       
+  BNB/USDT      13/16           76.9%/81.3%, +4.3 pp      0.65R/0.81R, +0.16       
+  BONK/USDT     11/14           90.9%/78.6%, -12.3 pp     1.14R/0.90R, -0.24       
+  BTC/USDT      11/15           81.8%/80.0%, -1.8 pp      0.88R/0.84R, -0.03       
+  CAKE/USDT     6/10            100.0%/80.0%, -20.0 pp    1.13R/0.68R, -0.45       
+  CHZ/USDT      13/18           92.3%/66.7%, -25.6 pp     1.06R/0.54R, -0.53       
+  CRV/USDT      5/12            80.0%/50.0%, -30.0 pp     0.77R/0.07R, -0.70       
+  DASH/USDT     11/15           81.8%/60.0%, -21.8 pp     0.75R/0.29R, -0.47       
+  DOGE/USDT     6/13            83.3%/61.5%, -21.8 pp     0.92R/0.35R, -0.57       
+  DOT/USDT      12/17           75.0%/58.8%, -16.2 pp     0.64R/0.32R, -0.32       
+  DYDX/USDT     6/11            66.7%/54.5%, -12.1 pp     0.42R/0.25R, -0.17       
+  EIGEN/USDT    12/19           66.7%/63.2%, -3.5 pp      0.50R/0.39R, -0.10       
+  ENA/USDT      12/15           75.0%/60.0%, -15.0 pp     0.58R/0.26R, -0.32       
+  ETC/USDT      13/16           76.9%/75.0%, -1.9 pp      0.58R/0.66R, +0.09       
+  ETH/USDT      12/15           91.7%/80.0%, -11.7 pp     1.00R/0.73R, -0.27       
+  ETHFI/USDT    12/18           66.7%/66.7%, +0.0 pp      0.49R/0.54R, +0.05       
+  FET/USDT      14/19           71.4%/68.4%, -3.0 pp      0.51R/0.49R, -0.03       
+  FIL/USDT      15/17           80.0%/70.6%, -9.4 pp      0.81R/0.60R, -0.21       
+  GALA/USDT     16/19           87.5%/78.9%, -8.6 pp      0.92R/0.73R, -0.19       
+  HBAR/USDT     10/15           70.0%/66.7%, -3.3 pp      0.48R/0.39R, -0.09       
+  ICP/USDT      7/15            85.7%/66.7%, -19.0 pp     0.86R/0.43R, -0.42       
+  INJ/USDT      12/17           75.0%/58.8%, -16.2 pp     0.50R/0.21R, -0.29       
+  IOTA/USDT     17/19           88.2%/68.4%, -19.8 pp     0.93R/0.50R, -0.43       
+  JTO/USDT      12/15           66.7%/53.3%, -13.3 pp     0.42R/0.13R, -0.28       
+  LDO/USDT      6/10            66.7%/60.0%, -6.7 pp      0.42R/0.25R, -0.17       
+  LINK/USDT     10/15           80.0%/60.0%, -20.0 pp     0.60R/0.30R, -0.30       
+  LTC/USDT      14/17           78.6%/64.7%, -13.9 pp     0.84R/0.52R, -0.33       
+  NEAR/USDT     11/17           72.7%/64.7%, -8.0 pp      0.55R/0.38R, -0.16       
+  NEO/USDT      12/17           83.3%/64.7%, -18.6 pp     0.83R/0.44R, -0.39       
+  ONDO/USDT     11/16           72.7%/43.8%, -29.0 pp     0.70R/-0.02R, -0.72      
+  OP/USDT       14/16           85.7%/81.3%, -4.5 pp      0.96R/0.81R, -0.15       
+  ORDI/USDT     6/11            66.7%/63.6%, -3.0 pp      0.58R/0.37R, -0.21       
+  PAXG/USDT     11/10           45.5%/50.0%, +4.5 pp      0.10R/0.10R, +0.00       
+  PENDLE/USDT   8/10            87.5%/70.0%, -17.5 pp     1.04R/0.64R, -0.41       
+  PENGU/USDT    9/15            88.9%/66.7%, -22.2 pp     0.83R/0.40R, -0.43       
+  PEPE/USDT     7/11            71.4%/54.5%, -16.9 pp     0.53R/0.26R, -0.27       
+  POL/USDT      16/17           56.3%/76.5%, +20.2 pp     0.21R/0.70R, +0.50       
+  PYTH/USDT     13/20           100.0%/65.0%, -35.0 pp    1.12R/0.38R, -0.74       
+  RENDER/USDT   11/16           72.7%/62.5%, -10.2 pp     0.59R/0.34R, -0.25       
+  RUNE/USDT     11/14           100.0%/92.9%, -7.1 pp     1.22R/1.20R, -0.02       
+  SEI/USDT      13/16           84.6%/68.8%, -15.9 pp     0.93R/0.54R, -0.39       
+  SHIB/USDT     9/14            77.8%/64.3%, -13.5 pp     0.56R/0.43R, -0.13       
+  SOL/USDT      13/17           92.3%/82.4%, -10.0 pp     0.92R/0.71R, -0.22       
+  STRK/USDT     6/9             100.0%/77.8%, -22.2 pp    1.14R/0.84R, -0.30       
+  SUI/USDT      9/13            88.9%/76.9%, -12.0 pp     1.29R/0.89R, -0.40       
+  TAO/USDT      11/15           90.9%/73.3%, -17.6 pp     1.09R/0.72R, -0.36       
+  TIA/USDT      9/12            100.0%/83.3%, -16.7 pp    1.19R/0.81R, -0.38       
+  TRX/USDT      19/18           89.5%/94.4%, +5.0 pp      1.07R/1.19R, +0.12       
+  UNI/USDT      10/16           70.0%/75.0%, +5.0 pp      0.55R/0.67R, +0.12       
+  WIF/USDT      10/15           80.0%/53.3%, -26.7 pp     0.90R/0.21R, -0.69       
+  WLD/USDT      13/17           76.9%/64.7%, -12.2 pp     0.78R/0.45R, -0.33       
+  XLM/USDT      12/16           58.3%/50.0%, -8.3 pp      0.44R/0.20R, -0.23       
+  XRP/USDT      10/16           80.0%/56.3%, -23.8 pp     0.89R/0.31R, -0.58       
+  ZEC/USDT      12/12           83.3%/75.0%, -8.3 pp      0.84R/0.54R, -0.30       
+  ZRO/USDT      14/17           78.6%/82.4%, +3.8 pp      0.87R/0.89R, +0.02       
+====================================================================================================
+
+======================================================================
+PENDING ORDER STATS
+======================================================================
+Signals seen: 1015
+Filled: 984
+Cancelled before fill: 28
+Expired: 0
+Fill rate: 96.9%
+Cancellation rate: 2.8%
+Expiry rate: 0.0%
+======================================================================
+
+{
+  "timeframe": "H4",
+  "bars": 500,
+  "exitMode": "fixed",
+  "trailBufferR": 0,
+  "swingLookback": 3,
+  "pendingExpiryBars": 2,
+  "overall": {
+    "immediate": {
+      "trades": 706,
+      "winRate": 0.8074,
+      "avgR": 0.78
+    },
+    "pending": {
+      "trades": 964,
+      "winRate": 0.6846,
+      "avgR": 0.52
+    },
+    "deltaWinRatePct": -12.27,
+    "deltaAvgR": -0.27,
+    "deltaTrades": 258
+  },
+  "bySetup": {
+    "RB": {
+      "immediate": {
+        "trades": 422,
+        "winRate": 0.8507,
+        "avgR": 0.8
+      },
+      "pending": {
+        "trades": 648,
+        "winRate": 0.6898,
+        "avgR": 0.46
+      }
+    },
+    "ARB": {
+      "immediate": {
+        "trades": 157,
+        "winRate": 0.8217,
+        "avgR": 0.73
+      },
+      "pending": {
+        "trades": 142,
+        "winRate": 0.8169,
+        "avgR": 0.71
+      }
+    },
+    "IRB": {
+      "immediate": {
+        "trades": 114,
+        "winRate": 0.614,
+        "avgR": 0.72
+      },
+      "pending": {
+        "trades": 156,
+        "winRate": 0.5321,
+        "avgR": 0.51
+      }
+    },
+    "BB": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.9231,
+        "avgR": 1.38
+      },
+      "pending": {
+        "trades": 18,
+        "winRate": 0.7778,
+        "avgR": 1
+      }
+    }
+  },
+  "byPair": {
+    "BTC/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.8182,
+        "avgR": 0.88
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.8,
+        "avgR": 0.84
+      }
+    },
+    "DASH/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.8182,
+        "avgR": 0.75
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6,
+        "avgR": 0.29
+      }
+    },
+    "ETH/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.9167,
+        "avgR": 1
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.8,
+        "avgR": 0.73
+      }
+    },
+    "LTC/USDT": {
+      "immediate": {
+        "trades": 14,
+        "winRate": 0.7857,
+        "avgR": 0.84
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.6471,
+        "avgR": 0.52
+      }
+    },
+    "DOT/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.75,
+        "avgR": 0.64
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.5882,
+        "avgR": 0.32
+      }
+    },
+    "XRP/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.8,
+        "avgR": 0.89
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.5625,
+        "avgR": 0.31
+      }
+    },
+    "ADA/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 1,
+        "avgR": 1.08
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.8,
+        "avgR": 0.77
+      }
+    },
+    "BCH/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 1,
+        "avgR": 1.2
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 1,
+        "avgR": 1.13
+      }
+    },
+    "SOL/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.9231,
+        "avgR": 0.92
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.8235,
+        "avgR": 0.71
+      }
+    },
+    "AVA/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.7143,
+        "avgR": 0.67
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.6364,
+        "avgR": 0.42
+      }
+    },
+    "ETC/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.7692,
+        "avgR": 0.58
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.75,
+        "avgR": 0.66
+      }
+    },
+    "NEO/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.8333,
+        "avgR": 0.83
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.6471,
+        "avgR": 0.44
+      }
+    },
+    "DOGE/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.8333,
+        "avgR": 0.92
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.6154,
+        "avgR": 0.35
+      }
+    },
+    "BNB/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.7692,
+        "avgR": 0.65
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.8125,
+        "avgR": 0.81
+      }
+    },
+    "ZEC/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.8333,
+        "avgR": 0.84
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.75,
+        "avgR": 0.54
+      }
+    },
+    "TRX/USDT": {
+      "immediate": {
+        "trades": 19,
+        "winRate": 0.8947,
+        "avgR": 1.07
+      },
+      "pending": {
+        "trades": 18,
+        "winRate": 0.9444,
+        "avgR": 1.19
+      }
+    },
+    "XLM/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.5833,
+        "avgR": 0.44
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.5,
+        "avgR": 0.2
+      }
+    },
+    "AAVE/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.8333,
+        "avgR": 0.97
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.5294,
+        "avgR": 0.27
+      }
+    },
+    "UNI/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.7,
+        "avgR": 0.55
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.75,
+        "avgR": 0.67
+      }
+    },
+    "ARB/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.9231,
+        "avgR": 0.91
+      },
+      "pending": {
+        "trades": 19,
+        "winRate": 0.6842,
+        "avgR": 0.42
+      }
+    },
+    "NEAR/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.7273,
+        "avgR": 0.55
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.6471,
+        "avgR": 0.38
+      }
+    },
+    "SUI/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.8889,
+        "avgR": 1.29
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.7692,
+        "avgR": 0.89
+      }
+    },
+    "PEPE/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.7143,
+        "avgR": 0.53
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.5455,
+        "avgR": 0.26
+      }
+    },
+    "WLD/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.7692,
+        "avgR": 0.78
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.6471,
+        "avgR": 0.45
+      }
+    },
+    "TAO/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.9091,
+        "avgR": 1.09
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.7333,
+        "avgR": 0.72
+      }
+    },
+    "ENA/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.75,
+        "avgR": 0.58
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6,
+        "avgR": 0.26
+      }
+    },
+    "PAXG/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.4545,
+        "avgR": 0.1
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.5,
+        "avgR": 0.1
+      }
+    },
+    "LINK/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.8,
+        "avgR": 0.6
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6,
+        "avgR": 0.3
+      }
+    },
+    "AVAX/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.8333,
+        "avgR": 0.75
+      },
+      "pending": {
+        "trades": 8,
+        "winRate": 0.75,
+        "avgR": 0.56
+      }
+    },
+    "ICP/USDT": {
+      "immediate": {
+        "trades": 7,
+        "winRate": 0.8571,
+        "avgR": 0.86
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6667,
+        "avgR": 0.43
+      }
+    },
+    "TIA/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 1,
+        "avgR": 1.19
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.8333,
+        "avgR": 0.81
+      }
+    },
+    "ONDO/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.7273,
+        "avgR": 0.7
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.4375,
+        "avgR": -0.02
+      }
+    },
+    "FIL/USDT": {
+      "immediate": {
+        "trades": 15,
+        "winRate": 0.8,
+        "avgR": 0.81
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.7059,
+        "avgR": 0.6
+      }
+    },
+    "SEI/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.8462,
+        "avgR": 0.93
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.6875,
+        "avgR": 0.54
+      }
+    },
+    "FET/USDT": {
+      "immediate": {
+        "trades": 14,
+        "winRate": 0.7143,
+        "avgR": 0.51
+      },
+      "pending": {
+        "trades": 19,
+        "winRate": 0.6842,
+        "avgR": 0.49
+      }
+    },
+    "HBAR/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.7,
+        "avgR": 0.48
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6667,
+        "avgR": 0.39
+      }
+    },
+    "IOTA/USDT": {
+      "immediate": {
+        "trades": 17,
+        "winRate": 0.8824,
+        "avgR": 0.93
+      },
+      "pending": {
+        "trades": 19,
+        "winRate": 0.6842,
+        "avgR": 0.5
+      }
+    },
+    "BONK/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.9091,
+        "avgR": 1.14
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.7857,
+        "avgR": 0.9
+      }
+    },
+    "LDO/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.6667,
+        "avgR": 0.42
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.6,
+        "avgR": 0.25
+      }
+    },
+    "INJ/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.75,
+        "avgR": 0.5
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.5882,
+        "avgR": 0.21
+      }
+    },
+    "EIGEN/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.6667,
+        "avgR": 0.5
+      },
+      "pending": {
+        "trades": 19,
+        "winRate": 0.6316,
+        "avgR": 0.39
+      }
+    },
+    "POL/USDT": {
+      "immediate": {
+        "trades": 16,
+        "winRate": 0.5625,
+        "avgR": 0.21
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.7647,
+        "avgR": 0.7
+      }
+    },
+    "APT/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.9,
+        "avgR": 1.01
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.6471,
+        "avgR": 0.41
+      }
+    },
+    "OP/USDT": {
+      "immediate": {
+        "trades": 14,
+        "winRate": 0.8571,
+        "avgR": 0.96
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.8125,
+        "avgR": 0.81
+      }
+    },
+    "PENGU/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.8889,
+        "avgR": 0.83
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.6667,
+        "avgR": 0.4
+      }
+    },
+    "ORDI/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.6667,
+        "avgR": 0.58
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.6364,
+        "avgR": 0.37
+      }
+    },
+    "ALGO/USDT": {
+      "immediate": {
+        "trades": 14,
+        "winRate": 0.7857,
+        "avgR": 0.57
+      },
+      "pending": {
+        "trades": 20,
+        "winRate": 0.75,
+        "avgR": 0.5
+      }
+    },
+    "JTO/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.6667,
+        "avgR": 0.42
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.5333,
+        "avgR": 0.13
+      }
+    },
+    "PENDLE/USDT": {
+      "immediate": {
+        "trades": 8,
+        "winRate": 0.875,
+        "avgR": 1.04
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.7,
+        "avgR": 0.64
+      }
+    },
+    "APE/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.6364,
+        "avgR": 0.39
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.5,
+        "avgR": 0.12
+      }
+    },
+    "ETHFI/USDT": {
+      "immediate": {
+        "trades": 12,
+        "winRate": 0.6667,
+        "avgR": 0.49
+      },
+      "pending": {
+        "trades": 18,
+        "winRate": 0.6667,
+        "avgR": 0.54
+      }
+    },
+    "PYTH/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 1,
+        "avgR": 1.12
+      },
+      "pending": {
+        "trades": 20,
+        "winRate": 0.65,
+        "avgR": 0.38
+      }
+    },
+    "SHIB/USDT": {
+      "immediate": {
+        "trades": 9,
+        "winRate": 0.7778,
+        "avgR": 0.56
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.6429,
+        "avgR": 0.43
+      }
+    },
+    "GALA/USDT": {
+      "immediate": {
+        "trades": 16,
+        "winRate": 0.875,
+        "avgR": 0.92
+      },
+      "pending": {
+        "trades": 19,
+        "winRate": 0.7895,
+        "avgR": 0.73
+      }
+    },
+    "ZRO/USDT": {
+      "immediate": {
+        "trades": 14,
+        "winRate": 0.7857,
+        "avgR": 0.87
+      },
+      "pending": {
+        "trades": 17,
+        "winRate": 0.8235,
+        "avgR": 0.89
+      }
+    },
+    "RENDER/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 0.7273,
+        "avgR": 0.59
+      },
+      "pending": {
+        "trades": 16,
+        "winRate": 0.625,
+        "avgR": 0.34
+      }
+    },
+    "CAKE/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 1,
+        "avgR": 1.13
+      },
+      "pending": {
+        "trades": 10,
+        "winRate": 0.8,
+        "avgR": 0.68
+      }
+    },
+    "CRV/USDT": {
+      "immediate": {
+        "trades": 5,
+        "winRate": 0.8,
+        "avgR": 0.77
+      },
+      "pending": {
+        "trades": 12,
+        "winRate": 0.5,
+        "avgR": 0.07
+      }
+    },
+    "CHZ/USDT": {
+      "immediate": {
+        "trades": 13,
+        "winRate": 0.9231,
+        "avgR": 1.06
+      },
+      "pending": {
+        "trades": 18,
+        "winRate": 0.6667,
+        "avgR": 0.54
+      }
+    },
+    "RUNE/USDT": {
+      "immediate": {
+        "trades": 11,
+        "winRate": 1,
+        "avgR": 1.22
+      },
+      "pending": {
+        "trades": 14,
+        "winRate": 0.9286,
+        "avgR": 1.2
+      }
+    },
+    "ATOM/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.9,
+        "avgR": 0.85
+      },
+      "pending": {
+        "trades": 13,
+        "winRate": 0.7692,
+        "avgR": 0.68
+      }
+    },
+    "DYDX/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 0.6667,
+        "avgR": 0.42
+      },
+      "pending": {
+        "trades": 11,
+        "winRate": 0.5455,
+        "avgR": 0.25
+      }
+    },
+    "STRK/USDT": {
+      "immediate": {
+        "trades": 6,
+        "winRate": 1,
+        "avgR": 1.14
+      },
+      "pending": {
+        "trades": 9,
+        "winRate": 0.7778,
+        "avgR": 0.84
+      }
+    },
+    "WIF/USDT": {
+      "immediate": {
+        "trades": 10,
+        "winRate": 0.8,
+        "avgR": 0.9
+      },
+      "pending": {
+        "trades": 15,
+        "winRate": 0.5333,
+        "avgR": 0.21
+      }
+    }
+  },
+  "pendingStats": {
+    "signalsSeen": 1015,
+    "filled": 984,
+    "cancelledBeforeFill": 28,
+    "expired": 0
+  }
+}
+[2026-07-11 18:35:45.890 +0700] [32mINFO[39m: [36m  Running backtest on 500 candles (both modes)...[39m
+    [35msource[39m: "charts:setup-backtest-compare"

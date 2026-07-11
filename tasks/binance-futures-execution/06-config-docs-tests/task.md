@@ -19,6 +19,7 @@ BINANCE_LIVE_TRADING_ENABLED=false
 BINANCE_LEVERAGE=5
 BINANCE_MARGIN_TYPE=ISOLATED
 BINANCE_RISK_PERCENT_PER_TRADE=1
+# Test end-to-end voi testnet TRUOC khi live: doi thanh https://testnet.binancefuture.com (API key testnet rieng)
 BINANCE_FUTURES_BASE_URL=https://fapi.binance.com
 # BINANCE_RATE_LIMIT_RPM=300   # mac dinh 300 request/phut
 ```
@@ -32,6 +33,11 @@ Viết test dùng `vitest` (xem cú pháp mẫu bất kỳ file `tests/charts/*.
 3. Case quantity tính ra nhỏ hơn `minQty` → phải trả về `Error`.
 4. Case notional nhỏ hơn `minNotional` → phải trả về `Error`.
 5. Case margin cần thiết vượt quá balance khả dụng → phải trả về `Error`.
+
+Thêm test cho 2 helper rounding (cùng file, describe block riêng):
+
+6. `roundToTickSize`: `roundToTickSize(64123.4567, 0.1) === 64123.5`; `roundToTickSize(0.123456, 0.0001) === 0.1235`; tickSize không hợp lệ (`0` hoặc âm) → trả về giá nguyên bản; kết quả không có dư số float (vd `roundToTickSize(1.005, 0.01)` phải là số khớp đúng 2 chữ số thập phân).
+7. `splitTpQuantities`: `splitTpQuantities(0.007, 50, 0.001)` → `{tp1Quantity: 0.003, tp2Quantity: 0.004}` (tp1 làm tròn XUỐNG, phần dư dồn về tp2); tổng `tp1Quantity + tp2Quantity` luôn bằng đúng `totalQuantity`; case `partialClosePercent=100` → tp2Quantity = 0.
 
 ### File 3: `tests/charts/binance-futures-client.test.ts` (tạo mới)
 

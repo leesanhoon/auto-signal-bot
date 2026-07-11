@@ -6,6 +6,7 @@ import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
 import { resolveOpenPositionDecision } from "./position-decision-volman.js";
+import { reconcileBinancePosition } from "./binance-execution-volman.js";
 
 const logger = createLogger("charts:check-open-trades-volman");
 
@@ -16,6 +17,10 @@ function formatCheckedAt(): string {
 async function evaluateOpenPosition(
   position: Awaited<ReturnType<typeof loadOpenPositions>>[number],
 ): Promise<PositionDecisionOutcome> {
+  if (position.binanceSymbol) {
+    return reconcileBinancePosition(position);
+  }
+
   const chart = findChartForPair(CHARTS, position.pair, "H4");
   if (!chart) {
     logger.warn("No chart configuration found; sending explicit warning", { pair: position.pair, id: position.id });
