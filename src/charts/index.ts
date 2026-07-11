@@ -36,7 +36,10 @@ import {
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
 import { CHARTS, getChartsForTimeframeMode } from "./volman-charts.config.js";
 import { openBinanceFuturesPosition } from "./binance-execution-volman.js";
-import { isBinanceLiveTradingEnabled } from "./binance-futures-config-env.js";
+import {
+  isBinanceLiveTradingEnabled,
+  isBinanceLiveTradingEnabledVolman,
+} from "./binance-futures-config-env.js";
 import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
 const logger = createLogger("charts:index");
@@ -215,7 +218,7 @@ async function handleAnalysisResult(
         if (saved) {
           setup.autoTracked = true;
           logger.info("Auto-saved open position", { pair: setup.pair });
-          if (isBinanceLiveTradingEnabled()) {
+          if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledVolman()) {
             const chartSymbol = symbolByPair.get(setup.pair);
             if (chartSymbol) {
               const positionId = await findOpenPositionIdByPair(setup.pair);

@@ -56,3 +56,7 @@ export function getConfiguredBinanceApiSecret(): string | undefined {
 export function isBinanceLiveTradingEnabledSmc(): boolean {
   return readBooleanEnv("BINANCE_LIVE_TRADING_ENABLED_SMC", false);
 }
+
+export function isBinanceLiveTradingEnabledVolman(): boolean {
+  return readBooleanEnv("BINANCE_LIVE_TRADING_ENABLED_VOLMAN", false);
+}
