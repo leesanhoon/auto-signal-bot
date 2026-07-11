@@ -27,6 +27,9 @@ vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
   getConfiguredBinanceLeverage: () => 5,
   getConfiguredBinanceMarginType: () => "ISOLATED",
   getConfiguredBinanceRiskPercentPerTrade: () => 1,
+  isBinanceHonorOrderTypeEnabledSmc: () => false,
+  getConfiguredBinanceEntryOrderExpiryMinutes: () => 60,
+  getConfiguredBinanceWorkingType: () => undefined,
 }));
 
 vi.mock("../../src/charts/position-engine-smc.js", () => ({

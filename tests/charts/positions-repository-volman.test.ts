@@ -353,4 +353,128 @@ describe("savePendingOrder", () => {
       }),
     );
   });
+
+  test("saveBinancePendingEntryOrder stores entry order details with working status", async () => {
+    repoState.updateResult = { error: null };
+
+    await positionsRepository.saveBinancePendingEntryOrder(123, {
+      binanceSymbol: "BTCUSDT",
+      binanceLeverage: 5,
+      binanceQuantity: 0.01,
+      binanceEntryOrderId: 456,
+      binanceEntryOrderType: "LIMIT",
+    });
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_volman");
+    expect(repoState.from().update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        binance_symbol: "BTCUSDT",
+        binance_leverage: 5,
+        binance_quantity: 0.01,
+        binance_entry_order_id: 456,
+        binance_entry_order_type: "LIMIT",
+        binance_entry_order_status: "working",
+        binance_execution_status: "pending",
+      }),
+    );
+  });
+
+  test("updateBinanceEntryOrderStatus updates only the entry order status", async () => {
+    repoState.updateResult = { error: null };
+
+    await positionsRepository.updateBinanceEntryOrderStatus(123, "filled");
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_volman");
+    expect(repoState.from().update).toHaveBeenCalledWith({
+      binance_entry_order_status: "filled",
+    });
+  });
+
+  test("getPendingEntryOrderPositions retrieves working entry orders", async () => {
+    repoState.chainResult = {
+      data: [
+        {
+          id: 1,
+          pair: "EUR/USD",
+          binance_symbol: "EURUSD",
+          binance_entry_order_id: 100,
+          binance_entry_order_type: "STOP_MARKET",
+          binance_entry_order_placed_at: "2026-07-12T10:00:00Z",
+          direction: "LONG",
+        },
+        {
+          id: 2,
+          pair: "GBP/USD",
+          binance_symbol: "GBPUSD",
+          binance_entry_order_id: 101,
+          binance_entry_order_type: "LIMIT",
+          binance_entry_order_placed_at: "2026-07-12T10:05:00Z",
+          direction: "SHORT",
+        },
+      ],
+      error: null,
+    };
+
+    const positions = await positionsRepository.getPendingEntryOrderPositions();
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_volman");
+    expect(positions).toHaveLength(2);
+    expect(positions[0]).toMatchObject({
+      id: 1,
+      pair: "EUR/USD",
+      binanceSymbol: "EURUSD",
+      binanceEntryOrderId: 100,
+      binanceEntryOrderType: "STOP_MARKET",
+      direction: "LONG",
+    });
+    expect(positions[1]).toMatchObject({
+      id: 2,
+      pair: "GBP/USD",
+      binanceSymbol: "GBPUSD",
+      binanceEntryOrderId: 101,
+      binanceEntryOrderType: "LIMIT",
+      direction: "SHORT",
+    });
+  });
+
+  test("getPendingEntryOrderPositions threads through real binanceLeverage and partialClosePercent", async () => {
+    repoState.chainResult = {
+      data: [
+        {
+          id: 3,
+          pair: "EUR/USD",
+          binance_symbol: "EURUSD",
+          binance_entry_order_id: 102,
+          binance_entry_order_type: "LIMIT",
+          binance_entry_order_placed_at: "2026-07-12T10:10:00Z",
+          direction: "LONG",
+          binance_leverage: 20,
+          tp1_close_percent: 30,
+        },
+      ],
+      error: null,
+    };
+
+    const positions = await positionsRepository.getPendingEntryOrderPositions();
+
+    // Real leverage/partial-close-percent must be threaded through (not hardcoded
+    // defaults) — the bug this closes: pollPendingEntryOrder used to hardcode
+    // leverage=1 and partialClosePercent=50 instead of the position's real values.
+    expect(positions[0]).toMatchObject({
+      binanceLeverage: 20,
+      partialClosePercent: 30,
+    });
+  });
+
+  test("closeExpiredEntryOrderPosition closes the DB row for an entry order that never filled", async () => {
+    await positionsRepository.closeExpiredEntryOrderPosition(21);
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_volman");
+    expect(repoState.from().update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "closed",
+        trade_stage: "closed",
+      }),
+    );
+  });
 });

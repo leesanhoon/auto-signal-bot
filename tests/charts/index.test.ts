@@ -33,6 +33,14 @@ const mocks = vi.hoisted(() => ({
   validateTradeSetupForOpen: vi.fn(),
   analyzeAllChartsDeterministic: vi.fn(),
   analyzeAllChartsSmc: vi.fn(),
+  openBinanceFuturesPosition: vi.fn(),
+  pollPendingEntryOrders: vi.fn(),
+  findOpenPositionIdByPair: vi.fn(),
+  saveBinancePendingEntryOrder: vi.fn(),
+  updateBinanceEntryOrderStatus: vi.fn(),
+  getPendingEntryOrderPositions: vi.fn(),
+  isBinanceLiveTradingEnabled: vi.fn(),
+  isBinanceLiveTradingEnabledVolman: vi.fn(),
   getConfiguredChartSignalConfidenceThreshold: vi.fn(),
   getConfiguredChartEngineMode: vi.fn(),
   getConfiguredChartTradingSystem: vi.fn(),
@@ -104,6 +112,10 @@ vi.mock("../../src/shared/logger.js", () => ({
 vi.mock("../../src/charts/positions-repository-volman.js", () => ({
   saveOpenPosition: mocks.saveOpenPosition,
   savePendingOrder: mocks.savePendingOrder,
+  findOpenPositionIdByPair: mocks.findOpenPositionIdByPair,
+  saveBinancePendingEntryOrder: mocks.saveBinancePendingEntryOrder,
+  updateBinanceEntryOrderStatus: mocks.updateBinanceEntryOrderStatus,
+  getPendingEntryOrderPositions: mocks.getPendingEntryOrderPositions,
 }));
 
 vi.mock("../../src/charts/position-engine-volman.js", () => ({
@@ -116,6 +128,19 @@ vi.mock("../../src/charts/deterministic-pipeline.js", () => ({
 
 vi.mock("../../src/charts/smc/smc-pipeline.js", () => ({
   analyzeAllChartsSmc: mocks.analyzeAllChartsSmc,
+}));
+
+vi.mock("../../src/charts/binance-execution-volman.js", () => ({
+  openBinanceFuturesPosition: mocks.openBinanceFuturesPosition,
+  pollPendingEntryOrders: mocks.pollPendingEntryOrders,
+}));
+
+vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
+  isBinanceLiveTradingEnabled: mocks.isBinanceLiveTradingEnabled,
+  isBinanceLiveTradingEnabledVolman: mocks.isBinanceLiveTradingEnabledVolman,
+  isBinanceHonorOrderTypeEnabledVolman: () => false,
+  getConfiguredBinanceEntryOrderExpiryMinutes: () => 60,
+  getConfiguredBinanceWorkingType: () => undefined,
 }));
 
 vi.mock("../../src/charts/volman-config-env.js", () => ({
@@ -192,6 +217,11 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
     mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
+    mocks.pollPendingEntryOrders.mockResolvedValue(undefined);
+    mocks.openBinanceFuturesPosition.mockResolvedValue(undefined);
+    mocks.findOpenPositionIdByPair.mockResolvedValue(null);
+    mocks.isBinanceLiveTradingEnabled.mockReturnValue(false);
+    mocks.isBinanceLiveTradingEnabledVolman.mockReturnValue(false);
     mocks.sendMessage.mockResolvedValue(undefined);
     mocks.sendAllAnalyses.mockResolvedValue(undefined);
     mocks.buildHeartbeatMessage.mockReturnValue("HEARTBEAT");

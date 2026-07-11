@@ -461,3 +461,116 @@ describe("savePendingOrder", () => {
     );
   });
 });
+
+describe("Binance entry order tracking (SMC)", () => {
+  test("saveBinancePendingEntryOrder stores entry order details with working status", async () => {
+    repoState.updateResult = { error: null };
+
+    await positionsRepository.saveBinancePendingEntryOrder(123, {
+      binanceSymbol: "BTCUSDT",
+      binanceLeverage: 5,
+      binanceQuantity: 0.01,
+      binanceEntryOrderId: 456,
+      binanceEntryOrderType: "LIMIT",
+    });
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_smc");
+    expect(repoState.from().update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        binance_symbol: "BTCUSDT",
+        binance_leverage: 5,
+        binance_quantity: 0.01,
+        binance_entry_order_id: 456,
+        binance_entry_order_type: "LIMIT",
+        binance_entry_order_status: "working",
+        binance_execution_status: "pending",
+      }),
+    );
+  });
+
+  test("updateBinanceEntryOrderStatus updates only the entry order status", async () => {
+    repoState.updateResult = { error: null };
+
+    await positionsRepository.updateBinanceEntryOrderStatus(123, "expired");
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_smc");
+    expect(repoState.from().update).toHaveBeenCalledWith({
+      binance_entry_order_status: "expired",
+    });
+  });
+
+  test("getPendingEntryOrderPositions retrieves working entry orders", async () => {
+    repoState.chainResult = {
+      data: [
+        {
+          id: 5,
+          pair: "BTC/USDT",
+          binance_symbol: "BTCUSDT",
+          binance_entry_order_id: 200,
+          binance_entry_order_type: "MARKET",
+          binance_entry_order_placed_at: "2026-07-12T11:00:00Z",
+          direction: "LONG",
+          binance_leverage: 10,
+          tp1_close_percent: 70,
+        },
+      ],
+      error: null,
+    };
+
+    const positions = await positionsRepository.getPendingEntryOrderPositions();
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_smc");
+    expect(positions).toHaveLength(1);
+    expect(positions[0]).toMatchObject({
+      id: 5,
+      pair: "BTC/USDT",
+      binanceSymbol: "BTCUSDT",
+      binanceEntryOrderId: 200,
+      binanceEntryOrderType: "MARKET",
+      direction: "LONG",
+      // Real leverage/partial-close-percent must be threaded through (not hardcoded
+      // defaults) — the bug this closes: pollPendingEntryOrder used to hardcode
+      // leverage=1 and partialClosePercent=50 instead of the position's real values.
+      binanceLeverage: 10,
+      partialClosePercent: 70,
+    });
+  });
+
+  test("getPendingEntryOrderPositions defaults binanceLeverage to 1 when column is null", async () => {
+    repoState.chainResult = {
+      data: [
+        {
+          id: 6,
+          pair: "ETH/USDT",
+          binance_symbol: "ETHUSDT",
+          binance_entry_order_id: 201,
+          binance_entry_order_type: "LIMIT",
+          binance_entry_order_placed_at: "2026-07-12T11:00:00Z",
+          direction: "SHORT",
+          binance_leverage: null,
+          tp1_close_percent: null,
+        },
+      ],
+      error: null,
+    };
+
+    const positions = await positionsRepository.getPendingEntryOrderPositions();
+
+    expect(positions[0]).toMatchObject({
+      binanceLeverage: 1,
+      partialClosePercent: null,
+    });
+  });
+
+  test("closeExpiredEntryOrderPosition closes the DB row for an entry order that never filled", async () => {
+    await positionsRepository.closeExpiredEntryOrderPosition(11);
+
+    expect(repoState.from).toHaveBeenCalledWith("open_positions_smc");
+    expect(repoState.from().update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "closed",
+        trade_stage: "closed",
+      }),
+    );
+  });
+});

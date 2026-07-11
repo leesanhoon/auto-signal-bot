@@ -13,6 +13,8 @@ const logger = createLogger("charts:binance-futures-client");
 
 export type BinanceOrderSide = "BUY" | "SELL";
 
+export type BinanceEntryOrderType = "LIMIT" | "STOP_MARKET";
+
 export type BinanceSymbolFilters = {
   stepSize: number;
   minQty: number;
@@ -246,6 +248,7 @@ export async function placeStopMarketOrder(
   symbol: string,
   side: BinanceOrderSide,
   stopPrice: number,
+  options: { workingType?: "MARK_PRICE" | "CONTRACT_PRICE" } = {},
 ): Promise<BinanceOrderResult | Error> {
   const result = await signedRequest<{
     algoId: number;
@@ -258,6 +261,7 @@ export async function placeStopMarketOrder(
     type: "STOP_MARKET",
     triggerPrice: stopPrice,
     closePosition: true,
+    ...(options.workingType ? { workingType: options.workingType } : {}),
   });
   if (result instanceof Error) return result;
   return { orderId: result.algoId, status: result.algoStatus, symbol: result.symbol };
@@ -268,6 +272,7 @@ export async function placeTakeProfitMarketOrder(
   side: BinanceOrderSide,
   stopPrice: number,
   quantity: number,
+  options: { workingType?: "MARK_PRICE" | "CONTRACT_PRICE" } = {},
 ): Promise<BinanceOrderResult | Error> {
   const result = await signedRequest<{
     algoId: number;
@@ -281,6 +286,82 @@ export async function placeTakeProfitMarketOrder(
     triggerPrice: stopPrice,
     quantity,
     reduceOnly: true,
+    ...(options.workingType ? { workingType: options.workingType } : {}),
+  });
+  if (result instanceof Error) return result;
+  return { orderId: result.algoId, status: result.algoStatus, symbol: result.symbol };
+}
+
+export async function placeLimitOrder(
+  symbol: string,
+  side: BinanceOrderSide,
+  price: number,
+  quantity: number,
+  options: { reduceOnly?: boolean; timeInForce?: "GTC" | "IOC" | "FOK" } = {},
+): Promise<BinanceOrderResult | Error> {
+  const result = await signedRequest<{
+    orderId: number;
+    status: string;
+    symbol: string;
+  }>("POST", "/fapi/v1/order", {
+    symbol,
+    side,
+    type: "LIMIT",
+    price,
+    quantity,
+    timeInForce: options.timeInForce ?? "GTC",
+    ...(options.reduceOnly ? { reduceOnly: true } : {}),
+  });
+  if (result instanceof Error) return result;
+  return { orderId: result.orderId, status: result.status, symbol: result.symbol };
+}
+
+export async function placeStopMarketEntryOrder(
+  symbol: string,
+  side: BinanceOrderSide,
+  stopPrice: number,
+  quantity: number,
+  options: { workingType?: "MARK_PRICE" | "CONTRACT_PRICE" } = {},
+): Promise<BinanceOrderResult | Error> {
+  const result = await signedRequest<{
+    algoId: number;
+    algoStatus: string;
+    symbol: string;
+  }>("POST", "/fapi/v1/algoOrder", {
+    algoType: "CONDITIONAL",
+    symbol,
+    side,
+    type: "STOP_MARKET",
+    triggerPrice: stopPrice,
+    quantity,
+    ...(options.workingType ? { workingType: options.workingType } : {}),
+  });
+  if (result instanceof Error) return result;
+  return { orderId: result.algoId, status: result.algoStatus, symbol: result.symbol };
+}
+
+export async function placeTrailingStopMarketOrder(
+  symbol: string,
+  side: BinanceOrderSide,
+  callbackRate: number,
+  quantity: number,
+  activationPrice?: number,
+  options: { workingType?: "MARK_PRICE" | "CONTRACT_PRICE" } = {},
+): Promise<BinanceOrderResult | Error> {
+  const result = await signedRequest<{
+    algoId: number;
+    algoStatus: string;
+    symbol: string;
+  }>("POST", "/fapi/v1/algoOrder", {
+    algoType: "CONDITIONAL",
+    symbol,
+    side,
+    type: "TRAILING_STOP_MARKET",
+    callbackRate,
+    quantity,
+    reduceOnly: true,
+    ...(activationPrice !== undefined ? { activationPrice } : {}),
+    ...(options.workingType ? { workingType: options.workingType } : {}),
   });
   if (result instanceof Error) return result;
   return { orderId: result.algoId, status: result.algoStatus, symbol: result.symbol };
@@ -322,6 +403,38 @@ export async function getOrderStatus(
     ? "FILLED"
     : result.algoStatus;
   return { status, avgPrice: "" };
+}
+
+// Lấy trạng thái của regular order (LIMIT orders placed via /fapi/v1/order)
+// Khác getOrderStatus — cái này chỉ dùng cho algo orders (SL/TP).
+export async function getRegularOrderStatus(
+  symbol: string,
+  orderId: number,
+): Promise<{ status: string; executedQty: string } | Error> {
+  const result = await signedRequest<{ status: string; executedQty: string; symbol: string }>(
+    "GET",
+    "/fapi/v1/order",
+    { symbol, orderId },
+  );
+  if (result instanceof Error) return result;
+  return { status: result.status, executedQty: result.executedQty };
+}
+
+// Hủy regular order (LIMIT orders placed via /fapi/v1/order)
+// Khác cancelOrder — cái này chỉ dùng cho algo orders (SL/TP).
+export async function cancelRegularOrder(
+  symbol: string,
+  orderId: number,
+): Promise<true | Error> {
+  const result = await signedRequest("DELETE", "/fapi/v1/order", {
+    symbol,
+    orderId,
+  });
+  if (result instanceof Error) {
+    if (result.message.includes("code -2011")) return true; // "Unknown order sent" = already cancelled/filled
+    return result;
+  }
+  return true;
 }
 
 // Trả về true nếu account đang ở Hedge mode (dualSidePosition) — plan này CHỈ hỗ trợ

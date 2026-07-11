@@ -10,6 +10,12 @@ import {
   type PositionDecisionOutcome,
 } from "./position-engine-volman.js";
 import { buildClosedPositionSnapshot, type ClosedPositionRecord } from "./performance-tracking-volman.js";
+import {
+  createSaveBinancePendingEntryOrder,
+  createUpdateBinanceEntryOrderStatus,
+  createGetPendingEntryOrderPositions,
+  createCloseExpiredEntryOrderPosition,
+} from "./positions-repository-binance-entry-order-shared.js";
 
 const logger = createLogger("charts:positions-repository");
 
@@ -504,3 +510,21 @@ export async function updateBinanceSlOrder(
 
   if (error) throw new Error(`updateBinanceSlOrder failed: ${error.message}`);
 }
+
+export {
+  type BinanceEntryOrderDetails,
+  type PendingEntryOrderPosition,
+} from "./positions-repository-binance-entry-order-shared.js";
+
+export const saveBinancePendingEntryOrder = createSaveBinancePendingEntryOrder(
+  "open_positions_volman",
+);
+export const updateBinanceEntryOrderStatus = createUpdateBinanceEntryOrderStatus(
+  "open_positions_volman",
+);
+export const getPendingEntryOrderPositions = createGetPendingEntryOrderPositions(
+  "open_positions_volman",
+);
+export const closeExpiredEntryOrderPosition = createCloseExpiredEntryOrderPosition(
+  "open_positions_volman",
+);

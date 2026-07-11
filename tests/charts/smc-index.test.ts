@@ -21,11 +21,16 @@ const mocks = vi.hoisted(() => ({
   isWithinTimeframeCandleCloseWindow: vi.fn(),
   runCheckOpenTrades: vi.fn(),
   runCheckPendingOrders: vi.fn(),
+  pollPendingEntryOrders: vi.fn(),
   sendAllAnalyses: vi.fn(),
   sendMessage: vi.fn(),
   notifyError: vi.fn(),
   saveOpenPosition: vi.fn(),
   savePendingOrder: vi.fn(),
+  findOpenPositionIdByPair: vi.fn(),
+  saveBinancePendingEntryOrder: vi.fn(),
+  updateBinanceEntryOrderStatus: vi.fn(),
+  getPendingEntryOrderPositions: vi.fn(),
   validateTradeSetupForOpen: vi.fn(),
   analyzeAllChartsSmc: vi.fn(),
   getConfiguredChartSignalConfidenceThreshold: vi.fn(),
@@ -103,10 +108,19 @@ vi.mock("../../src/shared/logger.js", () => ({
 vi.mock("../../src/charts/positions-repository-smc.js", () => ({
   saveOpenPosition: mocks.saveOpenPosition,
   savePendingOrder: mocks.savePendingOrder,
+  findOpenPositionIdByPair: mocks.findOpenPositionIdByPair,
+  saveBinancePendingEntryOrder: mocks.saveBinancePendingEntryOrder,
+  updateBinanceEntryOrderStatus: mocks.updateBinanceEntryOrderStatus,
+  getPendingEntryOrderPositions: mocks.getPendingEntryOrderPositions,
 }));
 
 vi.mock("../../src/charts/position-engine-smc.js", () => ({
   validateTradeSetupForOpen: mocks.validateTradeSetupForOpen,
+}));
+
+vi.mock("../../src/charts/binance-execution-smc.js", () => ({
+  openBinanceFuturesPosition: vi.fn(),
+  pollPendingEntryOrders: mocks.pollPendingEntryOrders,
 }));
 
 vi.mock("../../src/charts/smc/smc-pipeline.js", () => ({

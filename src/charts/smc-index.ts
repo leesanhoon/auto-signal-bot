@@ -1,7 +1,6 @@
 import "../shared/env.js";
-import { saveOpenPosition, findOpenPositionIdByPair /*, savePendingOrder */ } from "./positions-repository-smc.js";
+import { saveOpenPosition, findOpenPositionIdByPair } from "./positions-repository-smc.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner-smc.js";
-// import { runCheckPendingOrders } from "./check-pending-orders-runner.js"; // DISABLED: signals-only mode, xem tasks/disable-pending-orders/plan.md
 import { sendMessage, notifyError } from "../shared/telegram-client.js";
 import { buildHeartbeatMessage, sendAllAnalysesSmc } from "../shared/telegram-smc.js";
 import { createLogger } from "../shared/logger.js";
@@ -26,8 +25,12 @@ import {
 } from "./chart-cache-repository-smc.js";
 import { analyzeAllChartsSmc } from "./smc/smc-pipeline.js";
 import { CHARTS, getChartsForTimeframeMode } from "./smc-charts.config.js";
-import { openBinanceFuturesPosition } from "./binance-execution-smc.js";
-import { isBinanceLiveTradingEnabled, isBinanceLiveTradingEnabledSmc } from "./binance-futures-config-env.js";
+import { openBinanceFuturesPosition, pollPendingEntryOrders } from "./binance-execution-smc.js";
+import {
+  isBinanceLiveTradingEnabled,
+  isBinanceLiveTradingEnabledSmc,
+  isBinanceHonorOrderTypeEnabledSmc,
+} from "./binance-futures-config-env.js";
 import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
 const logger = createLogger("charts:smc-index");
@@ -39,7 +42,18 @@ type AnalysisOrigin =
   | { source: "cached"; candleKey: string };
 
 function shouldAutoTrackAsOpen(setup: TradeSetup, threshold: number): boolean {
-  return setup.orderType === "MARKET_NOW" && (setup.confidence ?? 0) >= threshold;
+  if ((setup.confidence ?? 0) < threshold) return false;
+
+  if (setup.orderType === "MARKET_NOW") return true;
+
+  // If HONOR_ORDER_TYPE is enabled, also auto-track LIMIT/STOP orders
+  if (isBinanceHonorOrderTypeEnabledSmc() &&
+      (setup.orderType === "BUY_LIMIT" || setup.orderType === "SELL_LIMIT" ||
+       setup.orderType === "BUY_STOP" || setup.orderType === "SELL_STOP")) {
+    return true;
+  }
+
+  return false;
 }
 
 function getPairs(): Array<{ pair: string; symbol: string }> {
@@ -173,18 +187,6 @@ async function handleAnalysisResult(result: AnalysisResult, origin: AnalysisOrig
       } catch (error) {
         logger.error("Failed to auto-save open position", { pair: setup.pair, error });
       }
-    } else if ((setup.confidence ?? 0) >= threshold && setup.orderType !== "MARKET_NOW") {
-      // DISABLED: signals-only mode, không tạo pending order nữa. Xem tasks/disable-pending-orders/plan.md
-      // try {
-      //   const saved = await savePendingOrder(setup);
-      //   if (saved) {
-      //     logger.info("Saved pending order", { pair: setup.pair, orderType: setup.orderType, primaryTimeframe: setup.primaryTimeframe });
-      //   } else {
-      //     logger.info("Skipped duplicate pending order", { pair: setup.pair, orderType: setup.orderType });
-      //   }
-      // } catch (error) {
-      //   logger.error("Failed to save pending order", { pair: setup.pair, error });
-      // }
     }
   }
 
@@ -237,9 +239,12 @@ export async function main(): Promise<void> {
 
   logger.info("Checking open positions");
   const openTradeNotifications = await runCheckOpenTrades();
-  // DISABLED: signals-only mode, không check/resolve pending order nữa. Xem tasks/disable-pending-orders/plan.md
-  // logger.info("Checking pending orders");
-  // const pendingNotifications = await runCheckPendingOrders();
+
+  // Poll pending entry orders (LIMIT/STOP) waiting to fill
+  if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledSmc()) {
+    logger.info("Polling pending entry orders");
+    await pollPendingEntryOrders();
+  }
 
   if (!result && openTradeNotifications === 0) {
     await maybeSendHeartbeat(runContext, candleKey, heartbeatReason, latestCacheCandleKey);

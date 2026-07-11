@@ -32,6 +32,9 @@ vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
   getConfiguredBinanceMarginType: () => "ISOLATED",
   getConfiguredBinanceRiskPercentPerTrade: () => 1,
   getConfiguredBinanceRiskUsdPerTrade: () => undefined,
+  isBinanceHonorOrderTypeEnabledVolman: () => false,
+  getConfiguredBinanceEntryOrderExpiryMinutes: () => 60,
+  getConfiguredBinanceWorkingType: () => undefined,
 }));
 
 vi.mock("../../src/charts/position-engine-volman.js", () => ({

@@ -60,3 +60,23 @@ export function isBinanceLiveTradingEnabledSmc(): boolean {
 export function isBinanceLiveTradingEnabledVolman(): boolean {
   return readBooleanEnv("BINANCE_LIVE_TRADING_ENABLED_VOLMAN", false);
 }
+
+export function isBinanceHonorOrderTypeEnabledSmc(): boolean {
+  return readBooleanEnv("BINANCE_HONOR_ORDER_TYPE_SMC", false);
+}
+
+export function isBinanceHonorOrderTypeEnabledVolman(): boolean {
+  return readBooleanEnv("BINANCE_HONOR_ORDER_TYPE_VOLMAN", false);
+}
+
+export function getConfiguredBinanceEntryOrderExpiryMinutes(): number {
+  const raw = process.env.BINANCE_ENTRY_ORDER_EXPIRY_MINUTES?.trim();
+  if (!raw) return 60;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
+}
+
+export function getConfiguredBinanceWorkingType(): "MARK_PRICE" | "CONTRACT_PRICE" | undefined {
+  const raw = process.env.BINANCE_WORKING_TYPE?.trim().toUpperCase();
+  return raw === "MARK_PRICE" || raw === "CONTRACT_PRICE" ? raw : undefined;
+}
