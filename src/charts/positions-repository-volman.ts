@@ -224,6 +224,15 @@ export async function findOpenPositionIdByPair(pair: string): Promise<number | n
   return (data ?? [])[0]?.id ?? null;
 }
 
+export async function loadOpenPairs(): Promise<Set<string>> {
+  const { data, error } = await (getDb().from("open_positions_volman") as any)
+    .select("pair")
+    .eq("status", "open");
+
+  if (error) throw new Error(`loadOpenPairs failed: ${error.message}`);
+  return new Set((data ?? []).map((row: { pair: string }) => row.pair));
+}
+
 export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" | "D1"): Promise<OpenPosition[]> {
   const { data, error } = await (getDb().from("open_positions_volman") as any)
     .select(

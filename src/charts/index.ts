@@ -2,6 +2,7 @@ import "../shared/env.js";
 import {
   saveOpenPosition,
   findOpenPositionIdByPair,
+  loadOpenPairs,
 } from "./positions-repository-volman.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
 import { sendMessage, notifyError } from "../shared/telegram-client.js";
@@ -205,6 +206,32 @@ async function handleAnalysisResult(
       .join("\n");
   }
 
+  // Filter out setups whose pair already has an open position — those pairs are
+  // monitored/managed via runCheckOpenTrades(), not re-signaled here.
+  const openPairs = await loadOpenPairs();
+  const openPositionReasons: string[] = [];
+  const setupsAfterOpenPositionFilter: TradeSetup[] = [];
+
+  for (const setup of result.setups) {
+    if (openPairs.has(setup.pair)) {
+      openPositionReasons.push(
+        `${setup.pair}: Đã có vị thế mở — chỉ theo dõi/quản lý, không gửi lại tín hiệu.`,
+      );
+      logger.info("Setup filtered — pair already has open position", {
+        pair: setup.pair,
+      });
+    } else {
+      setupsAfterOpenPositionFilter.push(setup);
+    }
+  }
+
+  result.setups = setupsAfterOpenPositionFilter;
+  if (openPositionReasons.length > 0) {
+    result.noSetupReason = [result.noSetupReason, ...openPositionReasons]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   // Auto-track open positions (now only for fresh setups after guard)
   for (const setup of result.setups) {
     if (shouldAutoTrackAsOpen(setup, threshold)) {
@@ -317,6 +344,9 @@ export async function main(): Promise<void> {
   heartbeatReason = analysisState.heartbeatReason;
   if (origin?.source === "cached") latestCacheCandleKey = origin.candleKey;
 
+  logger.info("Checking open positions");
+  const openTradeNotifications = await runCheckOpenTrades(primaryTimeframe);
+
   if (result && origin) {
     await handleAnalysisResult(result, origin);
   } else {
@@ -325,9 +355,6 @@ export async function main(): Promise<void> {
       { engineMode: "bob-volman" },
     );
   }
-
-  logger.info("Checking open positions");
-  const openTradeNotifications = await runCheckOpenTrades(primaryTimeframe);
 
   // Poll pending entry orders (LIMIT/STOP) waiting to fill
   if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledVolman()) {

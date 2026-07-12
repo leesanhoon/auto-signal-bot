@@ -223,6 +223,15 @@ export async function findOpenPositionIdByPair(pair: string): Promise<number | n
   return (data ?? [])[0]?.id ?? null;
 }
 
+export async function loadOpenPairs(): Promise<Set<string>> {
+  const { data, error } = await (getDb().from("open_positions_smc") as any)
+    .select("pair")
+    .eq("status", "open");
+
+  if (error) throw new Error(`loadOpenPairs failed: ${error.message}`);
+  return new Set((data ?? []).map((row: { pair: string }) => row.pair));
+}
+
 export async function loadOpenPositions(): Promise<OpenPosition[]> {
   const { data, error } = await (getDb().from("open_positions_smc") as any)
     .select(

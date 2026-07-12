@@ -345,6 +345,66 @@ describe("charts/binance-execution-volman reconcileBinancePosition", () => {
     expect(result.managementAction).toBe("TP2_CLOSE");
   });
 
+  test("no SL/TP filled + getPositionAmount = 0 -> manual close phat hien, ket luan CLOSE", async () => {
+    const position = { ...basePosition, binanceSlOrderId: 456, binanceTp1OrderId: 789, binanceTp2OrderId: 999 };
+    // SL, TP1, TP2 khong FILLED (all PENDING)
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // SL not filled
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP2 not filled
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP1 not filled
+    // getPositionAmount = 0: user da dong tay tren Binance app
+    clientState.getPositionAmount.mockResolvedValueOnce(0);
+    // best-effort: hu cac order con lai
+    clientState.cancelOrder.mockResolvedValueOnce({ orderId: 456 }); // Cancel SL
+    clientState.cancelOrder.mockResolvedValueOnce({ orderId: 789 }); // Cancel TP1
+    clientState.cancelOrder.mockResolvedValueOnce({ orderId: 999 }); // Cancel TP2
+
+    const result = await reconcileBinancePosition(position as any);
+
+    expect(result.decision).toBe("CLOSE");
+    expect(result.confidence).toBe(100);
+    expect(result.comment).toContain("getPositionAmount=0");
+    expect(result.comment).toContain("đóng thủ công");
+    // Verify cancel was attempted for all 3 orders
+    expect(clientState.cancelOrder).toHaveBeenCalledWith("BTCUSDT", 456); // SL
+    expect(clientState.cancelOrder).toHaveBeenCalledWith("BTCUSDT", 789); // TP1
+    expect(clientState.cancelOrder).toHaveBeenCalledWith("BTCUSDT", 999); // TP2
+  });
+
+  test("no SL/TP filled + getPositionAmount = 0, cancel orders fail -> best-effort, still return CLOSE", async () => {
+    const position = { ...basePosition, binanceSlOrderId: 456, binanceTp1OrderId: 789, binanceTp2OrderId: 999 };
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // SL not filled
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP2 not filled
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP1 not filled
+    clientState.getPositionAmount.mockResolvedValueOnce(0);
+    // Cancel fail for all orders (best-effort, khong throw)
+    clientState.cancelOrder.mockResolvedValueOnce(new Error("cancel SL failed"));
+    clientState.cancelOrder.mockResolvedValueOnce(new Error("cancel TP1 failed"));
+    clientState.cancelOrder.mockResolvedValueOnce(new Error("cancel TP2 failed"));
+
+    const result = await reconcileBinancePosition(position as any);
+
+    // Muc dich chinh la CLOSE (ly do manual close phat hien), khong can cancel success — best-effort
+    expect(result.decision).toBe("CLOSE");
+    expect(result.confidence).toBe(100);
+    // 3 cancel error calls but khong throw, so all 3 log warn
+    expect(clientState.cancelOrder).toHaveBeenCalledTimes(3);
+  });
+
+  test("no SL/TP filled + getPositionAmount return Error -> fallback HOLD, khong conclude CLOSE", async () => {
+    const position = { ...basePosition, binanceSlOrderId: 456, binanceTp1OrderId: 789, binanceTp2OrderId: null };
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // SL not filled
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP1 not filled
+    // getPositionAmount return Error: cannot verify -> KHONG duoc doan bua
+    clientState.getPositionAmount.mockResolvedValueOnce(new Error("API timeout"));
+
+    const result = await reconcileBinancePosition(position as any);
+
+    // Fallback: HOLD, khong CLOSE — neu khong xac minh duoc thi an toan nhat la giu lai
+    expect(result.decision).toBe("HOLD");
+    expect(result.confidence).toBe(100);
+    expect(result.comment).toContain("chưa có lệnh SL/TP nào khớp");
+  });
+
   describe("swing trailing SL sau TP1 (Task 07)", () => {
     // alreadyPartial=true (TP1 da khop tu truoc), SL/TP2 chua khop -> roi vao nhanh
     // trailing moi. SL hien tai = 49500 (da tung doi ve breakeven o cycle truoc).
@@ -432,5 +492,24 @@ describe("charts/binance-execution-volman reconcileBinancePosition", () => {
       expect(result.newStopLoss).toBe("50300");
       expect(clientState.placeStopMarketOrder).toHaveBeenCalledWith("BTCUSDT", "BUY", 50300);
     });
+  });
+
+  test("no SL/TP filled + getPositionAmount = 0 nhung KHONG co order id -> entry LIMIT/STOP dang cho khop, ket luan HOLD (khong phai dong thu cong)", async () => {
+    // Mô phỏng vị thế đang chờ entry khớp (SL/TP chưa được đặt vì entry chưa khớp thật)
+    const position = { ...basePosition, binanceSlOrderId: null, binanceTp1OrderId: null, binanceTp2OrderId: null };
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // SL not filled (but doesn't exist)
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP2 not filled (but doesn't exist)
+    clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP1 not filled (but doesn't exist)
+    // getPositionAmount = 0 vì entry LIMIT/STOP chưa khớp (chưa có vị thế thật trên sàn)
+    clientState.getPositionAmount.mockResolvedValueOnce(0);
+
+    const result = await reconcileBinancePosition(position as any);
+
+    // IMPORTANT: phải trả HOLD (không CLOSE) vì cả 3 order id đều null → entry chưa khớp
+    expect(result.decision).toBe("HOLD");
+    expect(result.confidence).toBe(100);
+    expect(result.comment).toContain("chưa có lệnh SL/TP nào khớp");
+    // Không được gọi cancelOrder vì không có order id nào để cancel
+    expect(clientState.cancelOrder).not.toHaveBeenCalled();
   });
 });

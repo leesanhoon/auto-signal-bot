@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   saveOpenPosition: vi.fn(),
   savePendingOrder: vi.fn(),
   findOpenPositionIdByPair: vi.fn(),
+  loadOpenPairs: vi.fn(),
+  applySignalFreshnessGuard: vi.fn(),
   saveBinancePendingEntryOrder: vi.fn(),
   updateBinanceEntryOrderStatus: vi.fn(),
   getPendingEntryOrderPositions: vi.fn(),
@@ -109,6 +111,7 @@ vi.mock("../../src/charts/positions-repository-smc.js", () => ({
   saveOpenPosition: mocks.saveOpenPosition,
   savePendingOrder: mocks.savePendingOrder,
   findOpenPositionIdByPair: mocks.findOpenPositionIdByPair,
+  loadOpenPairs: mocks.loadOpenPairs,
   saveBinancePendingEntryOrder: mocks.saveBinancePendingEntryOrder,
   updateBinanceEntryOrderStatus: mocks.updateBinanceEntryOrderStatus,
   getPendingEntryOrderPositions: mocks.getPendingEntryOrderPositions,
@@ -116,6 +119,10 @@ vi.mock("../../src/charts/positions-repository-smc.js", () => ({
 
 vi.mock("../../src/charts/position-engine-smc.js", () => ({
   validateTradeSetupForOpen: mocks.validateTradeSetupForOpen,
+}));
+
+vi.mock("../../src/charts/signal-freshness.js", () => ({
+  applySignalFreshnessGuard: mocks.applySignalFreshnessGuard,
 }));
 
 vi.mock("../../src/charts/binance-execution-smc.js", () => ({
@@ -196,7 +203,11 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
       accepted: true,
       reason: "",
     });
+    mocks.applySignalFreshnessGuard.mockImplementation((setup) =>
+      Promise.resolve({ ...setup, noSetupReason: undefined }),
+    );
     mocks.saveOpenPosition.mockResolvedValue(true);
+    mocks.loadOpenPairs.mockResolvedValue(new Set());
     mocks.savePendingOrder.mockResolvedValue(true);
     mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
@@ -510,5 +521,25 @@ describe("charts/smc-index main() — SMC standalone entrypoint", () => {
 
     // savePendingOrder KHÔNG được gọi (disabled)
     expect(mocks.savePendingOrder).not.toHaveBeenCalled();
+  });
+
+  test("loadOpenPairs trả về cặp có setup → loại khỏi result.setups, không gửi Telegram, không save position", async () => {
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
+    // loadOpenPairs trả về EUR/USD đã có vị thế mở
+    mocks.loadOpenPairs.mockResolvedValue(new Set(["EUR/USD"]));
+
+    await main();
+
+    // sendAllAnalyses được gọi nhưng result.setups phải rỗng (setup đã bị lọc)
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
+    const sendAllAnalysesCall = mocks.sendAllAnalyses.mock.calls[0];
+    const resultPassed = sendAllAnalysesCall[0];
+    expect(resultPassed.setups).toHaveLength(0);
+
+    // saveOpenPosition không được gọi (setup đã bị lọc trước vòng auto-track)
+    expect(mocks.saveOpenPosition).not.toHaveBeenCalled();
+
+    // noSetupReason phải chứa lý do lọc open position
+    expect(resultPassed.noSetupReason).toContain("Đã có vị thế mở");
   });
 });

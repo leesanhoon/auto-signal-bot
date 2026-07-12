@@ -1001,6 +1001,66 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
       }
     }
 
+    // Khong order tracked nao (SL/TP1/TP2) FILLED — truoc khi ket luan HOLD, xac minh
+    // truc tiep voi Binance xem vi the co con that su khong (user co the da tu tay dong
+    // tren app, khong qua cac order nay). "Hoi Binance truoc" la nguon du lieu chinh xac
+    // nhat, KHONG duoc tin DB/trang thai order mu quang.
+    // HANG: chi ket luan CLOSE neu TUNG CO IT NHAT 1 trong 3 order id (SL/TP1/TP2) — neu ca 3
+    // deu null, ngha la entry chua khop (entry LIMIT/STOP dang cho khop), KHONG phai "da dong".
+    const hasAnySlTpOrder = position.binanceSlOrderId || position.binanceTp1OrderId || position.binanceTp2OrderId;
+    const positionAmt = await getPositionAmount(symbol);
+    if (!(positionAmt instanceof Error) && positionAmt === 0 && hasAnySlTpOrder) {
+      // Don rac cac order con lai neu co (best-effort, khong throw neu fail — co the san
+      // da tu huy roi vi khong con vi the de reduce).
+      if (position.binanceSlOrderId) {
+        const cancelSl = await cancelOrder(symbol, position.binanceSlOrderId);
+        if (cancelSl instanceof Error) {
+          logger.warn("Khong huy duoc SL order con lai khi phat hien dong thu cong (co the da tu huy tren san)", {
+            pair: position.pair,
+            id: position.id,
+            orderId: position.binanceSlOrderId,
+            error: cancelSl,
+          });
+        }
+      }
+      if (position.binanceTp1OrderId) {
+        const cancelTp1 = await cancelOrder(symbol, position.binanceTp1OrderId);
+        if (cancelTp1 instanceof Error) {
+          logger.warn("Khong huy duoc TP1 order con lai khi phat hien dong thu cong (co the da tu huy tren san)", {
+            pair: position.pair,
+            id: position.id,
+            orderId: position.binanceTp1OrderId,
+            error: cancelTp1,
+          });
+        }
+      }
+      if (position.binanceTp2OrderId) {
+        const cancelTp2 = await cancelOrder(symbol, position.binanceTp2OrderId);
+        if (cancelTp2 instanceof Error) {
+          logger.warn("Khong huy duoc TP2 order con lai khi phat hien dong thu cong (co the da tu huy tren san)", {
+            pair: position.pair,
+            id: position.id,
+            orderId: position.binanceTp2OrderId,
+            error: cancelTp2,
+          });
+        }
+      }
+      return {
+        decision: "CLOSE",
+        confidence: 100,
+        comment:
+          "Không xác nhận được SL/TP nào khớp, nhưng vị thế đã trống trên sàn (getPositionAmount=0) — có thể đã đóng thủ công trên Binance, tự động đóng bản ghi DB tương ứng",
+        managementAction: "NONE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: alreadyPartial,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: null,
+        tp2RiskReward: null,
+      };
+    }
+
     return {
       decision: "HOLD",
       confidence: 100,
