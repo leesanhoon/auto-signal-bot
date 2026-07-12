@@ -27,7 +27,8 @@ import {
   roundToTickSize,
   splitTpQuantities,
 } from "./binance-position-sizing.js";
-import { toBinanceSymbol } from "./ohlc-provider.js";
+import { toBinanceSymbol, fetchOhlcHistory } from "./ohlc-provider.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 
@@ -141,6 +142,73 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   tp1MoveSLFailPrefix: string; // "*Binance Futures (SMC) — KHẨN CẤP*" or "*Binance Futures (Volman) — KHẨN CẤP*"
   entryOrderExpiredPrefix?: string; // "*Binance Futures (SMC|Volman)*" prefix cho entry order expiry alert
 };
+
+// ---------------------------------------------------------------------------
+// Helper functions for swing trailing SL after TP1
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the next higher timeframe.
+ * M15 → H1, M30 → H1, H1 → H4, H4 → D1, D1 → D1
+ */
+function getHigherTimeframe(timeframe: ChartTimeframe): ChartTimeframe {
+  switch (timeframe) {
+    case "M15":
+    case "M30":
+      return "H1";
+    case "H1":
+      return "H4";
+    case "H4":
+      return "D1";
+    case "D1":
+      return "D1"; // D1 is the highest, no higher available
+    default:
+      return timeframe;
+  }
+}
+
+/**
+ * Calculate swing support from OHLC data.
+ * Finds the lowest low in the data as a support level.
+ * If price has barely broken above entry, use a Fib-like level instead.
+ */
+function calculateSwingSupportLevel(
+  ohlcData: Array<{ high: number; low: number }>,
+  entryPrice: number,
+  direction: "LONG" | "SHORT",
+): number | null {
+  if (!ohlcData || ohlcData.length === 0) {
+    return null;
+  }
+
+  if (direction === "LONG") {
+    // For LONG: find lowest low in recent candles
+    let swingLow = ohlcData[0].low;
+    for (const candle of ohlcData) {
+      if (candle.low < swingLow) {
+        swingLow = candle.low;
+      }
+    }
+    // If swing low is too close to entry or above it, use a conservative level
+    if (swingLow >= entryPrice) {
+      return null; // No valid swing support, fall back to breakeven
+    }
+    return swingLow;
+  } else {
+    // For SHORT: find highest high in recent candles
+    let swingHigh = ohlcData[0].high;
+    for (const candle of ohlcData) {
+      if (candle.high > swingHigh) {
+        swingHigh = candle.high;
+      }
+    }
+    // If swing high is too close to entry or below it, use a conservative level
+    if (swingHigh <= entryPrice) {
+      return null; // No valid swing support, fall back to breakeven
+    }
+    return swingHigh;
+  }
+}
 
 export function createOpenBinanceFuturesPosition<
   TSetup extends { pair: string; direction: "LONG" | "SHORT"; orderType?: string },
@@ -761,9 +829,57 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
 
         // Tu day: SL cu DA bi huy — vi the dang KHONG CO SL nao tren san. Retry dat
         // SL moi toi da 3 lan trong cung 1 lan goi (khong de treo den cycle sau).
-        let newSl = await placeStopMarketOrder(symbol, closeSide, bePrice);
+
+        // Attempt to calculate swing support for trailing SL after TP1
+        // Falls back to breakeven if swing calculation fails or is not available
+        let slPrice = bePrice;
+        let slMethod = "breakeven"; // "breakeven", "swing_support", or "fallback"
+
+        try {
+          // Get primary timeframe from env or default to H4
+          const primaryTimeframe = (process.env.CHART_PRIMARY_TIMEFRAME as ChartTimeframe | undefined) || "H4";
+          const higherTimeframe = getHigherTimeframe(primaryTimeframe);
+
+          // Attempt to fetch OHLC data for swing support calculation
+          // Look back 10 candles to find swing low/high
+          const ohlcResult = await fetchOhlcHistory(
+            symbol,
+            higherTimeframe,
+            10, // number of candles
+          );
+
+          if (!(ohlcResult instanceof Error) && ohlcResult.length > 0) {
+            const swingLevel = calculateSwingSupportLevel(
+              ohlcResult,
+              entryPrice,
+              position.direction,
+            );
+
+            if (swingLevel !== null) {
+              slPrice = filters instanceof Error
+                ? swingLevel
+                : roundToTickSize(swingLevel, filters.tickSize);
+              slMethod = "swing_support";
+              logger.info(`Calculated swing ${position.direction === "LONG" ? "support" : "resistance"} for trailing SL after TP1: ${slPrice.toFixed(5)}`, {
+                pair: position.pair,
+                method: slMethod,
+                swingLevel,
+              });
+            }
+          }
+        } catch (error) {
+          // If swing calculation fails, fall back to breakeven
+          logger.warn(
+            "Swing support calculation failed after TP1 — falling back to breakeven",
+            { pair: position.pair, error: error instanceof Error ? error.message : String(error) },
+          );
+          slPrice = bePrice;
+          slMethod = "fallback";
+        }
+
+        let newSl = await placeStopMarketOrder(symbol, closeSide, slPrice);
         for (let attempt = 2; newSl instanceof Error && attempt <= 3; attempt++) {
-          newSl = await placeStopMarketOrder(symbol, closeSide, bePrice);
+          newSl = await placeStopMarketOrder(symbol, closeSide, slPrice);
         }
 
         if (newSl instanceof Error) {
@@ -772,14 +888,14 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
             { pair: position.pair, id: position.id, error: newSl },
           );
           await sendMessage(
-            `🚨🚨 ${config.tp1MoveSLFailPrefix} — ${symbol}: đã hủy SL cũ để dời breakeven nhưng KHÔNG đặt lại được SL mới sau 3 lần thử.\n⚠️ VỊ THẾ ĐANG KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY LẬP TỨC.\nLỗi: ${newSl.message}`,
+            `🚨🚨 ${config.tp1MoveSLFailPrefix} — ${symbol}: đã hủy SL cũ để dời SL (${slMethod}) nhưng KHÔNG đặt lại được SL mới sau 3 lần thử.\n⚠️ VỊ THẾ ĐANG KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY LẬP TỨC.\nLỗi: ${newSl.message}`,
           );
           // QUAN TRONG: xem giai thich o nhanh fail phia tren (3a) — cung ap dung o day.
           return {
             decision: "HOLD",
             confidence: 90,
             comment:
-              "TP1 đã khớp trên Binance Futures, dời SL về breakeven THẤT BẠI SAU KHI ĐÃ HỦY SL CŨ — vị thế đang KHÔNG CÓ SL, cần đặt tay khẩn cấp",
+              "TP1 đã khớp trên Binance Futures, dời SL THẤT BẠI SAU KHI ĐÃ HỦY SL CŨ — vị thế đang KHÔNG CÓ SL, cần đặt tay khẩn cấp",
             managementAction: "NONE",
             partialClosePercent: 0,
             newStopLoss: null,
@@ -791,14 +907,15 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
           };
         }
 
-        await config.updateBinanceSlOrder(position.id, newSl.orderId, String(bePrice));
+        await config.updateBinanceSlOrder(position.id, newSl.orderId, String(slPrice));
+        const slTypeLabel = slMethod === "swing_support" ? "swing support" : (slMethod === "breakeven" ? "breakeven" : "fallback");
         return {
           decision: "HOLD",
           confidence: 90,
-          comment: "TP1 đã khớp trên Binance Futures, dời SL về breakeven",
+          comment: `TP1 đã khớp trên Binance Futures, dời SL đến ${slTypeLabel}`,
           managementAction: "PARTIAL_TP1",
           partialClosePercent: position.tp1ClosePercent ?? 50,
-          newStopLoss: String(bePrice),
+          newStopLoss: String(slPrice),
           tp1Reached: true,
           tp2Reached: false,
           riskReward: null,
