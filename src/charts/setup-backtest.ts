@@ -1,12 +1,13 @@
 import type { Candle } from "./ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind } from "./setup-types.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
-import { calculateEma, calculateAtr, isFalseBreak } from "./indicators.js";
+import { calculateEma, calculateAtr, isFalseBreak, averageAtr } from "./indicators.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
+import { passesDeterministicWindowFilter } from "./deterministic-pipeline.js";
 import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:setup-backtest");
@@ -18,6 +19,74 @@ const logger = createLogger("charts:setup-backtest");
 export type ExitMode = "fixed" | "trailing" | "swing_trail";
 
 export type FillMode = "immediate" | "pending";
+
+/**
+ * Binance USDT-M Futures VIP0 standard fees (taker 0.05%, maker 0.02%).
+ * Entry via pending mode and any stop-loss exit fill as STOP_MARKET (taker).
+ * TP exits fill as a LIMIT reduce-only order (maker). Slippage is modeled as
+ * a fraction of price applied against the trader on stop-triggered fills
+ * (entry and SL); TP limit fills are assumed to get their exact price.
+ */
+export type FeeSlippageConfig = {
+  entryFeeRate: number;
+  exitTakerFeeRate: number;
+  exitMakerFeeRate: number;
+  entrySlippageRate: number;
+  slSlippageRate: number;
+};
+
+export const DEFAULT_FEE_SLIPPAGE_CONFIG: FeeSlippageConfig = {
+  entryFeeRate: 0.0005,
+  exitTakerFeeRate: 0.0005,
+  exitMakerFeeRate: 0.0002,
+  entrySlippageRate: 0.0002,
+  slSlippageRate: 0.0005,
+};
+
+export const ZERO_FEE_SLIPPAGE_CONFIG: FeeSlippageConfig = {
+  entryFeeRate: 0,
+  exitTakerFeeRate: 0,
+  exitMakerFeeRate: 0,
+  entrySlippageRate: 0,
+  slSlippageRate: 0,
+};
+
+/**
+ * Nets a raw (gross) R-multiple down to what a trader would actually keep
+ * after entry/exit slippage and fees, using the ORIGINAL planned entry/SL as
+ * the risk denominator (that's the R the signal advertised).
+ */
+function applyFeesAndSlippage(
+  direction: "LONG" | "SHORT",
+  rawEntry: number,
+  rawStopLoss: number,
+  rawExitPrice: number,
+  exitKind: "tp" | "sl",
+  fees: FeeSlippageConfig,
+): number {
+  const entrySlip = fees.entrySlippageRate * rawEntry;
+  const actualEntry = direction === "LONG" ? rawEntry + entrySlip : rawEntry - entrySlip;
+
+  let actualExit = rawExitPrice;
+  let exitFeeRate = fees.exitMakerFeeRate;
+  if (exitKind === "sl") {
+    const slSlip = fees.slSlippageRate * rawExitPrice;
+    actualExit = direction === "LONG" ? rawExitPrice - slSlip : rawExitPrice + slSlip;
+    exitFeeRate = fees.exitTakerFeeRate;
+  }
+
+  const risk = Math.abs(rawEntry - rawStopLoss);
+  if (risk === 0) return 0;
+
+  const grossRR =
+    direction === "LONG"
+      ? (actualExit - actualEntry) / risk
+      : (actualEntry - actualExit) / risk;
+
+  const feeCostR = (fees.entryFeeRate * actualEntry + exitFeeRate * actualExit) / risk;
+
+  return grossRR - feeCostR;
+}
 
 export type SetupBacktestTrade = {
   setup: SetupKind;
@@ -99,6 +168,8 @@ export function runSetupBacktest(
   swingLookback = 3,
   fillMode: FillMode = "immediate",
   pendingExpiryBars = 2,
+  feeSlippage: FeeSlippageConfig = DEFAULT_FEE_SLIPPAGE_CONFIG,
+  applySessionFilter = true,
 ): SetupBacktestReport {
   const ema20 = calculateEma(candles, 20);
   const atr14 = calculateAtr(candles, 14);
@@ -146,7 +217,7 @@ export function runSetupBacktest(
       } else {
         const triggered = direction === "LONG" ? high >= entry : low <= entry;
         if (triggered) {
-          const trade = buildTrade(candles, pendingOrder.signal, exitMode, trailBufferR, swingLookback, index);
+          const trade = buildTrade(candles, pendingOrder.signal, exitMode, trailBufferR, swingLookback, feeSlippage, index);
           trades.push(trade);
           pendingStats.filled++;
           openTrade = { signal: pendingOrder.signal, trade, triggerIndex: pendingOrder.triggerIndex, committed: true };
@@ -189,9 +260,18 @@ export function runSetupBacktest(
     }
 
     const freshSignals: DetectedSignal[] = [];
-    const canDetectSignal = fillMode === "pending"
+    const slotFree = fillMode === "pending"
       ? (openTrade === null && pendingOrder === null)
       : (openTrade === null);
+
+    const withinWindow = !applySessionFilter || passesDeterministicWindowFilter(
+      timeframe,
+      candles[index].time,
+      atr14[index],
+      averageAtr(atr14, index, 20),
+    );
+
+    const canDetectSignal = slotFree && withinWindow;
 
     if (canDetectSignal) {
       for (const detector of detectors) {
@@ -224,7 +304,7 @@ export function runSetupBacktest(
       };
     } else {
       // In immediate mode: fill trade immediately (original behavior)
-      const trade = buildTrade(candles, signal, exitMode, trailBufferR, swingLookback);
+      const trade = buildTrade(candles, signal, exitMode, trailBufferR, swingLookback, feeSlippage);
 
       openTrade = {
         signal,
@@ -252,15 +332,16 @@ function buildTrade(
   exitMode: ExitMode,
   trailBufferR: number,
   swingLookback: number,
+  feeSlippage: FeeSlippageConfig,
   entryIndexOverride?: number,
 ): SetupBacktestTrade {
   const entryIndex = entryIndexOverride ?? signal.triggerIndex;
   const outcome =
     exitMode === "trailing"
-      ? scanOutcomeTrailing(candles, signal, entryIndex, trailBufferR)
+      ? scanOutcomeTrailing(candles, signal, entryIndex, trailBufferR, feeSlippage)
       : exitMode === "swing_trail"
-        ? scanOutcomeSwingTrail(candles, signal, entryIndex, swingLookback)
-        : scanOutcome(candles, signal, entryIndex);
+        ? scanOutcomeSwingTrail(candles, signal, entryIndex, swingLookback, feeSlippage)
+        : scanOutcome(candles, signal, entryIndex, feeSlippage);
   return {
     setup: signal.setup,
     pair: signal.pair,
@@ -286,6 +367,7 @@ function scanOutcome(
   candles: Candle[],
   signal: DetectedSignal,
   entryIndex: number,
+  fees: FeeSlippageConfig,
 ): {
   exitIndex: number | null;
   exitPrice: number | null;
@@ -300,33 +382,33 @@ function scanOutcome(
     if (direction === "LONG") {
       if (low <= stopLoss) {
         const exitPrice = stopLoss;
-        const rr = (exitPrice - entry) / (entry - stopLoss);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         return { exitIndex: i, exitPrice, outcome: "stop", realizedRiskReward: rr };
       }
       if (high >= takeProfit2) {
         const exitPrice = takeProfit2;
-        const rr = (exitPrice - entry) / (entry - stopLoss);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
         return { exitIndex: i, exitPrice, outcome: "tp2", realizedRiskReward: rr };
       }
       if (high >= takeProfit1) {
         const exitPrice = takeProfit1;
-        const rr = (exitPrice - entry) / (entry - stopLoss);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
         return { exitIndex: i, exitPrice, outcome: "tp1", realizedRiskReward: rr };
       }
     } else {
       if (high >= stopLoss) {
         const exitPrice = stopLoss;
-        const rr = (entry - exitPrice) / (stopLoss - entry);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         return { exitIndex: i, exitPrice, outcome: "stop", realizedRiskReward: rr };
       }
       if (low <= takeProfit2) {
         const exitPrice = takeProfit2;
-        const rr = (entry - exitPrice) / (stopLoss - entry);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
         return { exitIndex: i, exitPrice, outcome: "tp2", realizedRiskReward: rr };
       }
       if (low <= takeProfit1) {
         const exitPrice = takeProfit1;
-        const rr = (entry - exitPrice) / (stopLoss - entry);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
         return { exitIndex: i, exitPrice, outcome: "tp1", realizedRiskReward: rr };
       }
     }
@@ -354,6 +436,7 @@ function scanOutcomeTrailing(
   signal: DetectedSignal,
   entryIndex: number,
   trailBufferR: number,
+  fees: FeeSlippageConfig,
 ): {
   exitIndex: number | null;
   exitPrice: number | null;
@@ -376,7 +459,7 @@ function scanOutcomeTrailing(
     if (direction === "LONG") {
       if (low <= currentStop) {
         const exitPrice = currentStop;
-        const rr = (exitPrice - entry) / (entry - stopLoss);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         const outcome = tp2Hit ? "trail_tp1" : tp1Hit ? "trail_be" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }
@@ -391,7 +474,7 @@ function scanOutcomeTrailing(
     } else {
       if (high >= currentStop) {
         const exitPrice = currentStop;
-        const rr = (entry - exitPrice) / (stopLoss - entry);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         const outcome = tp2Hit ? "trail_tp1" : tp1Hit ? "trail_be" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }
@@ -425,6 +508,7 @@ function scanOutcomeSwingTrail(
   signal: DetectedSignal,
   entryIndex: number,
   swingLookback: number,
+  fees: FeeSlippageConfig,
 ): {
   exitIndex: number | null;
   exitPrice: number | null;
@@ -441,7 +525,7 @@ function scanOutcomeSwingTrail(
     if (direction === "LONG") {
       if (low <= currentStop) {
         const exitPrice = currentStop;
-        const rr = (exitPrice - entry) / (entry - stopLoss);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         const outcome = tp1Hit ? "trail_swing" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }
@@ -456,7 +540,7 @@ function scanOutcomeSwingTrail(
     } else {
       if (high >= currentStop) {
         const exitPrice = currentStop;
-        const rr = (entry - exitPrice) / (stopLoss - entry);
+        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         const outcome = tp1Hit ? "trail_swing" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }

@@ -1,0 +1,69 @@
+
+> auto-signal-bot@1.0.0 analyze
+> tsx src/charts/index.ts
+
+[2026-07-12 15:28:28.488 +0700] [32mINFO[39m: [36mChart scanner starting[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "engineMode": "bob-volman",
+        "runContext": "manual",
+        "timeframeMode": "single",
+        "primaryTimeframe": "M15",
+        "analysisTimeframe": "M15"
+      }
+    ]
+[2026-07-12 15:28:29.783 +0700] [32mINFO[39m: [36mSkipped open position due to risk/reward gate[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "pair": "INJ/USDT",
+        "reason": "R:R 1.25 thấp hơn ngưỡng tối thiểu 3.00."
+      }
+    ]
+[2026-07-12 15:28:29.783 +0700] [32mINFO[39m: [36mSkipped open position due to risk/reward gate[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "pair": "RUNE/USDT",
+        "reason": "R:R 1.25 thấp hơn ngưỡng tối thiểu 3.00."
+      }
+    ]
+[2026-07-12 15:28:29.783 +0700] [32mINFO[39m: [36mSending results to Telegram[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "source": "cached",
+        "candleKey": "2026-07-12T08:15:deterministic:single:M15"
+      }
+    ]
+[2026-07-12 15:28:31.900 +0700] [32mINFO[39m: [36m  ✓ Sent setup: INJ/USDT LONG[39m
+    [35msource[39m: "shared:telegram-volman"
+[2026-07-12 15:28:33.395 +0700] [32mINFO[39m: [36m  ✓ Sent setup: RUNE/USDT LONG[39m
+    [35msource[39m: "shared:telegram-volman"
+[2026-07-12 15:28:34.834 +0700] [32mINFO[39m: [36mChecking open positions[39m
+    [35msource[39m: "charts:index"
+[2026-07-12 15:28:34.834 +0700] [32mINFO[39m: [36mCheck open trades starting[39m
+    [35msource[39m: "charts:check-open-trades-volman"
+[2026-07-12 15:28:35.137 +0700] [32mINFO[39m: [36mNo open positions[39m
+    [35msource[39m: "charts:check-open-trades-volman"
+[2026-07-12 15:28:35.137 +0700] [32mINFO[39m: [36mPolling pending entry orders[39m
+    [35msource[39m: "charts:index"
+[2026-07-12 15:28:35.415 +0700] [32mINFO[39m: [36mRun complete[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "scannedPairs": 64,
+        "attemptedPairs": 64,
+        "summaryPairs": 64,
+        "skippedPairs": 0,
+        "setupCount": 5,
+        "elapsedSeconds": 6.9,
+        "engineMode": "bob-volman",
+        "runContext": "manual",
+        "timeframeMode": "single",
+        "primaryTimeframe": "M15",
+        "analysisTimeframe": "M15",
+        "openTradeNotifications": 0
+      }
+    ]

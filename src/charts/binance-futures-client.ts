@@ -220,6 +220,35 @@ export async function setLeverage(
   return true;
 }
 
+const maxLeverageCache = new Map<string, number>();
+
+// Moi symbol co bracket doi leverage rieng (vd altcoin thanh khoan thap thuong
+// gioi han thap hon nhieu so voi BTCUSDT). Bracket dau tien (notional thap nhat)
+// luon la initialLeverage cao nhat duoc phep cho symbol do.
+export async function getMaxLeverageForSymbol(
+  symbol: string,
+): Promise<number | Error> {
+  const cached = maxLeverageCache.get(symbol);
+  if (cached !== undefined) return cached;
+
+  const result = await signedRequest<
+    | Array<{ symbol: string; brackets: Array<{ initialLeverage: number }> }>
+    | { symbol: string; brackets: Array<{ initialLeverage: number }> }
+  >("GET", "/fapi/v1/leverageBracket", { symbol });
+  if (result instanceof Error) return result;
+
+  const entry = Array.isArray(result)
+    ? result.find((r) => r.symbol === symbol)
+    : result;
+  const maxLeverage = entry?.brackets?.[0]?.initialLeverage;
+  if (!maxLeverage || !Number.isFinite(maxLeverage)) {
+    return new Error(`Khong lay duoc max leverage cho ${symbol} tu leverageBracket`);
+  }
+
+  maxLeverageCache.set(symbol, maxLeverage);
+  return maxLeverage;
+}
+
 export async function placeMarketOrder(
   symbol: string,
   side: BinanceOrderSide,

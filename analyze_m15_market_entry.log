@@ -1,0 +1,61 @@
+
+> auto-signal-bot@1.0.0 analyze
+> tsx src/charts/index.ts
+
+[2026-07-12 15:48:43.993 +0700] [32mINFO[39m: [36mChart scanner starting[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "engineMode": "bob-volman",
+        "runContext": "manual",
+        "timeframeMode": "single",
+        "primaryTimeframe": "M15",
+        "analysisTimeframe": "M15"
+      }
+    ]
+[2026-07-12 15:48:45.421 +0700] [32mINFO[39m: [36mSetup filtered by freshness guard[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "pair": "ICP/USDT",
+        "reason": "Gia da vuot TP1/SL (check gia tuc: 2.24900). Entry: 2.26200, TP1: 2.25100, SL: 2.27300."
+      }
+    ]
+[2026-07-12 15:48:45.750 +0700] [32mINFO[39m: [36mSending results to Telegram[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "source": "cached",
+        "candleKey": "2026-07-12T08:45:deterministic:single:M15"
+      }
+    ]
+[2026-07-12 15:48:47.609 +0700] [32mINFO[39m: [36m  ✓ Sent setup: TIA/USDT SHORT[39m
+    [35msource[39m: "shared:telegram-volman"
+[2026-07-12 15:48:49.075 +0700] [32mINFO[39m: [36m  ✓ Sent setup: INJ/USDT LONG[39m
+    [35msource[39m: "shared:telegram-volman"
+[2026-07-12 15:48:50.512 +0700] [32mINFO[39m: [36mChecking open positions[39m
+    [35msource[39m: "charts:index"
+[2026-07-12 15:48:50.512 +0700] [32mINFO[39m: [36mCheck open trades starting[39m
+    [35msource[39m: "charts:check-open-trades-volman"
+[2026-07-12 15:48:50.872 +0700] [32mINFO[39m: [36mNo open positions[39m
+    [35msource[39m: "charts:check-open-trades-volman"
+[2026-07-12 15:48:50.872 +0700] [32mINFO[39m: [36mPolling pending entry orders[39m
+    [35msource[39m: "charts:index"
+[2026-07-12 15:48:50.873 +0700] [32mINFO[39m: [36mRun complete[39m
+    [35msource[39m: "charts:index"
+    [35margs[39m: [
+      {
+        "scannedPairs": 64,
+        "attemptedPairs": 64,
+        "summaryPairs": 64,
+        "skippedPairs": 0,
+        "setupCount": 7,
+        "elapsedSeconds": 6.9,
+        "engineMode": "bob-volman",
+        "runContext": "manual",
+        "timeframeMode": "single",
+        "primaryTimeframe": "M15",
+        "analysisTimeframe": "M15",
+        "openTradeNotifications": 0
+      }
+    ]

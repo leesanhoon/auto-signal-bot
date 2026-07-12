@@ -132,7 +132,7 @@ describe("FB — First Break", () => {
 // ---------------------------------------------------------------------------
 
 describe("BB — Block Break", () => {
-  test("detects BB on a real breakout candle after the block", () => {
+  test("detects BB when block is ready (before breakout happens)", () => {
     const candles: Candle[] = [];
 
     for (let i = 0; i < 23; i++) {
@@ -170,7 +170,8 @@ describe("BB — Block Break", () => {
     expect(signal).not.toBeNull();
     expect(signal!.setup).toBe("BB");
     expect(signal!.direction).toBe("LONG");
-    expect(signal!.triggerIndex).toBe(last);
+    // Signal now triggers at block.endIndex (last candle of block), not at breakout candle
+    expect(signal!.triggerIndex).toBe(27); // block ends at index 27
     expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
   });
 });

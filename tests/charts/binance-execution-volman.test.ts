@@ -8,6 +8,7 @@ const clientState = vi.hoisted(() => ({
   getAvailableBalanceUsdt: vi.fn(),
   setMarginType: vi.fn(),
   setLeverage: vi.fn(),
+  getMaxLeverageForSymbol: vi.fn(),
   placeMarketOrder: vi.fn(),
   placeStopMarketOrder: vi.fn(),
   placeTakeProfitMarketOrder: vi.fn(),
@@ -111,6 +112,7 @@ beforeEach(() => {
   (repositoryState.saveBinanceExecutionDetails as any).mockReset();
   (repositoryState.updateBinanceSlOrder as any).mockReset();
   clientState.isHedgeModeEnabled.mockResolvedValue(false);
+  clientState.getMaxLeverageForSymbol.mockResolvedValue(20);
 });
 
 describe("charts/binance-execution-volman guard cross-system", () => {

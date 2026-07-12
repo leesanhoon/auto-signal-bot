@@ -3,6 +3,7 @@ import {
   getAvailableBalanceUsdt,
   setMarginType,
   setLeverage,
+  getMaxLeverageForSymbol,
   placeMarketOrder,
   placeStopMarketOrder,
   placeTakeProfitMarketOrder,
@@ -170,7 +171,7 @@ export function createOpenBinanceFuturesPosition<
       return;
     }
 
-    const leverage = getConfiguredBinanceLeverage();
+    let leverage = getConfiguredBinanceLeverage();
     const marginType = getConfiguredBinanceMarginType();
     const riskPercent = getConfiguredBinanceRiskPercentPerTrade();
     const riskUsdt = config.getConfiguredRiskUsdt?.();
@@ -217,6 +218,19 @@ export function createOpenBinanceFuturesPosition<
 
       const filters = await getExchangeInfoFilters(binanceSymbol);
       if (filters instanceof Error) throw filters;
+
+      // Moi symbol co gioi han leverage rieng tren Binance (altcoin thanh khoan
+      // thap thuong thap hon nhieu so voi cau hinh BINANCE_LEVERAGE chung) — kep
+      // xuong muc toi da san cho phep de tranh loi -4028 "Leverage X is not valid".
+      const maxLeverage = await getMaxLeverageForSymbol(binanceSymbol);
+      if (maxLeverage instanceof Error) throw maxLeverage;
+      if (leverage > maxLeverage) {
+        logger.warn(
+          `Leverage cau hinh (${leverage}x) vuot muc toi da Binance cho phep voi ${binanceSymbol} (${maxLeverage}x) — kep xuong ${maxLeverage}x`,
+          { pair: setup.pair, binanceSymbol },
+        );
+        leverage = maxLeverage;
+      }
 
       // Moi gia stopPrice gui len Binance PHAI lam tron theo tickSize — gia tho tu
       // engine se bi Binance tu choi (loi price precision -1111/-4014).

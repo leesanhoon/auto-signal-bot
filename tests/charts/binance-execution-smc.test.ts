@@ -7,6 +7,7 @@ const clientState = vi.hoisted(() => ({
   getAvailableBalanceUsdt: vi.fn(),
   setMarginType: vi.fn(),
   setLeverage: vi.fn(),
+  getMaxLeverageForSymbol: vi.fn(),
   placeMarketOrder: vi.fn(),
   placeStopMarketOrder: vi.fn(),
   placeTakeProfitMarketOrder: vi.fn(),
@@ -64,6 +65,7 @@ beforeEach(() => {
   Object.values(clientState).forEach((fn) => fn.mockReset());
   sendMessageMock.mockReset();
   clientState.isHedgeModeEnabled.mockResolvedValue(false);
+  clientState.getMaxLeverageForSymbol.mockResolvedValue(20);
 });
 
 describe("charts/binance-execution-smc guard cross-system", () => {

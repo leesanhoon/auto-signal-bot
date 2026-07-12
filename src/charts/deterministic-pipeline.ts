@@ -1,7 +1,7 @@
 import type { AnalysisResult, ChartTimeframe } from "./chart-types-volman.js";
 import type { Candle } from "./ohlc-provider.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
-import { calculateEma, calculateAtr, classifyTrend, averageAtr, isTradableWindow } from "./indicators.js";
+import { calculateEma, calculateAtr, classifyTrend, averageAtr } from "./indicators.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
@@ -13,17 +13,20 @@ import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:deterministic-pipeline");
 
+/**
+ * Volatility-floor gate only — no London/NY session-hour restriction.
+ * Crypto trades 24/7, so the forex-specific session window Bob Volman's
+ * setups were tuned around doesn't transfer; only the ATR floor (avoid
+ * dead/flat markets) is kept.
+ */
 export function passesDeterministicWindowFilter(
-  timeframe: ChartTimeframe,
-  lastCandleTime: number,
+  _timeframe: ChartTimeframe,
+  _lastCandleTime: number,
   atrLast: number | null,
   atrAvg20d: number | null,
 ): boolean {
   if (atrLast === null || atrAvg20d === null) return false;
-  if (timeframe === "D1") {
-    return atrLast >= 0.3 * atrAvg20d;
-  }
-  return isTradableWindow(lastCandleTime, atrLast, atrAvg20d);
+  return atrLast >= 0.3 * atrAvg20d;
 }
 
 /**

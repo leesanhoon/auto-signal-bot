@@ -29,31 +29,25 @@ export function detectBb(
   const atr = ctx.atr14[index];
   if (ema === null || atr === null || atr === 0) return null;
 
-  // Stricter slope requirement for BB: |slope| > 0.2
+  // Stricter slope requirement for BB pre-position: |slope| > 0.2
+  // Increased from original 0.15 to reduce false positives when signaling before breakout
   const slope = computeSlope(ctx.ema20, ctx.atr14, index);
-  if (slope === null || Math.abs(slope) <= 0.15) {
-    trace.push(`|slope|=${slope !== null ? Math.abs(slope).toFixed(2) : 'null'} <= 0.15 -> khong du doc cho BB`);
+  if (slope === null || Math.abs(slope) <= 0.2) {
+    trace.push(`|slope|=${slope !== null ? Math.abs(slope).toFixed(2) : 'null'} <= 0.2 -> khong du doc cho BB pre-position`);
     return null;
   }
   trace.push(`EMA20 slope=${slope.toFixed(2)}`);
 
-  // Detect compression (block) — window 4-6, default kBlock=1.2
-  // Try multiple window sizes
-  const windowSizes = [4, 5, 6];
-  let block: ReturnType<typeof detectCompression> = null;
-
-  for (const w of windowSizes) {
-    block = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, 1.2);
-    if (block !== null) {
-      trace.push(`Block detected w=${w}, range=${block.range.toFixed(5)}, distanceToEma=${block.distanceToEma.toFixed(2)}`);
-      break;
-    }
-  }
+  // Detect compression (block) — use window size 5, default kBlock=1.2
+  // Fixed window prevents multiple overlapping detections that could cause duplicate signals
+  const block = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, 5, 1.2);
 
   if (block === null) {
-    trace.push(`Khong phat hien Block trong 4-6 nen`);
+    trace.push(`Khong phat hien Block (w=5)`);
     return null;
   }
+
+  trace.push(`Block detected w=5, range=${block.range.toFixed(5)}, distanceToEma=${block.distanceToEma.toFixed(2)}`);
 
   // Block must be near EMA20
   if (block.distanceToEma > 0.35) {
@@ -62,20 +56,18 @@ export function detectBb(
   }
   trace.push(`Block sat EMA20, distance=${block.distanceToEma.toFixed(2)} ATR`);
 
-  // Close must break block boundary in trend direction
+  // Direction is determined by trend (BEFORE breakout happens)
+  // Signal when block is ready, NOT when price has already broken out
   const direction = trend === "UPTREND" ? "LONG" : "SHORT";
-  const breaksUp = candles[index].close > block.high;
-  const breaksDown = candles[index].close < block.low;
 
-  if (direction === "LONG" && !breaksUp) {
-    trace.push(`Gia chua pha dinh Block (close=${candles[index].close.toFixed(5)} <= high=${block.high.toFixed(5)})`);
+  // Only signal at the first moment we detect the block (index == block.endIndex + 1)
+  // This prevents duplicate signals for overlapping blocks
+  if (index !== block.endIndex + 1) {
+    trace.push(`Block phat hien cham: chi signal tuc thoi (index=${index}, block.endIndex+1=${block.endIndex + 1})`);
     return null;
   }
-  if (direction === "SHORT" && !breaksDown) {
-    trace.push(`Gia chua pha day Block (close=${candles[index].close.toFixed(5)} >= low=${block.low.toFixed(5)})`);
-    return null;
-  }
-  trace.push(`Close pha Block boundary: ${direction}`);
+
+  trace.push(`Block san sang, theo trend ${direction}: STOP chap Binance truoc khi gia breakout`);
 
   // Entry/Stop/Target
   const entry = direction === "LONG" ? block.high : block.low;
@@ -105,7 +97,7 @@ export function detectBb(
     takeProfit1,
     takeProfit2,
     confidence,
-    triggerIndex: index,
+    triggerIndex: block.endIndex,
     ruleTrace: trace,
   };
 }

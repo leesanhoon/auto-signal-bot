@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   calculateAtr: vi.fn(),
   averageAtr: vi.fn(),
   classifyTrend: vi.fn(),
-  isTradableWindow: vi.fn(),
   detectDd: vi.fn(),
   detectFb: vi.fn(),
   detectBb: vi.fn(),
@@ -29,7 +28,6 @@ vi.mock("../../src/charts/indicators.js", () => ({
   calculateAtr: mocks.calculateAtr,
   averageAtr: mocks.averageAtr,
   classifyTrend: mocks.classifyTrend,
-  isTradableWindow: mocks.isTradableWindow,
 }));
 
 vi.mock("../../src/charts/setups/dd.js", () => ({ detectDd: mocks.detectDd }));
@@ -52,7 +50,6 @@ const { analyzeAllChartsDeterministic } = await import("../../src/charts/determi
 describe("deterministic pipeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.isTradableWindow.mockReturnValue(true);
     mocks.averageAtr.mockReturnValue(1);
     mocks.classifyTrend.mockReturnValue("UPTREND");
     mocks.runSbDetection.mockImplementation((_candles, signals) => ({ resolved: signals }));
@@ -92,8 +89,8 @@ describe("deterministic pipeline", () => {
       volume: 10 + i,
     }));
     mocks.fetchOhlcHistory.mockResolvedValue(candles);
-    mocks.calculateEma.mockReturnValue([1, 1, 1]);
-    mocks.calculateAtr.mockReturnValue([0.5, 0.5, 0.5]);
+    mocks.calculateEma.mockReturnValue(candles.map(() => 1));
+    mocks.calculateAtr.mockReturnValue(candles.map(() => 0.5));
 
     const detectedAtLastIndex = vi.fn((_candles: Candle[], i: number) =>
       i === 30
@@ -148,9 +145,9 @@ describe("deterministic pipeline", () => {
       volume: 10 + i,
     }));
     mocks.fetchOhlcHistory.mockResolvedValue(candles);
-    mocks.calculateEma.mockReturnValue([1, 1, 1]);
-    mocks.calculateAtr.mockReturnValue([0.5, 0.5, 0.5]);
-    mocks.isTradableWindow.mockReturnValue(false);
+    mocks.calculateEma.mockReturnValue(candles.map(() => 1));
+    mocks.calculateAtr.mockReturnValue(candles.map(() => 0.1));
+    mocks.averageAtr.mockReturnValue(1); // ATR floor = 0.3 * 1 = 0.3 > atrLast (0.1) -> reject
     mocks.detectDd.mockReturnValue(null);
     mocks.detectFb.mockReturnValue(null);
     mocks.detectBb.mockReturnValue(null);

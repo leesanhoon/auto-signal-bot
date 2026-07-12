@@ -2,10 +2,10 @@ import "../shared/env.js";
 import { createLogger } from "../shared/logger.js";
 import { CHARTS } from "./volman-charts.config.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
-import { runSetupBacktest } from "./setup-backtest.js";
+import { runSetupBacktest, DEFAULT_FEE_SLIPPAGE_CONFIG, ZERO_FEE_SLIPPAGE_CONFIG } from "./setup-backtest.js";
 import type { Candle } from "./ohlc-provider.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
-import type { ExitMode, FillMode } from "./setup-backtest.js";
+import type { ExitMode, FillMode, FeeSlippageConfig } from "./setup-backtest.js";
 
 const logger = createLogger("charts:setup-backtest");
 const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H4", "D1"];
@@ -74,6 +74,48 @@ function parsePositiveNumber(value: string | undefined, fallback: number): numbe
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseNonNegativeNumber(value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim() === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value.trim() === "") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return fallback;
+}
+
+function parseFeeSlippageConfig(): FeeSlippageConfig {
+  const enabled = parseBoolean(process.env.BACKTEST_FEES_ENABLED, true);
+  if (!enabled) return ZERO_FEE_SLIPPAGE_CONFIG;
+
+  return {
+    entryFeeRate: parseNonNegativeNumber(
+      process.env.BACKTEST_TAKER_FEE_RATE,
+      DEFAULT_FEE_SLIPPAGE_CONFIG.entryFeeRate,
+    ),
+    exitTakerFeeRate: parseNonNegativeNumber(
+      process.env.BACKTEST_TAKER_FEE_RATE,
+      DEFAULT_FEE_SLIPPAGE_CONFIG.exitTakerFeeRate,
+    ),
+    exitMakerFeeRate: parseNonNegativeNumber(
+      process.env.BACKTEST_MAKER_FEE_RATE,
+      DEFAULT_FEE_SLIPPAGE_CONFIG.exitMakerFeeRate,
+    ),
+    entrySlippageRate: parseNonNegativeNumber(
+      process.env.BACKTEST_ENTRY_SLIPPAGE_RATE,
+      DEFAULT_FEE_SLIPPAGE_CONFIG.entrySlippageRate,
+    ),
+    slSlippageRate: parseNonNegativeNumber(
+      process.env.BACKTEST_SL_SLIPPAGE_RATE,
+      DEFAULT_FEE_SLIPPAGE_CONFIG.slSlippageRate,
+    ),
+  };
+}
+
 async function main(): Promise<void> {
   logger.info("Setup backtest starting");
   const timeframe = parseBacktestTimeframe(process.env.BACKTEST_TIMEFRAME);
@@ -85,11 +127,23 @@ async function main(): Promise<void> {
   const pendingExpiryBars = parsePendingExpiryBars(process.env.BACKTEST_PENDING_EXPIRY_BARS);
   const startingCapital = parsePositiveNumber(process.env.BACKTEST_CAPITAL, 10000);
   const riskPerTrade = parsePositiveNumber(process.env.BACKTEST_RISK_PER_TRADE, 50);
+  const feeSlippage = parseFeeSlippageConfig();
+  const applySessionFilter = parseBoolean(process.env.BACKTEST_SESSION_FILTER, true);
   logger.info(
     `Exit mode: ${exitMode}` +
       (exitMode === "trailing" ? `, buffer=${trailBufferR}R` : "") +
       (exitMode === "swing_trail" ? `, lookback=${swingLookback}` : "") +
       `, fill=${fillMode}${fillMode === "pending" ? ` (expiry=${pendingExpiryBars} bars)` : ""}`,
+  );
+  logger.info(
+    `Fees/slippage: entryFee=${(feeSlippage.entryFeeRate * 100).toFixed(3)}%, ` +
+      `exitTakerFee=${(feeSlippage.exitTakerFeeRate * 100).toFixed(3)}%, ` +
+      `exitMakerFee=${(feeSlippage.exitMakerFeeRate * 100).toFixed(3)}%, ` +
+      `entrySlippage=${(feeSlippage.entrySlippageRate * 100).toFixed(3)}%, ` +
+      `slSlippage=${(feeSlippage.slSlippageRate * 100).toFixed(3)}%`,
+  );
+  logger.info(
+    `ATR volatility-floor filter (matches live deterministic pipeline; no session-hour gate): ${applySessionFilter ? "ON" : "OFF"}`,
   );
 
   // Collect unique pairs
@@ -137,6 +191,8 @@ async function main(): Promise<void> {
       swingLookback,
       fillMode,
       pendingExpiryBars,
+      feeSlippage,
+      applySessionFilter,
     );
     allReports.push({ pair, report });
   }

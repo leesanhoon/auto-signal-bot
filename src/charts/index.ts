@@ -38,7 +38,6 @@ import { openBinanceFuturesPosition, pollPendingEntryOrders } from "./binance-ex
 import {
   isBinanceLiveTradingEnabled,
   isBinanceLiveTradingEnabledVolman,
-  isBinanceHonorOrderTypeEnabledVolman,
 } from "./binance-futures-config-env.js";
 import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
@@ -50,18 +49,10 @@ type AnalysisOrigin =
   | { source: "cached"; candleKey: string };
 
 function shouldAutoTrackAsOpen(setup: TradeSetup, threshold: number): boolean {
-  if ((setup.confidence ?? 0) < threshold) return false;
-
-  if (setup.orderType === "MARKET_NOW") return true;
-
-  // If HONOR_ORDER_TYPE is enabled, also auto-track LIMIT/STOP orders
-  if (isBinanceHonorOrderTypeEnabledVolman() &&
-      (setup.orderType === "BUY_LIMIT" || setup.orderType === "SELL_LIMIT" ||
-       setup.orderType === "BUY_STOP" || setup.orderType === "SELL_STOP")) {
-    return true;
-  }
-
-  return false;
+  // Whether/how the entry actually executes (MARKET vs LIMIT/STOP) is decided
+  // separately in binance-execution-shared.ts based on isBinanceHonorOrderTypeEnabledVolman()
+  // — auto-tracking itself only depends on signal quality (confidence threshold).
+  return (setup.confidence ?? 0) >= threshold;
 }
 
 function getPairs(): Array<{ pair: string; symbol: string }> {
