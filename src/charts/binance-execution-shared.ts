@@ -273,13 +273,15 @@ export function createOpenBinanceFuturesPosition<
         return;
       }
       if (existingPositionAmt !== 0) {
-        logger.warn("Bo qua entry Binance — symbol da co vi the mo (co the do he khac)", {
+        const setupTimeframe = (setup as any).primaryTimeframe ?? "unknown";
+        logger.warn("Bo qua entry Binance — symbol da co vi the mo (co the do he khac/timeframe khac)", {
           pair: setup.pair,
           binanceSymbol,
           existingPositionAmt,
+          setupTimeframe,
         });
         await sendMessage(
-          `⚠️ ${config.guardFailPrefix} — Bỏ qua mở vị thế thật ${binanceSymbol}: symbol này đã có vị thế đang mở trên sàn (có thể do hệ khác đặt). Signal vẫn được track trong hệ thống, không có lệnh thật trên sàn.`,
+          `⚠️ ${config.guardFailPrefix} — Bỏ qua mở vị thế thật ${binanceSymbol}: symbol này đã có vị thế đang mở trên sàn (timeframe hiện tại: ${setupTimeframe}). Signal vẫn được track trong hệ thống, không có lệnh thật trên sàn.`,
         );
         return;
       }
