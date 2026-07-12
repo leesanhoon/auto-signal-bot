@@ -31,7 +31,7 @@ export type OpenPosition = {
   reasons: string[] | null;
   openedAt: string;
   status: "open" | "closed";
-  primaryTimeframe: "M15" | "H1" | "H4" | "D1" | null;
+  primaryTimeframe: "M15" | "M30" | "H1" | "H4" | "D1" | null;
   lastDecision: "HOLD" | "CLOSE" | "STOP" | null;
   lastDecisionConfidence: number | null;
   lastDecisionComment: string | null;
@@ -224,12 +224,13 @@ export async function findOpenPositionIdByPair(pair: string): Promise<number | n
   return (data ?? [])[0]?.id ?? null;
 }
 
-export async function loadOpenPositions(): Promise<OpenPosition[]> {
+export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" | "D1"): Promise<OpenPosition[]> {
   const { data, error } = await (getDb().from("open_positions_volman") as any)
     .select(
       "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_tp2_order_id, binance_execution_status, primary_timeframe",
     )
     .eq("status", "open")
+    .eq("primary_timeframe", timeframe)
     .order("opened_at", { ascending: true });
 
   if (error) throw new Error(`loadOpenPositions failed: ${error.message}`);

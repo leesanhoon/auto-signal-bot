@@ -74,9 +74,9 @@ export async function processPosition(position: Awaited<ReturnType<typeof loadOp
   return true;
 }
 
-export async function runCheckOpenTrades(): Promise<number> {
-  logger.info("Check open trades starting");
-  const positions = await loadOpenPositions();
+export async function runCheckOpenTrades(timeframe: "M15" | "M30" | "H1" | "H4" | "D1"): Promise<number> {
+  logger.info("Check open trades starting", { timeframe });
+  const positions = await loadOpenPositions(timeframe);
   if (positions.length === 0) {
     logger.info("No open positions");
     return 0;

@@ -964,7 +964,7 @@ async function resolveFilledQuantity(
 export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
   config: BinanceExecutionSystemConfig<any, TOpenPosition, any>,
 ) {
-  return async function pollPendingEntryOrders(): Promise<void> {
+  return async function pollPendingEntryOrders(timeframe?: "M15" | "M30" | "H1" | "H4" | "D1"): Promise<void> {
     const logger = createLogger(config.loggerName);
 
     if (config.isHonorOrderTypeEnabled && !config.isHonorOrderTypeEnabled()) {
@@ -976,7 +976,12 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
       return;
     }
 
-    const pending = await config.getPendingEntryOrderPositions();
+    let pending = await config.getPendingEntryOrderPositions();
+
+    // Filter by timeframe if provided
+    if (timeframe) {
+      pending = pending.filter((p: any) => p.primaryTimeframe === timeframe);
+    }
 
     for (const position of pending) {
       const symbol = position.binanceSymbol;

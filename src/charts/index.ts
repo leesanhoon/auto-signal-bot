@@ -317,12 +317,12 @@ export async function main(): Promise<void> {
   }
 
   logger.info("Checking open positions");
-  const openTradeNotifications = await runCheckOpenTrades();
+  const openTradeNotifications = await runCheckOpenTrades(primaryTimeframe);
 
   // Poll pending entry orders (LIMIT/STOP) waiting to fill
   if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledVolman()) {
-    logger.info("Polling pending entry orders");
-    await pollPendingEntryOrders();
+    logger.info("Polling pending entry orders", { timeframe: primaryTimeframe });
+    await pollPendingEntryOrders(primaryTimeframe);
   }
 
   if (!result && openTradeNotifications === 0) {
