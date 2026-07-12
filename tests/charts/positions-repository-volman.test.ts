@@ -313,6 +313,73 @@ describe("charts/positions-repository-volman", () => {
       }),
     );
   });
+
+  test("closePosition returns the realized snapshot", async () => {
+    repoState.updateResult = { error: null };
+
+    const snapshot = await positionsRepository.closePosition(
+      {
+        id: 7,
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Breakout",
+        entry: "1.1000",
+        stopLoss: "1.1000",
+        takeProfit1: "1.1080",
+        takeProfit2: "1.1120",
+        reasons: ["EMA touch"],
+        openedAt: "2026-07-01T00:00:00.000Z",
+        status: "open",
+        lastDecision: null,
+        lastDecisionConfidence: null,
+        lastDecisionComment: null,
+        lastCheckedAt: null,
+        closedAt: null,
+        tradeStage: "tp1_partial",
+        tp1ClosePercent: 50,
+        tp1ClosedPercent: 50,
+        tp1ClosedAt: "2026-07-01T00:00:00.000Z",
+        trailingStopLoss: "1.1000",
+        trailingStartedAt: "2026-07-01T00:00:00.000Z",
+        riskRewardRatio: 2.5,
+        tp1RiskRewardRatio: 2,
+        tp2RiskRewardRatio: 3,
+        minRiskRewardRatio: 1.5,
+        lastManagementAction: "PARTIAL_TP1",
+        lastManagementComment: "TP1 reached",
+        lastManagementAt: "2026-07-01T00:00:00.000Z",
+        closeReason: null,
+        realizedRiskRewardRatio: null,
+        realizedExitPrice: null,
+      },
+      {
+        decision: "CLOSE",
+        confidence: 80,
+        comment: "Setup invalidated",
+        managementAction: "NONE",
+        partialClosePercent: 0,
+        newStopLoss: null,
+        tp1Reached: false,
+        tp2Reached: false,
+        riskReward: null,
+        tp1RiskReward: 2,
+        tp2RiskReward: 3,
+      },
+      {
+        tradeStage: "closed",
+        tp1ClosedPercent: 50,
+        trailingStopLoss: "1.1000",
+        stopLoss: "1.1000",
+        lastManagementAction: "NONE",
+      },
+    );
+
+    expect(snapshot).toMatchObject({
+      closeReason: "manual_close",
+      realizedRiskRewardRatio: expect.any(Number),
+      outcome: expect.stringMatching(/^(win|loss|breakeven)$/),
+    });
+  });
 });
 
 describe("savePendingOrder", () => {

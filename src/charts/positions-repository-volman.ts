@@ -9,7 +9,7 @@ import {
   type OpenPositionManagementPatch,
   type PositionDecisionOutcome,
 } from "./position-engine-volman.js";
-import { buildClosedPositionSnapshot, type ClosedPositionRecord } from "./performance-tracking-volman.js";
+import { buildClosedPositionSnapshot, type ClosedPositionRecord, type ClosedPositionSnapshot } from "./performance-tracking-volman.js";
 import {
   createSaveBinancePendingEntryOrder,
   createUpdateBinanceEntryOrderStatus,
@@ -430,7 +430,7 @@ export async function closePosition(
   position: OpenPosition,
   decision: PositionDecisionOutcome,
   patch: OpenPositionManagementPatch | null = null,
-): Promise<void> {
+): Promise<ClosedPositionSnapshot> {
   const closeReason =
     decision.tp2Reached || decision.managementAction === "TP2_CLOSE"
       ? "TP2_CLOSE"
@@ -476,6 +476,8 @@ export async function closePosition(
     .eq("id", position.id);
 
   if (error) throw new Error(`closePosition failed: ${error.message}`);
+
+  return snapshot;
 }
 
 export type BinanceExecutionDetails = {

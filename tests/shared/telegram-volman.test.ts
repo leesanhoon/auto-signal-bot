@@ -1,0 +1,258 @@
+import { describe, test, expect, vi } from "vitest";
+import { sendAllAnalysesVolman, buildPositionClosedMessage } from "../../src/shared/telegram-volman.js";
+import type {
+  AnalysisResult,
+  TradeSetup,
+} from "../../src/charts/chart-types-volman.js";
+import type { Notifier } from "../../src/shared/notifier.js";
+
+function createMockNotifier(): Notifier & { sentMessages: string[] } {
+  const sentMessages: string[] = [];
+  return {
+    sentMessages,
+    sendMessage: vi.fn(async (text: string) => {
+      sentMessages.push(text);
+    }),
+    sendPhoto: vi.fn(async () => {}),
+    sendDocument: vi.fn(async () => {}),
+  };
+}
+
+const minimalSetup: TradeSetup = {
+  pair: "EURUSD",
+  direction: "LONG",
+  setup: "RB",
+  reasons: ["Reason A", "Reason B"],
+  risks: ["Risk A"],
+  confidence: 85,
+  entry: "1.1000",
+  stopLoss: "1.0950",
+  takeProfit1: "1.1100",
+  takeProfit2: "1.1200",
+  riskReward: "1:2",
+  summary: "Test summary",
+};
+
+const result: AnalysisResult = {
+  summaries: [{ pair: "EURUSD", trend: "up", status: "ok", confidence: 85 }],
+  setups: [minimalSetup],
+  noSetupReason: "",
+  screenshots: [],
+};
+
+describe("sendAllAnalysesVolman", () => {
+  test("never calls sendPhoto (no chart-image scanning in the live pipeline)", async () => {
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(result, mockNotifier);
+    expect(mockNotifier.sendPhoto).not.toHaveBeenCalled();
+  });
+
+  test("setup message has no consecutive blank lines when optional fields are absent", async () => {
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(result, mockNotifier);
+
+    const setupMessage = mockNotifier.sentMessages.find(
+      (msg) => msg.includes("EURUSD") && msg.includes("LONG")
+    );
+    expect(setupMessage).toBeDefined();
+    expect(setupMessage).not.toContain("\n\n\n");
+  });
+
+  test("setup message still contains all required trading data", async () => {
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(result, mockNotifier);
+
+    const setupMessage = mockNotifier.sentMessages.find(
+      (msg) => msg.includes("EURUSD") && msg.includes("LONG")
+    );
+    expect(setupMessage).toBeDefined();
+    expect(setupMessage).toContain("EURUSD");
+    expect(setupMessage).toContain("LONG");
+    expect(setupMessage).toContain("RB");
+    expect(setupMessage).toContain("1.1000");
+    expect(setupMessage).toContain("1.0950");
+    expect(setupMessage).toContain("1.1100");
+    expect(setupMessage).toContain("1.1200");
+    expect(setupMessage).toContain("1:2");
+    expect(setupMessage).toContain("Reason A");
+    expect(setupMessage).toContain("Reason B");
+    expect(setupMessage).toContain("Risk A");
+    expect(setupMessage).toContain("Test summary");
+  });
+
+  test("setup message contains no chart-image wording", async () => {
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(result, mockNotifier);
+
+    const setupMessage = mockNotifier.sentMessages.find(
+      (msg) => msg.includes("EURUSD") && msg.includes("LONG")
+    );
+    expect(setupMessage).toBeDefined();
+    expect(setupMessage).not.toContain("Ảnh minh họa");
+    expect(setupMessage).not.toContain("Nguồn ảnh");
+  });
+
+  test("header message collapses stats into one line and drops the long disclaimer paragraph", async () => {
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(result, mockNotifier);
+
+    const headerMessage = mockNotifier.sentMessages[0];
+    expect(headerMessage).toBeDefined();
+    expect(headerMessage).not.toContain(
+      "Scanner luôn phân tích theo last closed candle"
+    );
+
+    const lines = headerMessage.split("\n");
+    const quetLine = lines.find((line) => line.includes("Quét"));
+    expect(quetLine).toBeDefined();
+    expect(quetLine).toContain("đạt ngưỡng");
+  });
+
+  test("footer message is a single short line", async () => {
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(result, mockNotifier);
+
+    const footerMessage = mockNotifier.sentMessages[mockNotifier.sentMessages.length - 1];
+    expect(footerMessage).toBeDefined();
+    expect(footerMessage).not.toContain("\n\n");
+    expect(footerMessage).toContain("Xong");
+  });
+});
+
+describe("buildPositionClosedMessage", () => {
+  test("renders a win outcome with green emoji and correct R-multiple", () => {
+    const position = {
+      id: 1,
+      pair: "EUR/USD",
+      direction: "LONG" as const,
+      setup: "Breakout",
+      entry: "1.1000",
+      openedAt: "2026-07-01T12:00:00.000Z",
+    };
+
+    const snapshot = {
+      closeReason: "take_profit_2",
+      realizedExitPrice: "1.1200",
+      realizedRiskRewardRatio: 2,
+      outcome: "win" as const,
+    };
+
+    const message = buildPositionClosedMessage(position, snapshot);
+
+    expect(message).toContain("🏁 *Vị thế #1 đã đóng*");
+    expect(message).toContain("EUR/USD LONG");
+    expect(message).toContain("📋 Breakout");
+    expect(message).toContain("🟢 *THẮNG* — 2R");
+    expect(message).toContain("Lý do: Chạm TP2");
+    expect(message).toContain("Entry: 1.1000 → Exit: 1.1200");
+    expect(message).toContain("Đã mở: 2026-07-01T12:00:00.000Z");
+  });
+
+  test("renders a loss outcome with red emoji and correct R-multiple", () => {
+    const position = {
+      id: 2,
+      pair: "GBP/USD",
+      direction: "SHORT" as const,
+      setup: null,
+      entry: "1.2000",
+      openedAt: null,
+    };
+
+    const snapshot = {
+      closeReason: "stop_loss",
+      realizedExitPrice: "1.2100",
+      realizedRiskRewardRatio: -0.5,
+      outcome: "loss" as const,
+    };
+
+    const message = buildPositionClosedMessage(position, snapshot);
+
+    expect(message).toContain("🏁 *Vị thế #2 đã đóng*");
+    expect(message).toContain("GBP/USD SHORT");
+    expect(message).toContain("🔴 *THUA* — -0.5R");
+    expect(message).toContain("Lý do: Chạm Stop Loss");
+    expect(message).toContain("Entry: 1.2000 → Exit: 1.2100");
+    // Setup and openedAt are null/empty, should be filtered out
+    expect(message).not.toContain("📋");
+    expect(message).not.toContain("Đã mở");
+  });
+
+  test("renders a breakeven outcome with white emoji", () => {
+    const position = {
+      id: 3,
+      pair: "USD/JPY",
+      direction: "LONG" as const,
+      setup: "Block Break",
+      entry: "149.00",
+      openedAt: "2026-07-02T08:00:00.000Z",
+    };
+
+    const snapshot = {
+      closeReason: "manual_close",
+      realizedExitPrice: "149.00",
+      realizedRiskRewardRatio: 0,
+      outcome: "breakeven" as const,
+    };
+
+    const message = buildPositionClosedMessage(position, snapshot);
+
+    expect(message).toContain("⚪ *HOÀ VỐN* — 0R");
+    expect(message).toContain("Lý do: Đóng thủ công (tín hiệu đảo chiều)");
+  });
+
+  test("omits empty optional lines (setup and openedAt)", () => {
+    const position = {
+      id: 4,
+      pair: "AUD/USD",
+      direction: "SHORT" as const,
+      setup: null,
+      entry: "0.6500",
+      openedAt: null,
+    };
+
+    const snapshot = {
+      closeReason: "take_profit_2",
+      realizedExitPrice: "0.6400",
+      realizedRiskRewardRatio: 1.5,
+      outcome: "win" as const,
+    };
+
+    const message = buildPositionClosedMessage(position, snapshot);
+
+    // Verify no consecutive blank lines
+    expect(message).not.toContain("\n\n");
+    // Verify optional fields are not present
+    expect(message).not.toContain("📋");
+    expect(message).not.toContain("Đã mở");
+  });
+
+  test("overrides the close-reason label for a fail-safe close instead of showing 'manual close'", () => {
+    const position = {
+      id: 5,
+      pair: "BTC/USDT",
+      direction: "LONG" as const,
+      setup: "Market",
+      entry: "50000",
+      openedAt: null,
+    };
+
+    // A fail-safe emergency close is stored with the generic "manual_close"
+    // bucket (see positions-repository-volman.ts closeReason derivation) —
+    // the Telegram label must not repeat that misleading generic bucket.
+    const snapshot = {
+      closeReason: "manual_close",
+      realizedExitPrice: "49000",
+      realizedRiskRewardRatio: -1,
+      outcome: "loss" as const,
+    };
+
+    const message = buildPositionClosedMessage(position, snapshot, {
+      isFailSafeClose: true,
+    });
+
+    expect(message).toContain(
+      "Lý do: Đóng khẩn cấp do lỗi thực thi trên sàn (fail-safe)",
+    );
+    expect(message).not.toContain("Đóng thủ công (tín hiệu đảo chiều)");
+  });
+});

@@ -1,19 +1,14 @@
-import { basename } from "path";
 import type {
   AnalysisResult,
   TradeSetup,
   PairSummary,
 } from "../charts/chart-types-volman.js";
-import type {
-  ScreenshotResult,
-  ChartAnalysisSource,
-  ChartTimeframe,
-} from "../charts/chart-types-common.js";
+import type { ChartTimeframe } from "../charts/chart-types-common.js";
 import type { Notifier } from "./notifier.js";
 import { createLogger } from "./logger.js";
-import type { PerformanceReport } from "../charts/performance-tracking-volman.js";
+import type { PerformanceReport, ClosedPositionSnapshot } from "../charts/performance-tracking-volman.js";
 import { getConfiguredChartSignalConfidenceThreshold } from "../charts/volman-config-env.js";
-import { sendMessage, sendPhoto, telegramNotifier } from "./telegram-client.js";
+import { sendMessage, telegramNotifier } from "./telegram-client.js";
 
 const logger = createLogger("shared:telegram-volman");
 
@@ -56,19 +51,19 @@ function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
 function getPatternInfo(setup: string): string {
   const s = setup.toUpperCase();
   if (s.includes("RB") && !s.includes("ARB") && !s.includes("IRB"))
-    return "📦 _Range Break — Phá vỡ vùng tích lũy đi ngang, EMA 20 phẳng rồi dốc theo hướng break_";
+    return "📦 _Range Break — vùng tích lũy phá theo EMA20_";
   if (s.includes("ARB"))
-    return "📦🔄 _Advanced Range Break — Range lớn, nhiều lần test biên + false break trước khi break thật_";
+    return "📦🔄 _Advanced RB — nhiều false break trước khi break thật_";
   if (s.includes("IRB"))
-    return "📦📦 _Inside Range Break — Range nhỏ trong range lớn, breakout kéo phá luôn range lớn_";
+    return "📦📦 _Inside RB — range nhỏ phá luôn range lớn_";
   if (s.includes("BB"))
-    return "🧱 _Block Break — Block nhỏ chặt sát EMA 20, break theo hướng trend chính_";
+    return "🧱 _Block Break — block sát EMA20, theo trend_";
   if (s.includes("FB"))
-    return "💥 _First Break — Breakout lần đầu từ range lớn, nến break thân dài_";
+    return "💥 _First Break — breakout đầu tiên, nến thân dài_";
   if (s.includes("SB"))
-    return "🔄 _Second Break — False break lần 1 → buildup → break lần 2 hướng thật_";
+    return "🔄 _Second Break — false break rồi break thật_";
   if (s.includes("DD"))
-    return "🎯 _Double Doji — 2-3 doji sát EMA 20 trong trend rõ, break theo trend_";
+    return "🎯 _Double Doji — doji sát EMA20, theo trend_";
   return "";
 }
 
@@ -104,27 +99,50 @@ function buildCopyableSetup(setup: TradeSetup): string {
     confidence >= 80 ? "🟢🟢🟢" : confidence >= threshold ? "🟡🟡" : "🔴";
   const emaTag = setup.emaTouch ? " 📍EMA" : "";
   const patternInfo = getPatternInfo(setup.setup);
-  const fallbackNote = setup.chartFallbackUsed
-    ? `⚠️ Ảnh minh họa không đúng khung thời gian gốc (${normalizeSetupTimeframe(setup)}), chỉ tham khảo.`
-    : "";
   const candleAge = formatCandleAge(setup.primaryTimeframe);
-  return [
+
+  // Build orderLine: merge orderType and entryCondition
+  let orderLine = "";
+  if (setup.orderType) {
+    const orderTypeLabel = getOrderTypeLabel(setup.orderType);
+    if (setup.entryCondition) {
+      orderLine = `🧭 *Lệnh:* ${orderTypeLabel} — ${setup.entryCondition}`;
+    } else {
+      orderLine = `🧭 *Lệnh:* ${orderTypeLabel}`;
+    }
+  }
+
+  // Build priceLine: merge lastPrice and currentPriceContext
+  let priceLine = "";
+  const hasLastPrice =
+    setup.lastPrice !== undefined && setup.lastPrice !== null;
+  const hasPriceContext = setup.currentPriceContext;
+  if (hasLastPrice && hasPriceContext) {
+    priceLine = `📍 *Giá:* ${formatLastPrice(setup.lastPrice as number)} (${setup.currentPriceContext})`;
+  } else if (hasLastPrice) {
+    priceLine = `📍 *Giá:* ${formatLastPrice(setup.lastPrice as number)}`;
+  } else if (hasPriceContext) {
+    priceLine = `📍 *Giá:* ${setup.currentPriceContext}`;
+  }
+
+  // Build trailing status line based on autoTracked
+  const statusLine =
+    setup.autoTracked === true
+      ? "✅ Đã lưu & theo dõi tự động."
+      : "ℹ️ Lệnh chờ — chỉ vào khi khớp điều kiện.";
+
+  const headerBlock = [
     `${arrow} *${setup.pair} — ${setup.direction}* (${confidence}% ${confBar})${emaTag}`,
     `📋 *${setup.setup}*`,
     patternInfo,
-    setup.orderType
-      ? `🧭 *Loại lệnh:* ${getOrderTypeLabel(setup.orderType)}`
-      : "",
-    setup.entryCondition ? `⏳ *Điều kiện vào:* ${setup.entryCondition}` : "",
-    setup.lastPrice !== undefined && setup.lastPrice !== null
-      ? `📍 *Giá thật:* ${formatLastPrice(setup.lastPrice)}`
-      : "",
-    setup.currentPriceContext
-      ? `📍 *Giá hiện tại:* ${setup.currentPriceContext}`
-      : "",
+    orderLine,
+    priceLine,
     candleAge ?? "",
-    fallbackNote,
-    "",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  const codeBlock = [
     "```",
     `Direction : ${setup.direction}`,
     `Entry     : ${setup.entry} (${setup.orderType === "MARKET_NOW" ? "market nếu còn đúng vùng" : "trigger/pending"})`,
@@ -133,19 +151,23 @@ function buildCopyableSetup(setup: TradeSetup): string {
     `TP2       : ${setup.takeProfit2}`,
     `R:R       : ${setup.riskReward}`,
     "```",
-    "",
+  ].join("\n");
+
+  const reasonsBlock = [
     `✅ *Lý do vào lệnh:*`,
     ...setup.reasons.map((r) => `  • ${r}`),
-    "",
+  ].join("\n");
+
+  const risksBlock = [
     `⚠️ *Rủi ro cần lưu ý:*`,
     ...(setup.risks || []).map((r) => `  • ${r}`),
-    "",
-    `💡 ${setup.summary}`,
-    "",
-    setup.autoTracked === true
-      ? "✅ Bot đã tự động lưu vị thế và sẽ tiếp tục theo dõi để báo khi cần đóng."
-      : "ℹ️ Nếu đây là lệnh chờ, chỉ vào khi giá khớp đúng điều kiện trên.",
   ].join("\n");
+
+  const summaryBlock = `💡 ${setup.summary}`;
+
+  return [headerBlock, codeBlock, reasonsBlock, risksBlock, summaryBlock, statusLine]
+    .filter((block) => block !== "")
+    .join("\n\n");
 }
 
 function buildSummaryTable(summaries: PairSummary[]): string {
@@ -168,97 +190,6 @@ function buildSummaryTable(summaries: PairSummary[]): string {
   }
 
   return lines.join("\n");
-}
-
-function normalizeChartKey(value: string): string {
-  return value.replace(/[\s\/_.:-]+/g, "").toUpperCase();
-}
-
-function normalizeSetupTimeframe(setup: TradeSetup): ChartTimeframe {
-  const raw = setup.primaryTimeframe?.trim().toUpperCase();
-  return raw === "D1" || raw === "H4" || raw === "M15" ? raw : "H4";
-}
-
-export function findScreenshotForSetup(
-  setup: TradeSetup,
-  screenshots: ScreenshotResult[],
-): { screenshot?: ScreenshotResult; usedFallback: boolean } {
-  const preferredTimeframe = normalizeSetupTimeframe(setup);
-  const preferredTargets: Array<
-    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
-  > = [];
-  const fallbackTargets: Array<
-    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
-  > = [];
-
-  for (const chart of setup.sourceCharts ?? []) {
-    if (chart.timeframe === preferredTimeframe) preferredTargets.push(chart);
-    else fallbackTargets.push(chart);
-  }
-
-  if (setup.telegramChart) {
-    if (setup.telegramChart.timeframe === preferredTimeframe)
-      preferredTargets.push(setup.telegramChart);
-    else fallbackTargets.push(setup.telegramChart);
-  }
-
-  const findExact = (
-    targets: Array<
-      Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
-    >,
-  ): ScreenshotResult | undefined => {
-    for (const target of targets) {
-      const exactTriple = screenshots.find(
-        (s) =>
-          s.filepath === target.filepath &&
-          s.chart.symbol === target.symbol &&
-          s.chart.timeframe === target.timeframe,
-      );
-      if (exactTriple) return exactTriple;
-    }
-
-    for (const target of targets) {
-      const exactSymbolTimeframe = screenshots.find(
-        (s) =>
-          s.chart.symbol === target.symbol &&
-          s.chart.timeframe === target.timeframe,
-      );
-      if (exactSymbolTimeframe) return exactSymbolTimeframe;
-    }
-
-    for (const target of targets) {
-      if (!target.filepath) continue;
-      const exactFilepath = screenshots.find(
-        (s) => s.filepath === target.filepath,
-      );
-      if (exactFilepath) return exactFilepath;
-    }
-
-    return undefined;
-  };
-
-  const preferredMatch = findExact(preferredTargets);
-  if (preferredMatch)
-    return { screenshot: preferredMatch, usedFallback: false };
-
-  const fallbackMatch = findExact(fallbackTargets);
-  if (fallbackMatch) return { screenshot: fallbackMatch, usedFallback: true };
-
-  const normalizedPair = normalizeChartKey(setup.pair);
-  const byPreferredTimeframe = screenshots.find(
-    (s) =>
-      normalizeChartKey(s.chart.symbol).includes(normalizedPair) &&
-      s.chart.timeframe === preferredTimeframe,
-  );
-  if (byPreferredTimeframe)
-    return { screenshot: byPreferredTimeframe, usedFallback: true };
-
-  return {
-    screenshot: screenshots.find((s) =>
-      normalizeChartKey(s.chart.symbol).includes(normalizedPair),
-    ),
-    usedFallback: true,
-  };
 }
 
 export function buildHeartbeatMessage(options: {
@@ -380,6 +311,42 @@ export function buildPositionDecisionMessage(
   return lines.join("\n");
 }
 
+export function buildPositionClosedMessage(
+  position: {
+    id: number;
+    pair: string;
+    direction: "LONG" | "SHORT";
+    setup: string | null;
+    entry: string;
+    openedAt?: string | null;
+  },
+  snapshot: ClosedPositionSnapshot,
+  options: { isFailSafeClose?: boolean } = {},
+): string {
+  const outcomeEmoji =
+    snapshot.outcome === "win" ? "🟢" : snapshot.outcome === "loss" ? "🔴" : "⚪";
+  const outcomeLabel =
+    snapshot.outcome === "win" ? "THẮNG" : snapshot.outcome === "loss" ? "THUA" : "HOÀ VỐN";
+  const closeReasonLabel = options.isFailSafeClose
+    ? "Đóng khẩn cấp do lỗi thực thi trên sàn (fail-safe)"
+    : snapshot.closeReason === "take_profit_2"
+      ? "Chạm TP2"
+      : snapshot.closeReason === "manual_close"
+        ? "Đóng thủ công (tín hiệu đảo chiều)"
+        : "Chạm Stop Loss";
+
+  const lines = [
+    `🏁 *Vị thế #${position.id} đã đóng* — ${position.pair} ${position.direction}`,
+    position.setup ? `📋 ${position.setup}` : "",
+    `${outcomeEmoji} *${outcomeLabel}* — ${snapshot.realizedRiskRewardRatio}R`,
+    `Lý do: ${closeReasonLabel}`,
+    `Entry: ${position.entry} → Exit: ${snapshot.realizedExitPrice ?? "-"}`,
+    position.openedAt ? `Đã mở: ${position.openedAt}` : "",
+  ];
+
+  return lines.filter((line) => line !== "").join("\n");
+}
+
 export function buildPerformanceReportMessage(
   report: PerformanceReport,
 ): string {
@@ -452,41 +419,24 @@ export async function sendAllAnalysesVolman(
   }
 
   await notifier.sendMessage(
-    `🚀 *${scannerLabel}${sourceLabel}*\n📅 ${timestamp}\n${cacheLine ? `${cacheLine}\n` : ""}📊 Đã quét *${result.summaries.length}* cặp (D1/H4/M15 + volume)\n📊 Lọc còn *${summaries.length}* cặp đạt ngưỡng (≥${threshold}%) — tìm thấy *${setups.length}* setup${setupHeaderSuffix}\n\n_"Scanner luôn phân tích theo last closed candle, không dùng nến đang chạy."_`,
+    [
+      `🚀 *${scannerLabel}${sourceLabel}*`,
+      `📅 ${timestamp}`,
+      cacheLine,
+      `📊 Quét *${result.summaries.length}* cặp → *${summaries.length}* đạt ngưỡng (≥${threshold}%) → *${setups.length}* setup${setupHeaderSuffix}`,
+      `_(luôn theo last closed candle)_`,
+    ]
+      .filter((line) => line !== "")
+      .join("\n"),
   );
 
   for (const setup of setups) {
-    const confidence = setup.confidence ?? 0;
-    const { screenshot, usedFallback } = findScreenshotForSetup(
-      setup,
-      result.screenshots,
-    );
-
-    if (screenshot) {
-      try {
-        const caption = `📊 ${screenshot.chart.symbol} ${screenshot.chart.timeframe} — ${setup.direction} (${confidence}% 🔥)\nNguồn ảnh: ${basename(screenshot.filepath)}`;
-        (setup as Record<string, unknown>).chartFallbackUsed = usedFallback;
-        await notifier.sendPhoto(screenshot.buffer, caption);
-        if (usedFallback) {
-          logger.warn(
-            `  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`,
-          );
-        } else {
-          logger.info(
-            `  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`,
-          );
-        }
-      } catch (error) {
-        logger.error(`  ✗ Failed to send chart ${setup.pair}:`, error);
-      }
-    }
-
     await notifier.sendMessage(buildCopyableSetup(setup));
     logger.info(`  ✓ Sent setup: ${setup.pair} ${setup.direction}`);
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
 
   await notifier.sendMessage(
-    `✅ *Scan hoàn tất* — ${summaries.length} cặp và ${setups.length} setup(s) đạt ngưỡng (≥${threshold}%)${isCached ? " từ cache" : " từ thuật toán"}\n\n⚠️ _Phân tích luôn bám theo last closed candle, không phải nến đang chạy._`,
+    `✅ Xong — ${setups.length} setup đã gửi (${summaries.length} cặp đạt ngưỡng).`,
   );
 }

@@ -909,6 +909,102 @@ describe("charts/binance-execution-shared", () => {
       expect(clientState.cancelOrder).not.toHaveBeenCalled();
       expect(clientState.cancelRegularOrder).not.toHaveBeenCalled();
     });
+
+    it("sends a Telegram message when an entry order fully fills", async () => {
+      const now = Date.now();
+      const placedAt = new Date(now - 5 * 60 * 1000).toISOString();
+
+      const configFilled: BinanceExecutionSystemConfig<any, any, any> = {
+        ...config,
+        getPendingEntryOrderPositions: vi.fn(() =>
+          Promise.resolve([
+            {
+              id: 1,
+              pair: "BTC/USDT",
+              binanceSymbol: "BTCUSDT",
+              binanceEntryOrderId: 100,
+              binanceEntryOrderType: "LIMIT",
+              binanceEntryOrderPlacedAt: placedAt,
+              direction: "LONG",
+              stopLoss: "49000",
+              takeProfit1: "51000",
+              takeProfit2: "52000",
+              binanceQuantity: 1.5,
+            },
+          ]),
+        ),
+        updateBinanceEntryOrderStatus: vi.fn(),
+      };
+
+      clientState.getRegularOrderStatus.mockResolvedValue({ status: "FILLED", executedQty: "1.5" });
+      clientState.getExchangeInfoFilters.mockResolvedValue({
+        tickSize: 1,
+        stepSize: 0.001,
+        minQty: 0.001,
+        minNotional: 10,
+      });
+      clientState.placeStopMarketOrder.mockResolvedValue({ orderId: 201 });
+      clientState.placeTakeProfitMarketOrder.mockResolvedValue({ orderId: 202 });
+
+      const pollFilled = createPollPendingEntryOrder(configFilled);
+      await pollFilled();
+
+      // Verify sendMessage was called with the fill notification
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.stringContaining("đã khớp"),
+      );
+      // Verify it does NOT contain the expiry message
+      expect(sendMessageMock).not.toHaveBeenCalledWith(
+        expect.stringContaining("hết hạn"),
+      );
+    });
+
+    it("does not send a fill message when protection orders fail to place", async () => {
+      const now = Date.now();
+      const placedAt = new Date(now - 5 * 60 * 1000).toISOString();
+
+      const configFailedFill: BinanceExecutionSystemConfig<any, any, any> = {
+        ...config,
+        getPendingEntryOrderPositions: vi.fn(() =>
+          Promise.resolve([
+            {
+              id: 1,
+              pair: "BTC/USDT",
+              binanceSymbol: "BTCUSDT",
+              binanceEntryOrderId: 100,
+              binanceEntryOrderType: "LIMIT",
+              binanceEntryOrderPlacedAt: placedAt,
+              direction: "LONG",
+              stopLoss: "49000",
+              takeProfit1: "51000",
+              takeProfit2: "52000",
+              binanceQuantity: 1.5,
+            },
+          ]),
+        ),
+        updateBinanceEntryOrderStatus: vi.fn(),
+      };
+
+      clientState.getRegularOrderStatus.mockResolvedValue({ status: "FILLED", executedQty: "1.5" });
+      clientState.getExchangeInfoFilters.mockResolvedValue({
+        tickSize: 1,
+        stepSize: 0.001,
+        minQty: 0.001,
+        minNotional: 10,
+      });
+      // Make SL placement fail
+      clientState.placeStopMarketOrder.mockRejectedValue(new Error("Exchange rejected"));
+      clientState.placeTakeProfitMarketOrder.mockResolvedValue({ orderId: 202 });
+
+      const pollFailedFill = createPollPendingEntryOrder(configFailedFill);
+      await pollFailedFill();
+
+      // Verify sendMessage was NOT called with the fill notification
+      // (The fail-safe messaging may fire, but not the new fill message specifically)
+      const allCalls = sendMessageMock.mock.calls.map((call) => call[0] ?? "");
+      const hasFilledMessage = allCalls.some((msg) => msg.includes("đã khớp") && !msg.includes("hết hạn"));
+      expect(hasFilledMessage).toBe(false);
+    });
   });
 
   describe("Entry order configuration", () => {

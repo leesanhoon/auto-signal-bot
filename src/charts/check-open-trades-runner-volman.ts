@@ -1,7 +1,7 @@
 import { fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
 import { CHARTS } from "./volman-charts.config.js";
 import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository-volman.js";
-import { buildPositionDecisionMessage } from "../shared/telegram-volman.js";
+import { buildPositionDecisionMessage, buildPositionClosedMessage } from "../shared/telegram-volman.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
@@ -44,8 +44,29 @@ export async function processPosition(position: Awaited<ReturnType<typeof loadOp
   const decision = await evaluateOpenPosition(position);
   const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, decision);
   await updatePositionDecision(position.id, decision, patch);
+
   if (shouldClose) {
-    await closePosition(position, decision, patch);
+    const snapshot = await closePosition(position, decision, patch);
+    const closedMessage = buildPositionClosedMessage(
+      {
+        id: position.id,
+        pair: position.pair,
+        direction: position.direction,
+        setup: position.setup,
+        entry: position.entry,
+        openedAt: position.openedAt
+          ? new Date(position.openedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+          : null,
+      },
+      snapshot,
+      {
+        isFailSafeClose:
+          position.binanceExecutionStatus === "failed" ||
+          position.binanceExecutionStatus === "close_failed",
+      },
+    );
+    await sendMessage(`${closedMessage}\n\n*Cập nhật lúc:* ${formatCheckedAt()}`);
+    return true;
   }
 
   const message = buildPositionDecisionMessage(

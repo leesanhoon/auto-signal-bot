@@ -1224,6 +1224,10 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
             logger,
           );
 
+          await sendMessage(
+            `✅ ${config.successPrefix} — Lệnh entry ${symbol} đã khớp, đã đặt SL/TP\nQty: ${actualQuantity} | Leverage: ${position.binanceLeverage}x\nSL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
+          );
+
           if (config.updateBinanceEntryOrderStatus) {
             try {
               await config.updateBinanceEntryOrderStatus(position.id, "filled");
@@ -1321,6 +1325,10 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
                 sizing,
                 position.binanceLeverage,
                 logger,
+              );
+
+              await sendMessage(
+                `✅ ${config.successPrefix} — Lệnh entry ${symbol} khớp một phần khi hết hạn (qty ${executedQty}), đã đặt SL/TP cho phần đã khớp\nSL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
               );
 
               if (config.updateBinanceEntryOrderStatus) {
