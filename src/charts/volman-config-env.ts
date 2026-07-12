@@ -38,7 +38,7 @@ export function getConfiguredChartTimeframeMode(): ChartTimeframeMode {
 
 export function getConfiguredChartPrimaryTimeframe(): ChartTimeframe {
   const raw = process.env.CHART_PRIMARY_TIMEFRAME?.trim().toUpperCase();
-  if (raw === "M15" || raw === "H4" || raw === "D1") {
+  if (raw === "M15" || raw === "H1" || raw === "H4" || raw === "D1") {
     return raw as ChartTimeframe;
   }
   return "M15";

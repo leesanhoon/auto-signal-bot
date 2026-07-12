@@ -25,6 +25,9 @@ export type PendingEntryOrderPosition = {
   binanceQuantity: number;
   binanceLeverage: number;
   partialClosePercent: number | null;
+  // Chi co gia tri thuc su khi table nay co cot primary_timeframe (hien chi
+  // open_positions_volman co, open_positions_smc KHONG co) — xem includeTimeframe.
+  primaryTimeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
 };
 
 export function createSaveBinancePendingEntryOrder(table: string) {
@@ -64,12 +67,15 @@ export function createUpdateBinanceEntryOrderStatus(table: string) {
   };
 }
 
-export function createGetPendingEntryOrderPositions(table: string) {
+// includeTimeframe: chi truyen true cho table co cot primary_timeframe that
+// (hien chi open_positions_volman — open_positions_smc KHONG co cot nay, select
+// them se loi "column does not exist").
+export function createGetPendingEntryOrderPositions(table: string, includeTimeframe = false) {
   return async function getPendingEntryOrderPositions(): Promise<PendingEntryOrderPosition[]> {
+    const baseColumns =
+      "id, pair, binance_symbol, binance_entry_order_id, binance_entry_order_type, binance_entry_order_placed_at, direction, stop_loss, take_profit_1, take_profit_2, binance_quantity, binance_leverage, tp1_close_percent";
     const { data, error } = await (getDb().from(table) as any)
-      .select(
-        "id, pair, binance_symbol, binance_entry_order_id, binance_entry_order_type, binance_entry_order_placed_at, direction, stop_loss, take_profit_1, take_profit_2, binance_quantity, binance_leverage, tp1_close_percent",
-      )
+      .select(includeTimeframe ? `${baseColumns}, primary_timeframe` : baseColumns)
       .eq("status", "open")
       .eq("binance_entry_order_status", "working")
       .order("binance_entry_order_placed_at", { ascending: true });
@@ -91,6 +97,7 @@ export function createGetPendingEntryOrderPositions(table: string) {
         binance_quantity: number;
         binance_leverage: number | null;
         tp1_close_percent: number | null;
+        primary_timeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
       }>
     ).map((row) => ({
       id: row.id,
@@ -106,6 +113,7 @@ export function createGetPendingEntryOrderPositions(table: string) {
       binanceQuantity: row.binance_quantity,
       binanceLeverage: row.binance_leverage ?? 1,
       partialClosePercent: row.tp1_close_percent,
+      ...(includeTimeframe ? { primaryTimeframe: row.primary_timeframe ?? null } : {}),
     }));
   };
 }

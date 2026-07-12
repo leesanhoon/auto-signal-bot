@@ -528,6 +528,7 @@ export const updateBinanceEntryOrderStatus = createUpdateBinanceEntryOrderStatus
 );
 export const getPendingEntryOrderPositions = createGetPendingEntryOrderPositions(
   "open_positions_volman",
+  true,
 );
 export const closeExpiredEntryOrderPosition = createCloseExpiredEntryOrderPosition(
   "open_positions_volman",

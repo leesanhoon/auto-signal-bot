@@ -22,11 +22,59 @@ vi.mock("../../src/shared/telegram-client.js", () => ({
 import {
   createOpenBinanceFuturesPosition,
   createPollPendingEntryOrder,
+  calculateSwingTrailLevel,
   type BinanceExecutionSystemConfig,
   type RiskRewardPlan,
 } from "../../src/charts/binance-execution-shared.js";
 
 describe("charts/binance-execution-shared", () => {
+  describe("calculateSwingTrailLevel (Task 07 — must match setup-backtest.ts scanOutcomeSwingTrail)", () => {
+    // Cong thuc tham chieu trong setup-backtest.ts (scanOutcomeSwingTrail):
+    //   const start = Math.max(entryIndex, i - swingLookback + 1);
+    //   const swingLow = Math.min(...candles.slice(start, i + 1).map((c) => c.low));
+    // (tuong tu cho SHORT dung Math.max(...high)). Test nay dung LAI dung cong thuc do
+    // tren cung du lieu gia lap, roi so sanh voi calculateSwingTrailLevel (live) — dam
+    // bao 2 noi khong bi lech nhau (bai hoc rut ra tu review Task 07 ban dau).
+    function referenceSwingTrail(
+      candles: Array<{ high: number; low: number }>,
+      lookback: number,
+      direction: "LONG" | "SHORT",
+    ): number {
+      const window = candles.slice(-lookback);
+      return direction === "LONG"
+        ? Math.min(...window.map((c) => c.low))
+        : Math.max(...window.map((c) => c.high));
+    }
+
+    const sampleCandles = [
+      { high: 110, low: 95 },
+      { high: 108, low: 99 },
+      { high: 112, low: 101 },
+      { high: 115, low: 105 },
+      { high: 118, low: 108 },
+    ];
+
+    it("LONG: khop chinh xac voi cong thuc scanOutcomeSwingTrail (lookback 3)", () => {
+      const lookback = 3;
+      const live = calculateSwingTrailLevel(sampleCandles.slice(-lookback), "LONG");
+      const reference = referenceSwingTrail(sampleCandles, lookback, "LONG");
+      expect(live).toBe(reference);
+      expect(live).toBe(101); // min(low) cua 3 nen cuoi: 101, 105, 108
+    });
+
+    it("SHORT: khop chinh xac voi cong thuc scanOutcomeSwingTrail (lookback 3)", () => {
+      const lookback = 3;
+      const live = calculateSwingTrailLevel(sampleCandles.slice(-lookback), "SHORT");
+      const reference = referenceSwingTrail(sampleCandles, lookback, "SHORT");
+      expect(live).toBe(reference);
+      expect(live).toBe(118); // max(high) cua 3 nen cuoi: 112, 115, 118
+    });
+
+    it("tra ve null khi mang candles rong", () => {
+      expect(calculateSwingTrailLevel([], "LONG")).toBeNull();
+    });
+  });
+
   describe("createOpenBinanceFuturesPosition", () => {
     let config: BinanceExecutionSystemConfig<any, any, any>;
     let openBinanceFuturesPosition: any;
@@ -159,6 +207,68 @@ describe("charts/binance-execution-shared", () => {
     it("factory creates valid poll function", async () => {
       expect(pollPendingEntryOrders).toBeDefined();
       expect(typeof pollPendingEntryOrders).toBe("function");
+    });
+
+    it("filters pending positions by timeframe when a timeframe arg is passed", async () => {
+      // Regression test: task-02 added timeframe filtering by reading
+      // position.primaryTimeframe, but getPendingEntryOrderPositions() previously never
+      // populated that field for ANY row (including Volman) — the filter silently emptied
+      // the list every time a timeframe was passed, so pending STOP/LIMIT entries were
+      // never checked/expired for the whole Volman pipeline. Fixed in
+      // positions-repository-binance-entry-order-shared.ts (includeTimeframe flag).
+      const makePosition = (id: number, primaryTimeframe: string) => ({
+        id,
+        pair: `PAIR${id}/USDT`,
+        binanceSymbol: `PAIR${id}USDT`,
+        binanceEntryOrderId: 1000 + id,
+        binanceEntryOrderType: "LIMIT",
+        binanceEntryOrderPlacedAt: new Date().toISOString(),
+        direction: "LONG" as const,
+        stopLoss: "1",
+        takeProfit1: "2",
+        takeProfit2: null,
+        binanceQuantity: 1,
+        binanceLeverage: 1,
+        partialClosePercent: 50,
+        primaryTimeframe,
+      });
+
+      const getPendingEntryOrderPositions = vi.fn(() =>
+        Promise.resolve([makePosition(1, "M15"), makePosition(2, "H4"), makePosition(3, "M15")]),
+      );
+      const configFiltered: BinanceExecutionSystemConfig<any, any, any> = {
+        ...config,
+        getPendingEntryOrderPositions,
+      };
+      const pollFiltered = createPollPendingEntryOrder(configFiltered);
+
+      clientState.getRegularOrderStatus.mockResolvedValue({ status: "NEW", executedQty: "0" });
+
+      await pollFiltered("M15");
+
+      // Only the 2 M15 positions should have been processed (id=1, id=3) — the H4 one (id=2)
+      // must be filtered out.
+      expect(clientState.getRegularOrderStatus).toHaveBeenCalledTimes(2);
+      const calledOrderIds = clientState.getRegularOrderStatus.mock.calls.map((c: any[]) => c[1]);
+      expect(calledOrderIds.sort()).toEqual([1001, 1003]);
+    });
+
+    it("does not filter when no timeframe arg is passed (SMC call site behavior)", async () => {
+      const getPendingEntryOrderPositions = vi.fn(() =>
+        Promise.resolve([
+          { ...({} as any), id: 1, pair: "A/USDT", binanceSymbol: "AUSDT", binanceEntryOrderId: 1, binanceEntryOrderType: "LIMIT", binanceEntryOrderPlacedAt: new Date().toISOString(), direction: "LONG", stopLoss: "1", takeProfit1: "2", takeProfit2: null, binanceQuantity: 1, binanceLeverage: 1, partialClosePercent: 50 },
+        ]),
+      );
+      const configNoTimeframe: BinanceExecutionSystemConfig<any, any, any> = {
+        ...config,
+        getPendingEntryOrderPositions,
+      };
+      const pollNoTimeframe = createPollPendingEntryOrder(configNoTimeframe);
+      clientState.getRegularOrderStatus.mockResolvedValue({ status: "NEW", executedQty: "0" });
+
+      await pollNoTimeframe();
+
+      expect(clientState.getRegularOrderStatus).toHaveBeenCalledTimes(1);
     });
 
     it("polls LIMIT order status and updates on FILLED", async () => {
@@ -484,6 +594,68 @@ describe("charts/binance-execution-shared", () => {
       // "working" would cause the next poll to re-run this exact FILLED branch forever.
       expect(updateBinanceEntryOrderStatus).toHaveBeenCalledWith(9, "filled");
     });
+
+    it("retries SL placement on -4509 (position not yet synced after fill) and succeeds once Binance catches up", async () => {
+      const now = Date.now();
+      const placedAt = new Date(now - 10 * 60 * 1000).toISOString();
+
+      const configRetry4509: BinanceExecutionSystemConfig<any, any, any> = {
+        ...config,
+        getPendingEntryOrderPositions: vi.fn(() =>
+          Promise.resolve([
+            {
+              id: 10,
+              pair: "JTO/USDT",
+              binanceSymbol: "JTOUSDT",
+              binanceEntryOrderId: 1000,
+              binanceEntryOrderType: "LIMIT",
+              binanceEntryOrderPlacedAt: placedAt,
+              direction: "LONG",
+              stopLoss: "1.0",
+              takeProfit1: "1.5",
+              takeProfit2: null,
+              binanceQuantity: 100,
+            },
+          ]),
+        ),
+        updateBinanceEntryOrderStatus: vi.fn(),
+        saveBinanceExecutionDetails: vi.fn(),
+      };
+
+      clientState.getRegularOrderStatus.mockResolvedValue({ status: "FILLED", executedQty: "100" });
+      // Position not synced yet right after fill (matches the -4509 log evidence).
+      clientState.getPositionAmount.mockResolvedValue(0);
+      clientState.getExchangeInfoFilters.mockResolvedValue({
+        tickSize: 0.001,
+        stepSize: 1,
+        minQty: 1,
+        minNotional: 10,
+      });
+      clientState.placeStopMarketOrder
+        .mockResolvedValueOnce(
+          new Error(
+            "Binance Futures API loi 400 (code -4509) tai /fapi/v1/algoOrder: Time in Force (TIF) GTE can only be used with open positions. Please ensure that positions are available.",
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Error(
+            "Binance Futures API loi 400 (code -4509) tai /fapi/v1/algoOrder: Time in Force (TIF) GTE can only be used with open positions. Please ensure that positions are available.",
+          ),
+        )
+        .mockResolvedValueOnce({ orderId: 501 });
+      clientState.placeTakeProfitMarketOrder.mockResolvedValue({ orderId: 502 });
+
+      const pollRetry4509 = createPollPendingEntryOrder(configRetry4509);
+      await pollRetry4509();
+
+      expect(clientState.placeStopMarketOrder).toHaveBeenCalledTimes(3);
+      // Protection succeeded on the 3rd attempt -> no fail-safe close, no "failed" status.
+      expect(clientState.placeMarketOrder).not.toHaveBeenCalled();
+      expect(configRetry4509.saveBinanceExecutionDetails).toHaveBeenCalledWith(
+        10,
+        expect.objectContaining({ binanceExecutionStatus: "placed" }),
+      );
+    }, 10_000);
 
     it("cancels LIMIT order on expiry and marks expired", async () => {
       const now = Date.now();

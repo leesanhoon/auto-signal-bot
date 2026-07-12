@@ -43,6 +43,10 @@ const config = {
   // Entry order type support (new in subtask 03, wired in subtask 05)
   entryExecutionMode: (isBinanceHonorOrderTypeEnabledVolman() ? "HONOR_ORDER_TYPE" : "MARKET_ONLY") as "MARKET_ONLY" | "HONOR_ORDER_TYPE",
   entryOrderExpiryMinutes: getConfiguredBinanceEntryOrderExpiryMinutes(),
+  // RB/ARB/IRB khong biet huong lenh truoc khi breakout xay ra (khac BB, huong da xac
+  // dinh tu trend) — neu dat LIMIT/STOP that bai (vd -2021 vi gia da vuot muc), fallback
+  // sang MARKET NOW thay vi bo lo tin hieu hoan toan.
+  entryFallbackToMarketForSetups: ["RB", "ARB", "IRB"],
   saveBinancePendingEntryOrder: (positionId: number, details: any) =>
     saveBinancePendingEntryOrder(positionId, details),
   updateBinanceEntryOrderStatus: (positionId: number, status: any) =>

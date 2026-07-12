@@ -341,6 +341,30 @@ export function deriveManagementPatch(
     };
   }
 
+  // QUAN TRONG: check TRAIL_SL/MOVE_SL_TO_BE TRUOC "PARTIAL_TP1 || tp1Reached" — vi
+  // moi quyet dinh SAU khi TP1 da khop deu co tp1Reached=true (phan anh dung trang thai
+  // that), nen neu check tp1Reached truoc, nhanh TRAIL_SL ben duoi se KHONG BAO GIO
+  // chay toi (luon bi nhanh PARTIAL_TP1 "bat" truoc). Day la bug tung ton tai truoc khi
+  // co swing trailing that (task 07) — nhanh TRAIL_SL da duoc khai bao nhung chua bao
+  // gio thuc su chay duoc.
+  if (
+    decision.managementAction === "MOVE_SL_TO_BE" ||
+    decision.managementAction === "TRAIL_SL"
+  ) {
+    return {
+      patch: {
+        tradeStage: "trailing",
+        trailingStopLoss: decision.newStopLoss ?? breakevenStopLoss,
+        trailingStartedAt: now,
+        lastManagementAction: decision.managementAction,
+        lastManagementComment: decision.comment,
+        lastManagementAt: now,
+        stopLoss: decision.newStopLoss ?? breakevenStopLoss,
+      },
+      closePosition: false,
+    };
+  }
+
   if (decision.managementAction === "PARTIAL_TP1" || decision.tp1Reached) {
     return {
       patch: {
@@ -356,24 +380,6 @@ export function deriveManagementPatch(
         lastManagementComment: decision.comment,
         lastManagementAt: now,
         stopLoss: breakevenStopLoss,
-      },
-      closePosition: false,
-    };
-  }
-
-  if (
-    decision.managementAction === "MOVE_SL_TO_BE" ||
-    decision.managementAction === "TRAIL_SL"
-  ) {
-    return {
-      patch: {
-        tradeStage: "trailing",
-        trailingStopLoss: decision.newStopLoss ?? breakevenStopLoss,
-        trailingStartedAt: now,
-        lastManagementAction: decision.managementAction,
-        lastManagementComment: decision.comment,
-        lastManagementAt: now,
-        stopLoss: decision.newStopLoss ?? breakevenStopLoss,
       },
       closePosition: false,
     };

@@ -28,9 +28,38 @@ import {
   splitTpQuantities,
 } from "./binance-position-sizing.js";
 import { toBinanceSymbol, fetchOhlcHistory } from "./ohlc-provider.js";
-import type { ChartTimeframe } from "./chart-types-common.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
+
+// -4509 "TIF GTE can only be used with open positions" xay ra khi dat SL (closePosition:true,
+// TIF mac dinh GTE_GTC) ngay sau khi entry order FILLED — status order da cap nhat nhanh hon
+// trang thai position tren Binance (getPositionAmount van tra ve 0 tam thoi). Day la do tre
+// dong bo thoang qua (verify thuc te qua log JTOUSDT 2026-07-12: positionAmtResult 0 ngay
+// truoc loi -4509), KHONG phai loi logic — retry ngan se tu het vi position kip dong bo.
+async function placeStopMarketOrderRetryOn4509(
+  symbol: string,
+  side: "BUY" | "SELL",
+  stopPrice: number,
+  options: { workingType?: "MARK_PRICE" | "CONTRACT_PRICE" },
+  logger: ReturnType<typeof createLogger>,
+): Promise<Awaited<ReturnType<typeof placeStopMarketOrder>>> {
+  const maxAttempts = 3;
+  const delayMs = 700;
+  let lastResult: Awaited<ReturnType<typeof placeStopMarketOrder>>;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    lastResult = await placeStopMarketOrder(symbol, side, stopPrice, options);
+    if (!(lastResult instanceof Error)) return lastResult;
+    if (!lastResult.message.includes("code -4509") || attempt === maxAttempts) {
+      return lastResult;
+    }
+    logger.warn(
+      `Dat SL that bai voi -4509 (vi the chua kip dong bo tren Binance sau entry fill) — retry ${attempt}/${maxAttempts} sau ${delayMs}ms`,
+      { symbol, side, stopPrice, attempt },
+    );
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return lastResult!;
+}
 
 export type RiskRewardPlan = {
   entry: number;
@@ -62,6 +91,9 @@ export type PendingEntryOrderPosition = {
   binanceQuantity: number;
   binanceLeverage: number;
   partialClosePercent: number | null;
+  // Chi co gia tri thuc su khi getPendingEntryOrderPositions duoc build voi
+  // includeTimeframe=true (hien chi Volman — xem positions-repository-binance-entry-order-shared.ts)
+  primaryTimeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
 };
 
 export type BinanceExecutionDetails = {
@@ -87,6 +119,12 @@ export type OpenPosition = {
   binanceTp1OrderId: number | null;
   binanceTp2OrderId: number | null;
   binanceExecutionStatus?: "pending" | "placed" | "failed" | "close_failed" | null;
+  // Gia SL hien tai (dung de so sanh khi trail — chi siet chat hon, khong noi long).
+  // Ca Volman va SMC deu co cot stop_loss nen luon co gia tri.
+  stopLoss?: string;
+  // Chi Volman co cot nay (xem positions-repository-volman.ts) — SMC se luon undefined,
+  // khien nhanh swing-trailing tu dong bo qua cho SMC (dung y, xem Task 07).
+  primaryTimeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
 };
 
 export type PositionDecisionOutcome = {
@@ -131,6 +169,12 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   // Cho pollPendingEntryOrders no-op ngay tu dau (khong query DB) khi feature dang tat —
   // tranh 1 Supabase round-trip vo ich moi cron cycle.
   isHonorOrderTypeEnabled?: () => boolean;
+  // Ten cac setup (setup.setup, vd "RB"/"ARB"/"IRB") KHONG the pre-position that su
+  // (huong lenh chi biet duoc luc breakout xay ra) — neu dat LIMIT/STOP that bai (vd
+  // -2021 "Order would immediately trigger" vi gia da vuot muc), tu dong fallback sang
+  // MARKET NOW thay vi bo lo tin hieu. BB KHONG nam trong danh sach nay vi bien
+  // truoc duoc breakout that (setup.direction xac dinh tu trend).
+  entryFallbackToMarketForSetups?: string[];
   // Telegram message prefixes to preserve exact strings across systems
   guardFailPrefix: string; // "*Binance Futures (SMC|Volman)*"
   failSafeMessagePrefix: string; // "*Binance Futures (SMC)*" or "*Binance Futures*"
@@ -144,70 +188,33 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
 };
 
 // ---------------------------------------------------------------------------
-// Helper functions for swing trailing SL after TP1
+// Swing trailing SL sau TP1 (Task 07) — dung DUNG cong thuc voi
+// scanOutcomeSwingTrail trong setup-backtest.ts: cung timeframe voi vi the,
+// lookback N nen gan nhat DA DONG, chi siet chat hon, khong bao gio noi long.
 // ---------------------------------------------------------------------------
 
-/**
- * Get the next higher timeframe.
- * M15 → H1, M30 → H1, H1 → H4, H4 → D1, D1 → D1
- */
-function getHigherTimeframe(timeframe: ChartTimeframe): ChartTimeframe {
-  switch (timeframe) {
-    case "M15":
-    case "M30":
-      return "H1";
-    case "H1":
-      return "H4";
-    case "H4":
-      return "D1";
-    case "D1":
-      return "D1"; // D1 is the highest, no higher available
-    default:
-      return timeframe;
-  }
+export function getConfiguredSwingTrailLookback(): number {
+  const raw = process.env.POSITION_SWING_TRAIL_LOOKBACK?.trim();
+  if (!raw) return 3;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 3;
 }
 
 /**
- * Calculate swing support from OHLC data.
- * Finds the lowest low in the data as a support level.
- * If price has barely broken above entry, use a Fib-like level instead.
+ * Tinh muc swing low/high tren N nen gan nhat DA DONG (cung cong thuc voi
+ * scanOutcomeSwingTrail trong setup-backtest.ts — xem test so sanh truc tiep
+ * trong tests/charts/binance-execution-shared.test.ts).
  */
-function calculateSwingSupportLevel(
-  ohlcData: Array<{ high: number; low: number }>,
-  entryPrice: number,
+export function calculateSwingTrailLevel(
+  candles: Array<{ high: number; low: number }>,
   direction: "LONG" | "SHORT",
 ): number | null {
-  if (!ohlcData || ohlcData.length === 0) {
-    return null;
-  }
+  if (!candles || candles.length === 0) return null;
 
   if (direction === "LONG") {
-    // For LONG: find lowest low in recent candles
-    let swingLow = ohlcData[0].low;
-    for (const candle of ohlcData) {
-      if (candle.low < swingLow) {
-        swingLow = candle.low;
-      }
-    }
-    // If swing low is too close to entry or above it, use a conservative level
-    if (swingLow >= entryPrice) {
-      return null; // No valid swing support, fall back to breakeven
-    }
-    return swingLow;
-  } else {
-    // For SHORT: find highest high in recent candles
-    let swingHigh = ohlcData[0].high;
-    for (const candle of ohlcData) {
-      if (candle.high > swingHigh) {
-        swingHigh = candle.high;
-      }
-    }
-    // If swing high is too close to entry or below it, use a conservative level
-    if (swingHigh <= entryPrice) {
-      return null; // No valid swing support, fall back to breakeven
-    }
-    return swingHigh;
+    return Math.min(...candles.map((c) => c.low));
   }
+  return Math.max(...candles.map((c) => c.high));
 }
 
 export function createOpenBinanceFuturesPosition<
@@ -345,7 +352,7 @@ export function createOpenBinanceFuturesPosition<
         setup.orderType !== "MARKET_NOW";
 
       let entryOrder: any;
-      const entryOrderType: "MARKET" | "LIMIT" | "STOP_MARKET" = (() => {
+      const preferredEntryType: "MARKET" | "LIMIT" | "STOP_MARKET" = (() => {
         if (!isHonorOrderType || !setup.orderType) return "MARKET";
         if (setup.orderType === "BUY_LIMIT" || setup.orderType === "SELL_LIMIT")
           return "LIMIT";
@@ -354,10 +361,60 @@ export function createOpenBinanceFuturesPosition<
         return "MARKET";
       })();
 
-      if (entryOrderType === "MARKET" || !isHonorOrderType) {
-        // MARKET_ONLY mode: keep exact current behavior
-        entryOrder = await placeMarketOrder(binanceSymbol, side, sizing.quantity);
-        if (entryOrder instanceof Error) throw entryOrder;
+      // resolvedEntryType co the khac preferredEntryType neu dat LIMIT/STOP that bai
+      // va setup nam trong danh sach entryFallbackToMarketForSetups (vd RB/ARB/IRB —
+      // huong lenh chi biet duoc luc breakout xay ra nen khong the "cho san" nhu BB,
+      // gia thuong da vuot muc entry -> Binance tu choi lenh dieu kien voi -2021).
+      let resolvedEntryType: "MARKET" | "LIMIT" | "STOP_MARKET" = preferredEntryType;
+      let fellBackToMarket = false;
+
+      if (preferredEntryType === "LIMIT" || preferredEntryType === "STOP_MARKET") {
+        try {
+          if (preferredEntryType === "LIMIT") {
+            const entryPrice = roundToTickSize(plan.entry, filters.tickSize);
+            const limitResult = await placeLimitOrder(binanceSymbol, side, entryPrice, sizing.quantity);
+            if (limitResult instanceof Error) throw limitResult;
+            entryOrder = limitResult;
+          } else {
+            const stopPrice = roundToTickSize(plan.entry, filters.tickSize);
+            const workingType = getConfiguredBinanceWorkingType();
+            const stopResult = await placeStopMarketEntryOrder(
+              binanceSymbol,
+              side,
+              stopPrice,
+              sizing.quantity,
+              workingType ? { workingType } : {},
+            );
+            if (stopResult instanceof Error) throw stopResult;
+            entryOrder = stopResult;
+          }
+        } catch (pendingEntryError) {
+          const setupKind = (setup as any).setup as string | undefined;
+          const fallbackEligible =
+            !!setupKind && !!config.entryFallbackToMarketForSetups?.includes(setupKind);
+          if (!fallbackEligible) throw pendingEntryError;
+
+          logger.warn(
+            `Dat lenh ${preferredEntryType} that bai cho setup ${setupKind} (khong the pre-position that su vi huong lenh chi biet khi breakout xay ra) — fallback sang MARKET`,
+            {
+              pair: setup.pair,
+              binanceSymbol,
+              error:
+                pendingEntryError instanceof Error
+                  ? pendingEntryError.message
+                  : String(pendingEntryError),
+            },
+          );
+          resolvedEntryType = "MARKET";
+          fellBackToMarket = true;
+        }
+      }
+
+      if (resolvedEntryType === "MARKET") {
+        if (!entryOrder) {
+          entryOrder = await placeMarketOrder(binanceSymbol, side, sizing.quantity);
+          if (entryOrder instanceof Error) throw entryOrder;
+        }
 
         // Tu day tro di, vi the DA THAT SU MO tren Binance — moi loi khi dat SL/TP
         // phai duoc fail-safe dong lai ngay, khong duoc de vi the "tran" (khong co SL).
@@ -378,18 +435,10 @@ export function createOpenBinanceFuturesPosition<
         );
 
         await sendMessage(
-          `✅ ${config.successPrefix} — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
+          `✅ ${config.successPrefix} — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}${fellBackToMarket ? " (fallback MARKET — lệnh chờ khớp không đặt được)" : ""}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
         );
-      } else if (entryOrderType === "LIMIT") {
-        // LIMIT entry order
+      } else if (resolvedEntryType === "LIMIT") {
         const entryPrice = roundToTickSize(plan.entry, filters.tickSize);
-        entryOrder = await placeLimitOrder(
-          binanceSymbol,
-          side,
-          entryPrice,
-          sizing.quantity,
-        );
-        if (entryOrder instanceof Error) throw entryOrder;
 
         // Lưu entry order vào DB, chưa đặt SL/TP
         if (config.saveBinancePendingEntryOrder) {
@@ -422,18 +471,8 @@ export function createOpenBinanceFuturesPosition<
         await sendMessage(
           `⏳ ${config.successPrefix} — Đã đặt lệnh LIMIT ${setup.direction} ${binanceSymbol}\nGiá: ${entryPrice} | Qty: ${sizing.quantity} | Leverage: ${leverage}x\nSL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}\nChờ khớp...`,
         );
-      } else if (entryOrderType === "STOP_MARKET") {
-        // STOP_MARKET entry order
+      } else if (resolvedEntryType === "STOP_MARKET") {
         const stopPrice = roundToTickSize(plan.entry, filters.tickSize);
-        const workingType = getConfiguredBinanceWorkingType();
-        entryOrder = await placeStopMarketEntryOrder(
-          binanceSymbol,
-          side,
-          stopPrice,
-          sizing.quantity,
-          workingType ? { workingType } : {},
-        );
-        if (entryOrder instanceof Error) throw entryOrder;
 
         // Lưu entry order vào DB, chưa đặt SL/TP
         if (config.saveBinancePendingEntryOrder) {
@@ -503,7 +542,7 @@ async function placeProtectionOrdersAndFinalize(
   const workingTypeOption = workingType ? { workingType } : {};
 
   try {
-    const slOrder = await placeStopMarketOrder(binanceSymbol, closeSide, slPrice, workingTypeOption);
+    const slOrder = await placeStopMarketOrderRetryOn4509(binanceSymbol, closeSide, slPrice, workingTypeOption, logger);
     if (slOrder instanceof Error) throw slOrder;
     slOrderId = slOrder.orderId;
     placedProtectionOrders.push(slOrder.orderId);
@@ -831,57 +870,9 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
 
         // Tu day: SL cu DA bi huy — vi the dang KHONG CO SL nao tren san. Retry dat
         // SL moi toi da 3 lan trong cung 1 lan goi (khong de treo den cycle sau).
-
-        // Attempt to calculate swing support for trailing SL after TP1
-        // Falls back to breakeven if swing calculation fails or is not available
-        let slPrice = bePrice;
-        let slMethod = "breakeven"; // "breakeven", "swing_support", or "fallback"
-
-        try {
-          // Get primary timeframe from env or default to H4
-          const primaryTimeframe = (process.env.CHART_PRIMARY_TIMEFRAME as ChartTimeframe | undefined) || "H4";
-          const higherTimeframe = getHigherTimeframe(primaryTimeframe);
-
-          // Attempt to fetch OHLC data for swing support calculation
-          // Look back 10 candles to find swing low/high
-          const ohlcResult = await fetchOhlcHistory(
-            symbol,
-            higherTimeframe,
-            10, // number of candles
-          );
-
-          if (!(ohlcResult instanceof Error) && ohlcResult.length > 0) {
-            const swingLevel = calculateSwingSupportLevel(
-              ohlcResult,
-              entryPrice,
-              position.direction,
-            );
-
-            if (swingLevel !== null) {
-              slPrice = filters instanceof Error
-                ? swingLevel
-                : roundToTickSize(swingLevel, filters.tickSize);
-              slMethod = "swing_support";
-              logger.info(`Calculated swing ${position.direction === "LONG" ? "support" : "resistance"} for trailing SL after TP1: ${slPrice.toFixed(5)}`, {
-                pair: position.pair,
-                method: slMethod,
-                swingLevel,
-              });
-            }
-          }
-        } catch (error) {
-          // If swing calculation fails, fall back to breakeven
-          logger.warn(
-            "Swing support calculation failed after TP1 — falling back to breakeven",
-            { pair: position.pair, error: error instanceof Error ? error.message : String(error) },
-          );
-          slPrice = bePrice;
-          slMethod = "fallback";
-        }
-
-        let newSl = await placeStopMarketOrder(symbol, closeSide, slPrice);
+        let newSl = await placeStopMarketOrder(symbol, closeSide, bePrice);
         for (let attempt = 2; newSl instanceof Error && attempt <= 3; attempt++) {
-          newSl = await placeStopMarketOrder(symbol, closeSide, slPrice);
+          newSl = await placeStopMarketOrder(symbol, closeSide, bePrice);
         }
 
         if (newSl instanceof Error) {
@@ -890,14 +881,14 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
             { pair: position.pair, id: position.id, error: newSl },
           );
           await sendMessage(
-            `🚨🚨 ${config.tp1MoveSLFailPrefix} — ${symbol}: đã hủy SL cũ để dời SL (${slMethod}) nhưng KHÔNG đặt lại được SL mới sau 3 lần thử.\n⚠️ VỊ THẾ ĐANG KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY LẬP TỨC.\nLỗi: ${newSl.message}`,
+            `🚨🚨 ${config.tp1MoveSLFailPrefix} — ${symbol}: đã hủy SL cũ để dời breakeven nhưng KHÔNG đặt lại được SL mới sau 3 lần thử.\n⚠️ VỊ THẾ ĐANG KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY LẬP TỨC.\nLỗi: ${newSl.message}`,
           );
           // QUAN TRONG: xem giai thich o nhanh fail phia tren (3a) — cung ap dung o day.
           return {
             decision: "HOLD",
             confidence: 90,
             comment:
-              "TP1 đã khớp trên Binance Futures, dời SL THẤT BẠI SAU KHI ĐÃ HỦY SL CŨ — vị thế đang KHÔNG CÓ SL, cần đặt tay khẩn cấp",
+              "TP1 đã khớp trên Binance Futures, dời SL về breakeven THẤT BẠI SAU KHI ĐÃ HỦY SL CŨ — vị thế đang KHÔNG CÓ SL, cần đặt tay khẩn cấp",
             managementAction: "NONE",
             partialClosePercent: 0,
             newStopLoss: null,
@@ -909,21 +900,104 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
           };
         }
 
-        await config.updateBinanceSlOrder(position.id, newSl.orderId, String(slPrice));
-        const slTypeLabel = slMethod === "swing_support" ? "swing support" : (slMethod === "breakeven" ? "breakeven" : "fallback");
+        await config.updateBinanceSlOrder(position.id, newSl.orderId, String(bePrice));
         return {
           decision: "HOLD",
           confidence: 90,
-          comment: `TP1 đã khớp trên Binance Futures, dời SL đến ${slTypeLabel}`,
+          comment: "TP1 đã khớp trên Binance Futures, dời SL về breakeven",
           managementAction: "PARTIAL_TP1",
           partialClosePercent: position.tp1ClosePercent ?? 50,
-          newStopLoss: String(slPrice),
+          newStopLoss: String(bePrice),
           tp1Reached: true,
           tp2Reached: false,
           riskReward: null,
           tp1RiskReward: null,
           tp2RiskReward: null,
         };
+      }
+    }
+
+    // Swing trailing SL sau khi TP1 da khop tu truoc (alreadyPartial) — moi cycle deu
+    // tinh lai swing low/high tren CUNG timeframe cua vi the (khong phai khung cao hon),
+    // dung cong thuc voi scanOutcomeSwingTrail trong setup-backtest.ts. Chi siet SL chat
+    // hon, khong bao gio noi long. Chi ap dung khi biet duoc primaryTimeframe cua vi the
+    // (hien tai la Volman — SMC chua co cot nay nen se bo qua nhanh nay, giu nguyen
+    // breakeven co dinh nhu truoc).
+    if (alreadyPartial && position.primaryTimeframe && position.binanceSlOrderId && position.stopLoss) {
+      const currentStop = Number(position.stopLoss);
+      if (Number.isFinite(currentStop)) {
+        const lookback = getConfiguredSwingTrailLookback();
+        const ohlcResult = await fetchOhlcHistory(symbol, position.primaryTimeframe, lookback);
+
+        if (!(ohlcResult instanceof Error) && ohlcResult.length > 0) {
+          const recentCandles = ohlcResult.slice(-lookback);
+          const swingLevel = calculateSwingTrailLevel(recentCandles, position.direction);
+
+          const isTighter =
+            swingLevel !== null &&
+            (position.direction === "LONG" ? swingLevel > currentStop : swingLevel < currentStop);
+
+          if (isTighter) {
+            const filters = await getExchangeInfoFilters(symbol);
+            const newStopPrice =
+              filters instanceof Error
+                ? (swingLevel as number)
+                : roundToTickSize(swingLevel as number, filters.tickSize);
+            const closeSide: "BUY" | "SELL" = position.direction === "LONG" ? "SELL" : "BUY";
+
+            const cancelResult = await cancelOrder(symbol, position.binanceSlOrderId);
+            if (cancelResult instanceof Error) {
+              logger.warn(
+                "Khong huy duoc SL cu de trail theo swing — giu nguyen SL, thu lai lan sau",
+                { pair: position.pair, id: position.id, error: cancelResult },
+              );
+            } else {
+              let newSl = await placeStopMarketOrder(symbol, closeSide, newStopPrice);
+              for (let attempt = 2; newSl instanceof Error && attempt <= 3; attempt++) {
+                newSl = await placeStopMarketOrder(symbol, closeSide, newStopPrice);
+              }
+
+              if (newSl instanceof Error) {
+                logger.error(
+                  "KHAN CAP: da huy SL cu de trail swing nhung khong dat lai duoc SL moi sau 3 lan thu — vi the dang KHONG CO SL",
+                  { pair: position.pair, id: position.id, error: newSl },
+                );
+                await sendMessage(
+                  `🚨🚨 ${config.tp1MoveSLFailPrefix} — ${symbol}: đã hủy SL để trail theo swing nhưng KHÔNG đặt lại được SL mới sau 3 lần thử.\n⚠️ VỊ THẾ ĐANG KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY LẬP TỨC.\nLỗi: ${newSl.message}`,
+                );
+                return {
+                  decision: "HOLD",
+                  confidence: 90,
+                  comment:
+                    "Trail SL theo swing THẤT BẠI SAU KHI ĐÃ HỦY SL CŨ — vị thế đang KHÔNG CÓ SL, cần đặt tay khẩn cấp",
+                  managementAction: "NONE",
+                  partialClosePercent: 0,
+                  newStopLoss: null,
+                  tp1Reached: true,
+                  tp2Reached: false,
+                  riskReward: null,
+                  tp1RiskReward: null,
+                  tp2RiskReward: null,
+                };
+              }
+
+              await config.updateBinanceSlOrder(position.id, newSl.orderId, String(newStopPrice));
+              return {
+                decision: "HOLD",
+                confidence: 90,
+                comment: `Đã siết SL theo swing ${lookback} nến gần nhất: ${newStopPrice}`,
+                managementAction: "TRAIL_SL",
+                partialClosePercent: 0,
+                newStopLoss: String(newStopPrice),
+                tp1Reached: true,
+                tp2Reached: false,
+                riskReward: null,
+                tp1RiskReward: null,
+                tp2RiskReward: null,
+              };
+            }
+          }
+        }
       }
     }
 
@@ -980,9 +1054,11 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
 
     let pending = await config.getPendingEntryOrderPositions();
 
-    // Filter by timeframe if provided
+    // Filter by timeframe if provided (only meaningful when getPendingEntryOrderPositions
+    // was built with includeTimeframe=true — currently Volman only, see
+    // positions-repository-binance-entry-order-shared.ts)
     if (timeframe) {
-      pending = pending.filter((p: any) => p.primaryTimeframe === timeframe);
+      pending = pending.filter((p) => p.primaryTimeframe === timeframe);
     }
 
     for (const position of pending) {

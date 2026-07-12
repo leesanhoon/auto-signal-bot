@@ -23,9 +23,12 @@ const repositoryState = vi.hoisted(() => ({
 
 vi.mock("../../src/charts/binance-futures-client.js", () => clientState);
 
+const fetchOhlcHistoryMock = vi.hoisted(() => vi.fn());
+
 vi.mock("../../src/charts/ohlc-provider.js", () => ({
   toBinanceSymbol: (chartSymbol: string) =>
     chartSymbol.startsWith("BINANCE:") ? chartSymbol.replace("BINANCE:", "") : null,
+  fetchOhlcHistory: fetchOhlcHistoryMock,
 }));
 
 vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
@@ -109,6 +112,7 @@ const basePosition = {
 beforeEach(() => {
   Object.values(clientState).forEach((fn) => fn.mockReset());
   sendMessageMock.mockReset();
+  fetchOhlcHistoryMock.mockReset();
   (repositoryState.saveBinanceExecutionDetails as any).mockReset();
   (repositoryState.updateBinanceSlOrder as any).mockReset();
   clientState.isHedgeModeEnabled.mockResolvedValue(false);
@@ -339,5 +343,94 @@ describe("charts/binance-execution-volman reconcileBinancePosition", () => {
 
     expect(result.decision).toBe("CLOSE");
     expect(result.managementAction).toBe("TP2_CLOSE");
+  });
+
+  describe("swing trailing SL sau TP1 (Task 07)", () => {
+    // alreadyPartial=true (TP1 da khop tu truoc), SL/TP2 chua khop -> roi vao nhanh
+    // trailing moi. SL hien tai = 49500 (da tung doi ve breakeven o cycle truoc).
+    const trailingPosition = {
+      ...basePosition,
+      tp1ClosedPercent: 50,
+      binanceTp1OrderId: null,
+      binanceSlOrderId: 456,
+      binanceTp2OrderId: 999,
+      stopLoss: "49500",
+      primaryTimeframe: "H4" as const,
+    };
+
+    test("swing low siet chat hon SL hien tai -> huy SL cu, dat SL moi tai swing low, managementAction TRAIL_SL", async () => {
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // SL not filled
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" }); // TP2 not filled
+      // 3 nen gan nhat, low thap nhat = 49700 > currentStop 49500 -> siet duoc
+      fetchOhlcHistoryMock.mockResolvedValueOnce([
+        { time: 1, open: 50000, high: 50200, low: 49900, close: 50100, volume: 1 },
+        { time: 2, open: 50100, high: 50300, low: 49700, close: 50200, volume: 1 },
+        { time: 3, open: 50200, high: 50400, low: 50000, close: 50300, volume: 1 },
+      ]);
+      clientState.cancelOrder.mockResolvedValueOnce({ orderId: 456 });
+      clientState.placeStopMarketOrder.mockResolvedValueOnce({ orderId: 111 });
+      (repositoryState.updateBinanceSlOrder as any).mockResolvedValueOnce(undefined);
+
+      const result = await reconcileBinancePosition(trailingPosition as any);
+
+      expect(result.managementAction).toBe("TRAIL_SL");
+      expect(result.newStopLoss).toBe("49700");
+      expect(clientState.cancelOrder).toHaveBeenCalledWith("BTCUSDT", 456);
+      expect(clientState.placeStopMarketOrder).toHaveBeenCalledWith("BTCUSDT", "SELL", 49700);
+      expect((repositoryState.updateBinanceSlOrder as any)).toHaveBeenCalledWith(1, 111, "49700");
+    });
+
+    test("swing low KHONG siet chat hon SL hien tai -> khong goi cancel/place, giu nguyen SL", async () => {
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" });
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" });
+      // low thap nhat = 49200 < currentStop 49500 -> khong siet duoc, phai giu nguyen
+      fetchOhlcHistoryMock.mockResolvedValueOnce([
+        { time: 1, open: 50000, high: 50200, low: 49200, close: 50100, volume: 1 },
+        { time: 2, open: 50100, high: 50300, low: 49600, close: 50200, volume: 1 },
+        { time: 3, open: 50200, high: 50400, low: 50000, close: 50300, volume: 1 },
+      ]);
+
+      const result = await reconcileBinancePosition(trailingPosition as any);
+
+      expect(clientState.cancelOrder).not.toHaveBeenCalled();
+      expect(clientState.placeStopMarketOrder).not.toHaveBeenCalled();
+      expect(result.managementAction).toBe("NONE");
+    });
+
+    test("khong co primaryTimeframe (vd du lieu SMC) -> bo qua hoan toan nhanh trailing, khong goi fetchOhlcHistory", async () => {
+      const positionNoTimeframe = { ...trailingPosition, primaryTimeframe: undefined };
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" });
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" });
+
+      const result = await reconcileBinancePosition(positionNoTimeframe as any);
+
+      expect(fetchOhlcHistoryMock).not.toHaveBeenCalled();
+      expect(result.managementAction).toBe("NONE");
+    });
+
+    test("SHORT: swing high siet chat hon SL hien tai -> dat SL moi tai swing high", async () => {
+      const shortPosition = {
+        ...trailingPosition,
+        direction: "SHORT" as const,
+        stopLoss: "50500",
+      };
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" });
+      clientState.getOrderStatus.mockResolvedValueOnce({ status: "PENDING" });
+      // high cao nhat = 50300 < currentStop 50500 -> siet duoc (SHORT: cang thap cang chat)
+      fetchOhlcHistoryMock.mockResolvedValueOnce([
+        { time: 1, open: 50000, high: 50100, low: 49900, close: 50050, volume: 1 },
+        { time: 2, open: 50050, high: 50300, low: 49950, close: 50100, volume: 1 },
+        { time: 3, open: 50100, high: 50200, low: 50000, close: 50150, volume: 1 },
+      ]);
+      clientState.cancelOrder.mockResolvedValueOnce({ orderId: 456 });
+      clientState.placeStopMarketOrder.mockResolvedValueOnce({ orderId: 222 });
+      (repositoryState.updateBinanceSlOrder as any).mockResolvedValueOnce(undefined);
+
+      const result = await reconcileBinancePosition(shortPosition as any);
+
+      expect(result.managementAction).toBe("TRAIL_SL");
+      expect(result.newStopLoss).toBe("50300");
+      expect(clientState.placeStopMarketOrder).toHaveBeenCalledWith("BTCUSDT", "BUY", 50300);
+    });
   });
 });
