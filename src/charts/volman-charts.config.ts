@@ -7,6 +7,7 @@ const TIMEFRAME_CONFIGS: Array<{
 }> = [
   { timeframe: "D1", interval: "D" },
   { timeframe: "H4", interval: "240" },
+  { timeframe: "H1", interval: "60" },
   { timeframe: "M15", interval: "15" },
 ];
 

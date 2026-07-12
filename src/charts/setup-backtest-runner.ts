@@ -8,7 +8,7 @@ import type { ChartTimeframe } from "./chart-types-common.js";
 import type { ExitMode, FillMode, FeeSlippageConfig } from "./setup-backtest.js";
 
 const logger = createLogger("charts:setup-backtest");
-const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H4", "D1"];
+const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H1", "H4", "D1"];
 
 function parseExitMode(value: string | undefined): ExitMode {
   const normalized = value?.trim().toLowerCase();
