@@ -237,7 +237,7 @@ describe("ARB — Advanced Range Break", () => {
       { time: 1700000000000 + 1 * 3600000, open: 100.05, high: 100.75, low: 99.97, close: 100.02, volume: 100 },
     );
 
-    for (let i = 2; i < 20; i++) {
+    for (let i = 2; i < 24; i++) {
       candles.push({
         time: 1700000000000 + i * 3600000,
         open: 100,
@@ -249,7 +249,7 @@ describe("ARB — Advanced Range Break", () => {
     }
 
     candles.push({
-      time: 1700000000000 + 20 * 3600000,
+      time: 1700000000000 + 24 * 3600000,
       open: 100.1,
       high: 101.2,
       low: 100.0,
@@ -310,7 +310,7 @@ describe("ARB — Advanced Range Break", () => {
       { time: 1700000000000 + 1 * 3600000, open: 99.95, high: 100.03, low: 99.25, close: 99.98, volume: 100 },
     );
 
-    for (let i = 2; i < 20; i++) {
+    for (let i = 2; i < 24; i++) {
       candles.push({
         time: 1700000000000 + i * 3600000,
         open: 100,
@@ -322,7 +322,7 @@ describe("ARB — Advanced Range Break", () => {
     }
 
     candles.push({
-      time: 1700000000000 + 20 * 3600000,
+      time: 1700000000000 + 24 * 3600000,
       open: 99.9,
       high: 99.95,
       low: 98.9,

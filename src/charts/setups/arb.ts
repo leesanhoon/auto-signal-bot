@@ -53,6 +53,15 @@ export function detectArb(
   const direction = breaksUp ? "LONG" : "SHORT";
   trace.push(`Breakout ${direction} phat hien`);
 
+  // Check EMA20 slope aligned with breakout direction (same rule as RB)
+  const slope = computeSlope(ctx.ema20, ctx.atr14, index);
+  const slopeAligned = direction === "LONG" ? (slope !== null && slope > 0) : (slope !== null && slope < 0);
+  if (!slopeAligned) {
+    trace.push(`EMA20 slope=${slope !== null ? slope.toFixed(2) : "null"} khong cung huong breakout ${direction}`);
+    return null;
+  }
+  trace.push(`EMA20 slope=${slope!.toFixed(2)} cung huong breakout ${direction}`);
+
   // Count edge tests: scan back from range start for false breaks at the same edge
   let edgeTestCount = 0;
   const testLookback = Math.max(0, range.startIndex - 15);
@@ -124,8 +133,7 @@ export function detectArb(
   confidence += edgeBonus;
   trace.push(`Edge test bonus: +${edgeBonus} (${edgeTestCount} tests x 10)`);
 
-  // Standard confidence adjustments
-  const slope = computeSlope(ctx.ema20, ctx.atr14, index);
+  // Standard confidence adjustments (reuse slope already computed above)
   const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
