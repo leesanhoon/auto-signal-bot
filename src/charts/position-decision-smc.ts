@@ -2,6 +2,7 @@ import type { OpenPosition } from "./positions-repository-smc.js";
 import type { CandleRangeStats } from "./chart-types-common.js";
 import type { PendingOrder } from "./chart-types-common.js";
 import type { PositionDecisionOutcome } from "./position-engine-smc.js";
+import { resolveEmaExitDecision } from "./position-ema-exit.js";
 
 function parsePrice(value: string | number | null | undefined): number | null {
   const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
@@ -110,6 +111,7 @@ export function resolveOpenPositionDecision(
   position: Pick<OpenPosition, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "tradeStage" | "tp1ClosedPercent" | "trailingStopLoss">,
   stats: CandleRangeStats | null,
   reason?: "ohlc_fetch_fail" | "missing_chart_config",
+  emaContext?: { emaValue: number | null; period: number; lastClose: number | null } | null,
 ): PositionDecisionOutcome {
   if (stats === null) {
     const comment = reason === "missing_chart_config"
@@ -160,6 +162,11 @@ export function resolveOpenPositionDecision(
     if (tp1AlreadyClosed && shouldMoveStopToBreakeven(position.direction, parsePrice(position.trailingStopLoss), entry)) {
       return buildTrailDecision("Đã partial TP1, dời SL về entry theo dữ liệu OHLC.", position.entry);
     }
+  }
+
+  if (emaContext) {
+    const emaDecision = resolveEmaExitDecision(position.direction, emaContext.lastClose, emaContext.emaValue, emaContext.period);
+    if (emaDecision) return emaDecision;
   }
 
   return buildHoldDecision("Chưa chạm SL/TP theo dữ liệu OHLC.");

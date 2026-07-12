@@ -59,6 +59,7 @@ const config = {
     closeExpiredEntryOrderPosition(positionId),
   isHonorOrderTypeEnabled: () => isBinanceHonorOrderTypeEnabledVolman(),
   entryOrderExpiredPrefix: "*Binance Futures (Volman)*",
+  getEmaExitTimeframe: (position: OpenPosition) => position.primaryTimeframe ?? "H4",
 };
 
 export const openBinanceFuturesPosition = createOpenBinanceFuturesPosition<TradeSetup>(config);

@@ -7,6 +7,9 @@ import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-smc.js";
 import { resolveOpenPositionDecision } from "./position-decision-smc.js";
 import { reconcileBinancePosition } from "./binance-execution-smc.js";
+import { isEmaExitEnabled, getEmaExitPeriod } from "./smc-config-env.js";
+import { calculateLatestEma } from "./position-ema-exit.js";
+import { fetchOhlcHistory } from "./ohlc-provider.js";
 
 const logger = createLogger("charts:check-open-trades-smc");
 
@@ -37,7 +40,22 @@ async function evaluateOpenPosition(
       `⚠️ *Check Open Trades*\n\nKhông lấy được OHLC để kiểm tra vị thế #${position.id} ${position.pair}.\nBot tạm giữ vị thế nhưng không thể xác minh SL/TP trong lượt này. Vui lòng kiểm tra dữ liệu thị trường / nguồn chart.`,
     );
   }
-  return resolveOpenPositionDecision(position, stats);
+
+  let emaContext: { emaValue: number | null; period: number; lastClose: number | null } | null = null;
+  if (isEmaExitEnabled()) {
+    const period = getEmaExitPeriod();
+    const candlesResult = await fetchOhlcHistory(chart.symbol, chart.timeframe, period + 5);
+    if (!(candlesResult instanceof Error) && candlesResult.length > 0) {
+      emaContext = {
+        emaValue: calculateLatestEma(candlesResult, period),
+        period,
+        lastClose: candlesResult[candlesResult.length - 1].close,
+      };
+    } else if (candlesResult instanceof Error) {
+      logger.warn("Failed to fetch candles for EMA exit check", { pair: position.pair, id: position.id, error: candlesResult });
+    }
+  }
+  return resolveOpenPositionDecision(position, stats, undefined, emaContext);
 }
 
 export async function processPosition(position: Awaited<ReturnType<typeof loadOpenPositions>>[number]): Promise<boolean> {

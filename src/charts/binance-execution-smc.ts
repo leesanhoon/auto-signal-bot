@@ -53,6 +53,7 @@ const config = {
     closeExpiredEntryOrderPosition(positionId),
   isHonorOrderTypeEnabled: () => isBinanceHonorOrderTypeEnabledSmc(),
   entryOrderExpiredPrefix: "*Binance Futures (SMC)*",
+  getEmaExitTimeframe: () => "H4" as const,
 };
 
 export const openBinanceFuturesPosition = createOpenBinanceFuturesPosition<TradeSetup>(config);

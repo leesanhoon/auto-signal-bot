@@ -30,6 +30,9 @@ import {
 import { toBinanceSymbol, fetchOhlcHistory } from "./ohlc-provider.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
+import { isEmaExitEnabled, getEmaExitPeriod } from "./smc-config-env.js";
+import { calculateLatestEma, resolveEmaExitDecision } from "./position-ema-exit.js";
 
 // -4509 "TIF GTE can only be used with open positions" xay ra khi dat SL (closePosition:true,
 // TIF mac dinh GTE_GTC) ngay sau khi entry order FILLED — status order da cap nhat nhanh hon
@@ -201,6 +204,10 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   tp1MoveSLFailPrefix: string; // "*Binance Futures (SMC) — KHẨN CẤP*" or "*Binance Futures (Volman) — KHẨN CẤP*"
   entryOrderExpiredPrefix?: string; // "*Binance Futures (SMC|Volman)*" prefix cho entry order expiry alert
   silentFailureWarnPrefix: string; // "*Binance Futures (SMC|Volman)*" — cho cac loi cleanup/retry muc do thap
+  // Timeframe dung de tinh EMA cho EMA-exit check. Optional vi khong phai
+  // he thong nao cung co du lieu timeframe cua position (SMC chua co cot
+  // primaryTimeframe) -- neu khong cung cap, EMA-exit se bi bo qua cho he do.
+  getEmaExitTimeframe?: (position: TOpenPosition) => ChartTimeframe;
 };
 
 // ---------------------------------------------------------------------------
@@ -794,6 +801,69 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
         tp1RiskReward: null,
         tp2RiskReward: null,
       };
+    }
+
+    if (isEmaExitEnabled() && config.getEmaExitTimeframe) {
+      const timeframe = config.getEmaExitTimeframe(position);
+      const period = getEmaExitPeriod();
+      const candlesResult = await fetchOhlcHistory(symbol, timeframe, period + 5);
+      if (!(candlesResult instanceof Error) && candlesResult.length > 0) {
+        const emaValue = calculateLatestEma(candlesResult, period);
+        const lastClose = candlesResult[candlesResult.length - 1].close;
+        const emaDecision = resolveEmaExitDecision(position.direction, lastClose, emaValue, period);
+        if (emaDecision) {
+          const closeSide: "BUY" | "SELL" = position.direction === "LONG" ? "SELL" : "BUY";
+          const positionAmt = await getPositionAmount(symbol);
+          const qtyToClose = !(positionAmt instanceof Error) && positionAmt !== 0 ? Math.abs(positionAmt) : null;
+
+          if (qtyToClose === null) {
+            logger.warn("Khong xac dinh duoc khoi luong vi the de dong theo EMA exit, bo qua lan check nay (chua huy SL/TP)", {
+              pair: position.pair, id: position.id,
+            });
+          } else {
+            if (position.binanceSlOrderId) {
+              const cancelSl = await cancelOrder(symbol, position.binanceSlOrderId);
+              if (cancelSl instanceof Error) {
+                logger.error("Khong huy duoc SL order truoc khi dong vi the theo EMA exit", {
+                  pair: position.pair, id: position.id, error: cancelSl,
+                });
+              }
+            }
+            if (position.binanceTp1OrderId) {
+              const cancelTp1 = await cancelOrder(symbol, position.binanceTp1OrderId);
+              if (cancelTp1 instanceof Error) {
+                logger.error("Khong huy duoc TP1 order truoc khi dong vi the theo EMA exit", {
+                  pair: position.pair, id: position.id, error: cancelTp1,
+                });
+              }
+            }
+            if (position.binanceTp2OrderId) {
+              const cancelTp2 = await cancelOrder(symbol, position.binanceTp2OrderId);
+              if (cancelTp2 instanceof Error) {
+                logger.error("Khong huy duoc TP2 order truoc khi dong vi the theo EMA exit", {
+                  pair: position.pair, id: position.id, error: cancelTp2,
+                });
+              }
+            }
+
+            const closeResult = await placeMarketOrder(symbol, closeSide, qtyToClose, { reduceOnly: true });
+            if (closeResult instanceof Error) {
+              logger.error("Dong vi the theo EMA exit THAT BAI SAU KHI DA HUY SL/TP", {
+                pair: position.pair, id: position.id, error: closeResult,
+              });
+              await sendMessage(
+                `🚨🚨 ${config.failSafeEmergencyMessagePrefix} — ${symbol}: EMA exit trigger, đã hủy SL/TP nhưng lệnh đóng MARKET THẤT BẠI.\n⚠️ VỊ THẾ ĐANG MỞ KHÔNG CÓ SL/TP — mở Binance app và ĐÓNG TAY hoặc đặt lại SL NGAY.\nLỗi: ${closeResult.message}`,
+              );
+            } else {
+              return emaDecision;
+            }
+          }
+        }
+      } else if (candlesResult instanceof Error) {
+        logger.warn("Khong fetch duoc candles cho EMA exit check", {
+          pair: position.pair, id: position.id, error: candlesResult,
+        });
+      }
     }
 
     if (position.binanceSlOrderId) {

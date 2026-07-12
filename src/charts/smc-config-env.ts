@@ -104,3 +104,19 @@ export function getConfiguredSmcMinRiskPct(): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 5 ? parsed : 0.5;
 }
+
+// ============================================================================
+// EMA Exit configuration (shared between SMC and Volman exit logic)
+// ============================================================================
+
+export function isEmaExitEnabled(): boolean {
+  const raw = process.env.EMA_EXIT_ENABLED?.trim().toLowerCase();
+  return raw === "true" || raw === "1";
+}
+
+export function getEmaExitPeriod(): number {
+  const raw = process.env.EMA_EXIT_PERIOD?.trim();
+  if (!raw) return 20;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 2 ? parsed : 20;
+}
