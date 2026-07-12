@@ -272,6 +272,9 @@ async function handleAnalysisResult(
           pair: setup.pair,
           error,
         });
+        await sendMessage(
+          `⚠️ *Auto Track (Volman)* — Không lưu được vị thế mở cho ${setup.pair}: ${error instanceof Error ? error.message : String(error)}\nSignal có thể bị bỏ lỡ hoàn toàn (không track, không có lệnh thật) — kiểm tra log/DB.`,
+        );
       }
     }
   }

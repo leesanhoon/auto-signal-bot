@@ -13,6 +13,7 @@ import { calculateRiskRewardPlan } from "./position-engine-volman.js";
 import {
   saveBinanceExecutionDetails,
   updateBinanceSlOrder,
+  saveBinanceExecutionFailure,
   saveBinancePendingEntryOrder,
   updateBinanceEntryOrderStatus,
   getPendingEntryOrderPositions,
@@ -28,18 +29,20 @@ const config = {
   calculateRiskRewardPlan: (setup: TradeSetup) => calculateRiskRewardPlan(setup),
   saveBinanceExecutionDetails: (positionId: number, details: BinanceExecutionDetails) =>
     saveBinanceExecutionDetails(positionId, details),
+  saveBinanceExecutionFailure: (positionId: number, reason: string) =>
+    saveBinanceExecutionFailure(positionId, reason),
   updateBinanceSlOrder: (positionId: number, orderId: number, stopLoss: string) =>
     updateBinanceSlOrder(positionId, orderId, stopLoss),
   getConfiguredRiskUsdt: getConfiguredBinanceRiskUsdPerTrade,
-  // Volman has inconsistent labels: some messages use (Volman), others don't
   guardFailPrefix: "*Binance Futures (Volman)*",
-  failSafeMessagePrefix: "*Binance Futures*",
-  failSafeEmergencyMessagePrefix: "*Binance Futures — KHẨN CẤP*",
-  dbErrorPrefix: "*Binance Futures*",
-  successPrefix: "*Binance Futures*",
-  entryErrorPrefix: "*Binance Futures*",
+  failSafeMessagePrefix: "*Binance Futures (Volman)*",
+  failSafeEmergencyMessagePrefix: "*Binance Futures (Volman) — KHẨN CẤP*",
+  dbErrorPrefix: "*Binance Futures (Volman)*",
+  successPrefix: "*Binance Futures (Volman)*",
+  entryErrorPrefix: "*Binance Futures (Volman)*",
   closeFailedUrgentPrefix: "*Binance Futures (Volman) — KHẨN CẤP nhắc lại*",
   tp1MoveSLFailPrefix: "*Binance Futures (Volman) — KHẨN CẤP*",
+  silentFailureWarnPrefix: "*Binance Futures (Volman)*",
   // Entry order type support (new in subtask 03, wired in subtask 05)
   entryExecutionMode: (isBinanceHonorOrderTypeEnabledVolman() ? "HONOR_ORDER_TYPE" : "MARKET_ONLY") as "MARKET_ONLY" | "HONOR_ORDER_TYPE",
   entryOrderExpiryMinutes: getConfiguredBinanceEntryOrderExpiryMinutes(),

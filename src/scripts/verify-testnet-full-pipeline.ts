@@ -137,6 +137,7 @@ async function main(): Promise<void> {
       closeFailedUrgentPrefix: `*[TEST ${label}] — KHẨN CẤP nhắc lại*`,
       tp1MoveSLFailPrefix: `*[TEST ${label}] — KHẨN CẤP*`,
       entryOrderExpiredPrefix: `*[TEST ${label}]*`,
+      silentFailureWarnPrefix: `*[TEST ${label}]*`,
     };
   }
 

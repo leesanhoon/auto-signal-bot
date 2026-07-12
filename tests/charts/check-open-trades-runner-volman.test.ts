@@ -65,6 +65,8 @@ describe("check-open-trades-runner-volman", () => {
     binanceQuantity: null,
     binanceLeverage: null,
     binanceExecutionStatus: null,
+    binanceFailureReason: null,
+    binanceFailureAt: null,
     lastDecision: null,
     lastDecisionConfidence: null,
     lastDecisionComment: null,
@@ -210,6 +212,63 @@ describe("check-open-trades-runner-volman", () => {
       expect.objectContaining({ id: 1 }),
       snapshot,
       { isFailSafeClose: true },
+    );
+  });
+
+  it("does NOT flag a fail-safe close for a signal-only position that recorded a failure reason but never had a live order", async () => {
+    // Regression test: binance_execution_status must stay untouched by
+    // saveBinanceExecutionFailure (guard/catch paths that fire BEFORE any real entry
+    // order exists — binanceSymbol is still null). Before the fix, that helper also wrote
+    // binance_execution_status="failed", which made a signal-only position closing
+    // normally on a real SL/TP hit get mislabeled as a "fail-safe emergency close" in the
+    // Telegram message, even though no live order was ever placed.
+    const position = createMinimalPosition();
+    position.binanceSymbol = null;
+    position.binanceExecutionStatus = null;
+    position.binanceFailureReason = "symbol_already_has_position (timeframe: H4)";
+
+    const decisionResult = {
+      decision: "CLOSE" as const,
+      confidence: 90,
+      comment: "Stop loss hit",
+      managementAction: "NONE" as const,
+      partialClosePercent: 0,
+      newStopLoss: null,
+      tp1Reached: false,
+      tp2Reached: false,
+      riskReward: null,
+      tp1RiskReward: null,
+      tp2RiskReward: null,
+    };
+
+    screenshotMocks.findChartForPair.mockReturnValue({ symbol: "EUR_USD" });
+    screenshotMocks.fetchCandleRangeStats.mockResolvedValue({ high: 1.09, low: 1.085 });
+    decisionMocks.resolveOpenPositionDecision.mockReturnValue(decisionResult);
+
+    positionsRepoMocks.buildPositionManagementPatch.mockReturnValue({
+      patch: { tradeStage: "closed" },
+      closePosition: true,
+    });
+
+    const snapshot = {
+      closeReason: "stop_loss",
+      realizedExitPrice: "1.0900",
+      realizedRiskRewardRatio: -1,
+      outcome: "loss" as const,
+    };
+
+    positionsRepoMocks.closePosition.mockResolvedValue(snapshot);
+
+    telegramMocks.buildPositionClosedMessage.mockReturnValue(
+      "🏁 *Vị thế #1 đã đóng* — EUR/USD LONG\n🔴 *THUA* — -1R\nLý do: Chạm Stop Loss",
+    );
+
+    await processPosition(position);
+
+    expect(telegramMocks.buildPositionClosedMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      snapshot,
+      { isFailSafeClose: false },
     );
   });
 

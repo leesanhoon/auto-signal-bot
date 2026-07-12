@@ -3,6 +3,7 @@ import { mkdir } from "fs/promises";
 import { join } from "path";
 import type { CandleRangeStats, ChartTimeframe, ChartConfig, ScreenshotResult } from "./chart-types-common.js";
 import { createLogger } from "../shared/logger.js";
+import { toBinanceSymbol } from "./ohlc-provider.js";
 
 // Import buildChartHtml as a type to avoid dependency on a specific config
 type BuildChartHtmlFn = (chart: ChartConfig) => string;
@@ -136,7 +137,46 @@ async function fetchFallbackLastPrice(symbol: string): Promise<number | null> {
   return typeof lastClose === "number" ? lastClose : null;
 }
 
+const BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines";
+
+async function fetchBinanceCandleRangeStats(bnSymbol: string, sinceMs: number): Promise<CandleRangeStats | null> {
+  const url = `${BINANCE_KLINES_URL}?symbol=${encodeURIComponent(bnSymbol)}&interval=15m&startTime=${sinceMs}&limit=1000`;
+  const response = await fetch(url, { headers: { "user-agent": "Mozilla/5.0" } });
+  if (!response.ok) {
+    return null;
+  }
+
+  const body = (await response.json()) as unknown;
+  if (!Array.isArray(body) || body.length === 0) {
+    return null;
+  }
+
+  let high = -Infinity;
+  let low = Infinity;
+  let lastClose: number | null = null;
+  for (const row of body) {
+    if (!Array.isArray(row) || row.length < 5) continue;
+    const h = Number(row[2]);
+    const l = Number(row[3]);
+    const c = Number(row[4]);
+    if (Number.isFinite(h)) high = Math.max(high, h);
+    if (Number.isFinite(l)) low = Math.min(low, l);
+    if (Number.isFinite(c)) lastClose = c;
+  }
+
+  if (!Number.isFinite(high) || !Number.isFinite(low)) {
+    return null;
+  }
+
+  return { high, low, lastClose };
+}
+
 export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Promise<CandleRangeStats | null> {
+  const bnSymbol = toBinanceSymbol(symbol);
+  if (bnSymbol) {
+    return fetchBinanceCandleRangeStats(bnSymbol, sinceMs);
+  }
+
   const fallbackSymbol = FALLBACK_SYMBOLS[symbol];
   if (!fallbackSymbol) {
     return null;

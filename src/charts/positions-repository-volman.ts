@@ -61,6 +61,8 @@ export type OpenPosition = {
   binanceTp1OrderId: number | null;
   binanceTp2OrderId: number | null;
   binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed" | null;
+  binanceFailureReason: string | null;
+  binanceFailureAt: string | null;
 };
 
 export type PendingOrderUpdate = {
@@ -236,7 +238,7 @@ export async function loadOpenPairs(): Promise<Set<string>> {
 export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" | "D1"): Promise<OpenPosition[]> {
   const { data, error } = await (getDb().from("open_positions_volman") as any)
     .select(
-      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_tp2_order_id, binance_execution_status, primary_timeframe",
+      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_tp2_order_id, binance_execution_status, binance_failure_reason, binance_failure_at, primary_timeframe",
     )
     .eq("status", "open")
     .eq("primary_timeframe", timeframe)
@@ -285,6 +287,8 @@ export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" |
       binance_tp1_order_id: number | null;
       binance_tp2_order_id: number | null;
       binance_execution_status: "pending" | "placed" | "failed" | "close_failed" | null;
+      binance_failure_reason: string | null;
+      binance_failure_at: string | null;
       primary_timeframe: "M15" | "H1" | "H4" | "D1" | null;
     }>
   ).map((row) => ({
@@ -329,6 +333,8 @@ export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" |
     binanceTp1OrderId: row.binance_tp1_order_id ?? null,
     binanceTp2OrderId: row.binance_tp2_order_id ?? null,
     binanceExecutionStatus: row.binance_execution_status ?? null,
+    binanceFailureReason: row.binance_failure_reason ?? null,
+    binanceFailureAt: row.binance_failure_at ?? null,
   }));
 }
 
@@ -509,6 +515,26 @@ export async function saveBinanceExecutionDetails(
     .eq("id", positionId);
 
   if (error) throw new Error(`saveBinanceExecutionDetails failed: ${error.message}`);
+}
+
+export async function saveBinanceExecutionFailure(
+  positionId: number,
+  reason: string,
+): Promise<void> {
+  // KHONG set binance_execution_status "failed" o day — gia tri do mang nghia rieng
+  // ("da co lenh that tren san, dat SL/TP fail, bi fail-safe dong khan cap", xem
+  // saveBinanceExecutionDetails) va duoc check-open-trades-runner-volman.ts dung de hien thi
+  // "dong khan cap fail-safe" trong Telegram. Ham nay duoc goi cho cac guard/catch xay ra
+  // TRUOC khi co lenh that (binance_symbol van null) — set "failed" o day se khien vi the
+  // signal-only dong binh thuong (cham SL/TP that) bi hien thi nham la fail-safe close.
+  const { error } = await (getDb().from("open_positions_volman") as any)
+    .update({
+      binance_failure_reason: reason.slice(0, 500),
+      binance_failure_at: new Date().toISOString(),
+    })
+    .eq("id", positionId);
+
+  if (error) throw new Error(`saveBinanceExecutionFailure failed: ${error.message}`);
 }
 
 export async function updateBinanceSlOrder(

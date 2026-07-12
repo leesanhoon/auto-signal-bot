@@ -8,6 +8,7 @@ import { calculateRiskRewardPlan } from "./position-engine-smc.js";
 import {
   saveBinanceExecutionDetails,
   updateBinanceSlOrder,
+  saveBinanceExecutionFailure,
   saveBinancePendingEntryOrder,
   updateBinanceEntryOrderStatus,
   getPendingEntryOrderPositions,
@@ -27,6 +28,8 @@ const config = {
   calculateRiskRewardPlan: (setup: TradeSetup) => calculateRiskRewardPlan(setup),
   saveBinanceExecutionDetails: (positionId: number, details: BinanceExecutionDetails) =>
     saveBinanceExecutionDetails(positionId, details),
+  saveBinanceExecutionFailure: (positionId: number, reason: string) =>
+    saveBinanceExecutionFailure(positionId, reason),
   updateBinanceSlOrder: (positionId: number, orderId: number, stopLoss: string) =>
     updateBinanceSlOrder(positionId, orderId, stopLoss),
   guardFailPrefix: "*Binance Futures (SMC)*",
@@ -37,6 +40,7 @@ const config = {
   entryErrorPrefix: "*Binance Futures (SMC)*",
   closeFailedUrgentPrefix: "*Binance Futures (SMC) — KHẨN CẤP nhắc lại*",
   tp1MoveSLFailPrefix: "*Binance Futures (SMC) — KHẨN CẤP*",
+  silentFailureWarnPrefix: "*Binance Futures (SMC)*",
   // Entry order type support (new in subtask 03, wired in subtask 04)
   entryExecutionMode: (isBinanceHonorOrderTypeEnabledSmc() ? "HONOR_ORDER_TYPE" : "MARKET_ONLY") as "MARKET_ONLY" | "HONOR_ORDER_TYPE",
   entryOrderExpiryMinutes: getConfiguredBinanceEntryOrderExpiryMinutes(),

@@ -36,6 +36,16 @@ import { createLogger } from "../shared/logger.js";
 // trang thai position tren Binance (getPositionAmount van tra ve 0 tam thoi). Day la do tre
 // dong bo thoang qua (verify thuc te qua log JTOUSDT 2026-07-12: positionAmtResult 0 ngay
 // truoc loi -4509), KHONG phai loi logic — retry ngan se tu het vi position kip dong bo.
+async function sendCleanupWarning(
+  config: BinanceExecutionSystemConfig<any, any, any>,
+  symbolOrPair: string,
+  detail: string,
+): Promise<void> {
+  await sendMessage(
+    `⚠️ ${config.silentFailureWarnPrefix} — ${symbolOrPair}: ${detail}`,
+  );
+}
+
 async function placeStopMarketOrderRetryOn4509(
   symbol: string,
   side: "BUY" | "SELL",
@@ -175,6 +185,11 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   // MARKET NOW thay vi bo lo tin hieu. BB KHONG nam trong danh sach nay vi bien
   // truoc duoc breakout that (setup.direction xac dinh tu trend).
   entryFallbackToMarketForSetups?: string[];
+  // Ghi lai ly do fail khi loi xay ra TRUOC luc dat duoc entry order (hedge mode / guard /
+  // filters / balance / sizing / margin / entry order) — cac truong hop nay khong the goi
+  // saveBinanceExecutionDetails vi chua co day du entryOrderId/quantity that. Optional de
+  // khong pha vo test hien co chua wire field nay.
+  saveBinanceExecutionFailure?: (positionId: number, reason: string) => Promise<void>;
   // Telegram message prefixes to preserve exact strings across systems
   guardFailPrefix: string; // "*Binance Futures (SMC|Volman)*"
   failSafeMessagePrefix: string; // "*Binance Futures (SMC)*" or "*Binance Futures*"
@@ -185,6 +200,7 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   closeFailedUrgentPrefix: string; // "*Binance Futures (SMC) — KHẨN CẤP nhắc lại*" or "*Binance Futures (Volman) — KHẨN CẤP nhắc lại*"
   tp1MoveSLFailPrefix: string; // "*Binance Futures (SMC) — KHẨN CẤP*" or "*Binance Futures (Volman) — KHẨN CẤP*"
   entryOrderExpiredPrefix?: string; // "*Binance Futures (SMC|Volman)*" prefix cho entry order expiry alert
+  silentFailureWarnPrefix: string; // "*Binance Futures (SMC|Volman)*" — cho cac loi cleanup/retry muc do thap
 };
 
 // ---------------------------------------------------------------------------
@@ -215,6 +231,24 @@ export function calculateSwingTrailLevel(
     return Math.min(...candles.map((c) => c.low));
   }
   return Math.max(...candles.map((c) => c.high));
+}
+
+async function recordExecutionFailure(
+  config: BinanceExecutionSystemConfig<any, any, any>,
+  positionId: number,
+  reason: string,
+  logger: ReturnType<typeof createLogger>,
+): Promise<void> {
+  if (!config.saveBinanceExecutionFailure) return;
+  try {
+    await config.saveBinanceExecutionFailure(positionId, reason);
+  } catch (dbError) {
+    logger.error("Khong ghi duoc binance_failure_reason vao DB", {
+      positionId,
+      reason,
+      error: dbError,
+    });
+  }
 }
 
 export function createOpenBinanceFuturesPosition<
@@ -274,6 +308,12 @@ export function createOpenBinanceFuturesPosition<
           "Khong xac minh duoc vi the hien tai tren san — bo qua entry (fail-closed)",
           { pair: setup.pair, binanceSymbol, error: existingPositionAmt },
         );
+        await recordExecutionFailure(
+          config,
+          positionId,
+          `cannot_verify_existing_position: ${existingPositionAmt.message}`,
+          logger,
+        );
         await sendMessage(
           `⚠️ ${config.guardFailPrefix} — Bỏ qua mở vị thế thật ${binanceSymbol}: không xác minh được vị thế hiện tại trên sàn (lỗi API). Signal vẫn được track trong hệ thống, không có lệnh thật trên sàn để tránh rủi ro mở đè lên vị thế của hệ khác.\nLỗi: ${existingPositionAmt.message}`,
         );
@@ -287,6 +327,12 @@ export function createOpenBinanceFuturesPosition<
           existingPositionAmt,
           setupTimeframe,
         });
+        await recordExecutionFailure(
+          config,
+          positionId,
+          `symbol_already_has_position (timeframe: ${setupTimeframe})`,
+          logger,
+        );
         await sendMessage(
           `⚠️ ${config.guardFailPrefix} — Bỏ qua mở vị thế thật ${binanceSymbol}: symbol này đã có vị thế đang mở trên sàn (timeframe hiện tại: ${setupTimeframe}). Signal vẫn được track trong hệ thống, không có lệnh thật trên sàn.`,
         );
@@ -512,6 +558,12 @@ export function createOpenBinanceFuturesPosition<
         positionId,
         error,
       });
+      await recordExecutionFailure(
+        config,
+        positionId,
+        error instanceof Error ? error.message : String(error),
+        logger,
+      );
       await sendMessage(
         `❌ ${config.entryErrorPrefix} — Không thể mở vị thế thật cho ${binanceSymbol} (${setup.direction}).\nLỗi: ${error instanceof Error ? error.message : String(error)}\nVị thế vẫn được track trong hệ thống (chỉ signal), không có lệnh thật trên sàn.`,
       );
@@ -756,6 +808,11 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
               orderId: position.binanceTp1OrderId,
               error: cancelTp1,
             });
+            await sendCleanupWarning(
+              config,
+              position.pair,
+              `Không hủy được TP1 order còn lại sau khi SL filled (orderId ${position.binanceTp1OrderId}) — có thể còn orphan order trên sàn, kiểm tra tay.`,
+            );
           }
         }
         if (position.binanceTp2OrderId) {
@@ -767,6 +824,11 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
               orderId: position.binanceTp2OrderId,
               error: cancelTp2,
             });
+            await sendCleanupWarning(
+              config,
+              position.pair,
+              `Không hủy được TP2 order còn lại sau khi SL filled (orderId ${position.binanceTp2OrderId}) — có thể còn orphan order trên sàn, kiểm tra tay.`,
+            );
           }
         }
         return {
@@ -797,6 +859,11 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
               orderId: position.binanceSlOrderId,
               error: cancelSl,
             });
+            await sendCleanupWarning(
+              config,
+              position.pair,
+              `Không hủy được SL order còn lại sau khi TP2 filled (orderId ${position.binanceSlOrderId}) — có thể còn orphan order trên sàn, kiểm tra tay.`,
+            );
           }
         }
         return {
@@ -845,6 +912,11 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
             logger.error(
               "Khong huy duoc SL cu de doi BE — giu nguyen SL goc, thu lai lan sau",
               { pair: position.pair, id: position.id, error: cancelResult },
+            );
+            await sendCleanupWarning(
+              config,
+              position.pair,
+              `Không hủy được SL cũ để dời breakeven — SL gốc vẫn còn hiệu lực, bot sẽ tự thử lại lần check sau.`,
             );
             // QUAN TRONG: managementAction "NONE" + tp1Reached false + partialClosePercent 0
             // (KHONG phai "PARTIAL_TP1"/true/50 nhu truoc) de deriveManagementPatch KHONG ghi
@@ -950,6 +1022,11 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
               logger.warn(
                 "Khong huy duoc SL cu de trail theo swing — giu nguyen SL, thu lai lan sau",
                 { pair: position.pair, id: position.id, error: cancelResult },
+              );
+              await sendCleanupWarning(
+                config,
+                position.pair,
+                `Không hủy được SL cũ để trail theo swing — SL hiện tại vẫn còn hiệu lực, bot sẽ tự thử lại lần check sau.`,
               );
             } else {
               let newSl = await placeStopMarketOrder(symbol, closeSide, newStopPrice);
@@ -1142,6 +1219,11 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
               error: orderStatus,
             },
           );
+          await sendCleanupWarning(
+            config,
+            position.pair,
+            `Không xác nhận được trạng thái LIMIT entry order (orderId ${position.binanceEntryOrderId}) — bỏ qua lượt kiểm tra này, sẽ thử lại cycle sau.`,
+          );
           continue;
         }
       } else if (position.binanceEntryOrderType === "STOP_MARKET") {
@@ -1154,6 +1236,11 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
               orderId: position.binanceEntryOrderId,
               error: orderStatus,
             },
+          );
+          await sendCleanupWarning(
+            config,
+            position.pair,
+            `Không xác nhận được trạng thái STOP_MARKET entry order (orderId ${position.binanceEntryOrderId}) — bỏ qua lượt kiểm tra này, sẽ thử lại cycle sau.`,
           );
           continue;
         }
@@ -1287,6 +1374,11 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
                 "Khong huy duoc phan LIMIT order con lai chua khop sau partial fill — co the tiep tuc khop them ngoai du kien",
                 { pair: position.pair, orderId: position.binanceEntryOrderId, error: cancelRemainder },
               );
+              await sendCleanupWarning(
+                config,
+                position.pair,
+                `Không hủy được phần LIMIT order còn lại chưa khớp sau partial fill (orderId ${position.binanceEntryOrderId}) — có thể tiếp tục khớp thêm ngoài dự kiến, kiểm tra tay.`,
+              );
             }
           }
 
@@ -1376,6 +1468,11 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
                 orderId: position.binanceEntryOrderId,
                 error: cancelResult,
               });
+              await sendCleanupWarning(
+                config,
+                position.pair,
+                `Không hủy được LIMIT entry order khi hết hạn (orderId ${position.binanceEntryOrderId}) — bot sẽ thử lại cycle sau.`,
+              );
             }
           } else if (position.binanceEntryOrderType === "STOP_MARKET") {
             const cancelResult = await cancelOrder(symbol, position.binanceEntryOrderId);
@@ -1386,6 +1483,11 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
                 orderId: position.binanceEntryOrderId,
                 error: cancelResult,
               });
+              await sendCleanupWarning(
+                config,
+                position.pair,
+                `Không hủy được STOP_MARKET entry order khi hết hạn (orderId ${position.binanceEntryOrderId}) — bot sẽ thử lại cycle sau.`,
+              );
             }
           }
 
