@@ -12,6 +12,9 @@ Set-Location $repo
 $jobs = @{
     "analyze"                     = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto" } }
     "analyze-smc"                 = @{ Script = "analyze:smc"; Env = @{ CHART_RUN_CONTEXT = "auto" } }
+    "analyze-volman-m15"          = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto"; CHART_PRIMARY_TIMEFRAME = "M15" } }
+    "analyze-volman-h1"           = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto"; CHART_PRIMARY_TIMEFRAME = "H1" } }
+    "analyze-volman-h4"           = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto"; CHART_PRIMARY_TIMEFRAME = "H4" } }
     "fetch-matches-list"          = @{ Script = "fetch-matches-list" }
     "match-odds"                  = @{ Script = "match-odds" }
     "performance-report-weekly"   = @{ Script = "performance-report"; Env = @{ PERFORMANCE_REPORT_PERIOD = "weekly" } }

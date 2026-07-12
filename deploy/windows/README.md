@@ -82,6 +82,9 @@ cd C:\bots\auto-signal-bot
 |---|---|---|
 | analyze | 07:05, 11:05, 15:05, 19:05, 23:05 (T2–T6) + 03:05 (T3–T7) | 00:05,04:05…20:05 T2–T6 |
 | analyze-smc | mỗi 15 phút, từ T2 07:00 đến T7 06:45 | */15 T2–T6 |
+| **analyze-volman-m15** | **mỗi 15 phút, suốt ngày** | ***/15** |
+| **analyze-volman-h1** | **mỗi 60 phút (1 giờ), suốt ngày** | ***/60** |
+| **analyze-volman-h4** | **mỗi 240 phút (4 giờ), suốt ngày** | ***/240** |
 | fetch-matches-list | 07:00 hằng ngày | 00:00 |
 | match-odds | 12:00 hằng ngày | 05:00 |
 | performance-report-weekly | T2 08:15 | T2 01:15 |

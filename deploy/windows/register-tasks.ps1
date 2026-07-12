@@ -69,6 +69,22 @@ Register-BotTask "analyze-smc" @(
     (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 15 (New-TimeSpan -Days 1))
 )
 
+# Volman multi-timeframe independent tasks — mỗi timeframe chạy riêng
+# M15: mỗi 15 phút
+Register-BotTask "analyze-volman-m15" @(
+    (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 15 (New-TimeSpan -Days 1))
+)
+
+# H1: mỗi 60 phút (1 giờ)
+Register-BotTask "analyze-volman-h1" @(
+    (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 60 (New-TimeSpan -Days 1))
+)
+
+# H4: mỗi 240 phút (4 giờ)
+Register-BotTask "analyze-volman-h4" @(
+    (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 240 (New-TimeSpan -Days 1))
+)
+
 # === Betting ===
 
 # fetch-matches-list — 00:00 UTC = 07:00 VN hằng ngày
