@@ -31,6 +31,7 @@ export type OpenPosition = {
   reasons: string[] | null;
   openedAt: string;
   status: "open" | "closed";
+  primaryTimeframe: "M15" | "H1" | "H4" | "D1" | null;
   lastDecision: "HOLD" | "CLOSE" | "STOP" | null;
   lastDecisionConfidence: number | null;
   lastDecisionComment: string | null;
@@ -226,7 +227,7 @@ export async function findOpenPositionIdByPair(pair: string): Promise<number | n
 export async function loadOpenPositions(): Promise<OpenPosition[]> {
   const { data, error } = await (getDb().from("open_positions_volman") as any)
     .select(
-      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_tp2_order_id, binance_execution_status",
+      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_tp2_order_id, binance_execution_status, primary_timeframe",
     )
     .eq("status", "open")
     .order("opened_at", { ascending: true });
@@ -274,6 +275,7 @@ export async function loadOpenPositions(): Promise<OpenPosition[]> {
       binance_tp1_order_id: number | null;
       binance_tp2_order_id: number | null;
       binance_execution_status: "pending" | "placed" | "failed" | "close_failed" | null;
+      primary_timeframe: "M15" | "H1" | "H4" | "D1" | null;
     }>
   ).map((row) => ({
     id: row.id,
@@ -287,6 +289,7 @@ export async function loadOpenPositions(): Promise<OpenPosition[]> {
     reasons: row.reasons,
     openedAt: row.opened_at,
     status: row.status,
+    primaryTimeframe: row.primary_timeframe,
     lastDecision: row.last_decision,
     lastDecisionConfidence: row.last_decision_confidence,
     lastDecisionComment: row.last_decision_comment,

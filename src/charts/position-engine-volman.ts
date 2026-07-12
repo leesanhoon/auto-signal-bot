@@ -263,6 +263,7 @@ export function buildOpenPositionInsertRow(
     | "takeProfit2"
     | "reasons"
     | "detectionSource"
+    | "primaryTimeframe"
   >,
   options: { partialClosePercent?: number; minRiskReward?: number } = {},
 ): Record<string, unknown> | null {
@@ -294,6 +295,7 @@ export function buildOpenPositionInsertRow(
     last_management_action: "NONE",
     last_management_comment: null,
     last_management_at: null,
+    primary_timeframe: setup.primaryTimeframe ?? null,
   };
 }
 
