@@ -151,12 +151,18 @@ function normalizeArgs(args: unknown[]): { message: string; context?: LogContext
   return { message, context };
 }
 
+const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function nowAsVietnamWallClockIso(): string {
+  return new Date(Date.now() + VIETNAM_UTC_OFFSET_MS).toISOString();
+}
+
 async function persistLog(level: "warn" | "error", source: string, message: string, context?: LogContext): Promise<void> {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) return;
 
   try {
     const { error } = await ((getDb().from("logs") as any).insert({
-      timestamp: new Date().toISOString(),
+      timestamp: nowAsVietnamWallClockIso(),
       level,
       message,
       context: context ?? {},

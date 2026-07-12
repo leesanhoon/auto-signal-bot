@@ -1,10 +1,10 @@
 import "../shared/env.js";
-import { saveOpenPosition, findOpenPositionIdByPair } from "./positions-repository-volman.js";
-import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
 import {
-  sendMessage,
-  notifyError,
-} from "../shared/telegram-client.js";
+  saveOpenPosition,
+  findOpenPositionIdByPair,
+} from "./positions-repository-volman.js";
+import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
+import { sendMessage, notifyError } from "../shared/telegram-client.js";
 import {
   buildHeartbeatMessage,
   sendAllAnalysesVolman,
@@ -34,7 +34,10 @@ import {
 } from "./chart-cache-repository-volman.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
 import { CHARTS, getChartsForTimeframeMode } from "./volman-charts.config.js";
-import { openBinanceFuturesPosition, pollPendingEntryOrders } from "./binance-execution-volman.js";
+import {
+  openBinanceFuturesPosition,
+  pollPendingEntryOrders,
+} from "./binance-execution-volman.js";
 import {
   isBinanceLiveTradingEnabled,
   isBinanceLiveTradingEnabledVolman,
@@ -218,12 +221,19 @@ async function handleAnalysisResult(
         if (saved) {
           setup.autoTracked = true;
           logger.info("Auto-saved open position", { pair: setup.pair });
-          if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledVolman()) {
+          if (
+            isBinanceLiveTradingEnabled() &&
+            isBinanceLiveTradingEnabledVolman()
+          ) {
             const chartSymbol = symbolByPair.get(setup.pair);
             if (chartSymbol) {
               const positionId = await findOpenPositionIdByPair(setup.pair);
               if (positionId !== null) {
-                await openBinanceFuturesPosition(setup, positionId, chartSymbol);
+                await openBinanceFuturesPosition(
+                  setup,
+                  positionId,
+                  chartSymbol,
+                );
               }
             }
           }
@@ -321,7 +331,9 @@ export async function main(): Promise<void> {
 
   // Poll pending entry orders (LIMIT/STOP) waiting to fill
   if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledVolman()) {
-    logger.info("Polling pending entry orders", { timeframe: primaryTimeframe });
+    logger.info("Polling pending entry orders", {
+      timeframe: primaryTimeframe,
+    });
     await pollPendingEntryOrders(primaryTimeframe);
   }
 
@@ -360,10 +372,7 @@ export async function main(): Promise<void> {
 if (!process.env.VITEST) {
   main().catch(async (error) => {
     logger.error("Fatal error", { error });
-    await notifyError(
-      getChartScannerErrorScope(),
-      error,
-    );
+    await notifyError(getChartScannerErrorScope(), error);
     process.exit(1);
   });
 }

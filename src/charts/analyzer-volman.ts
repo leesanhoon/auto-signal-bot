@@ -1,12 +1,10 @@
-import type {
-  TradeSetup,
-  PairSummary,
-} from "./chart-types-volman.js";
-import type {
-  PendingOrder,
-  ChartOrderType,
-} from "./chart-types-common.js";
-import { cleanResponse, extractJsonObject, clampConfidence } from "./analyzer-common.js";
+import type { TradeSetup, PairSummary } from "./chart-types-volman.js";
+import type { PendingOrder, ChartOrderType } from "./chart-types-common.js";
+import {
+  cleanResponse,
+  extractJsonObject,
+  clampConfidence,
+} from "./analyzer-common.js";
 
 function normalizePairKey(value: string): string {
   return value.replace(/[\s\/_.:-]+/g, "").toUpperCase();
@@ -145,8 +143,13 @@ function toArray(value: unknown): string[] {
   return [];
 }
 
-function normalizeOrderType(value: unknown, direction: unknown): ChartOrderType {
-  const raw = String(value ?? "").trim().toUpperCase();
+function normalizeOrderType(
+  value: unknown,
+  direction: unknown,
+): ChartOrderType {
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase();
   if (
     raw === "MARKET_NOW" ||
     raw === "BUY_STOP" ||
@@ -175,14 +178,24 @@ function normalizeDirection(value: unknown): "LONG" | "SHORT" {
 }
 
 function normalizeTimeframe(value: unknown) {
-  const raw = String(value ?? "").trim().toUpperCase();
-  return raw === "D1" || raw === "H4" || raw === "M15" || raw === "M30" || raw === "H1" ? raw : "H4";
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase();
+  return raw === "D1" ||
+    raw === "H4" ||
+    raw === "M15" ||
+    raw === "M30" ||
+    raw === "H1"
+    ? raw
+    : "H4";
 }
 
 function normalizePendingStatus(
   value: unknown,
 ): "TRIGGERED" | "CANCELLED" | "PENDING" {
-  const raw = String(value ?? "").trim().toUpperCase();
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase();
   if (raw === "TRIGGERED" || raw === "CANCELLED" || raw === "PENDING")
     return raw;
   return "PENDING";
@@ -205,7 +218,10 @@ export function parseAnalysisResponse(
     const rawSetups = Array.isArray(parsed.setups) ? parsed.setups : [];
     const noSetupNotes: string[] = [];
     const normalizedSetups = rawSetups
-      .filter((s): s is Record<string, unknown> => s !== null && typeof s === "object")
+      .filter(
+        (s): s is Record<string, unknown> =>
+          s !== null && typeof s === "object",
+      )
       .map((s): TradeSetup | null => {
         const direction = normalizeDirection(s.direction);
         const setup = {
@@ -235,7 +251,9 @@ export function parseAnalysisResponse(
       });
     return {
       summaries: Array.isArray(parsed.summaries) ? parsed.summaries : [],
-      setups: normalizedSetups.filter((setup): setup is TradeSetup => Boolean(setup)),
+      setups: normalizedSetups.filter((setup): setup is TradeSetup =>
+        Boolean(setup),
+      ),
       noSetupReason: [toText(parsed.noSetupReason), ...noSetupNotes]
         .filter(Boolean)
         .join("\n"),
