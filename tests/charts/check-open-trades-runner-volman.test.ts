@@ -39,7 +39,7 @@ vi.mock("../../src/charts/volman-charts.config.js", () => ({
 vi.mock("../../src/charts/position-decision-volman.js", () => decisionMocks);
 vi.mock("../../src/charts/binance-execution-volman.js", () => binanceMocks);
 
-import { processPosition } from "../../src/charts/check-open-trades-runner-volman.js";
+import { processPosition, runCheckOpenTrades } from "../../src/charts/check-open-trades-runner-volman.js";
 
 describe("check-open-trades-runner-volman", () => {
   beforeEach(() => {
@@ -318,5 +318,105 @@ describe("check-open-trades-runner-volman", () => {
     expect(telegramClientMocks.sendMessage).toHaveBeenCalledWith(
       expect.stringContaining("🟢 Tiếp tục giữ lệnh"),
     );
+  });
+
+  it("uses the position's own primaryTimeframe when looking up its chart, not a hardcoded H4", async () => {
+    // Regression: evaluateOpenPosition used to hardcode findChartForPair(..., "H4")
+    // regardless of which timeframe the position actually opened on. A position opened
+    // from an M15 signal must look up its M15 chart, not H4's.
+    const position = createMinimalPosition();
+    position.binanceSymbol = null;
+    position.primaryTimeframe = "M15";
+
+    screenshotMocks.findChartForPair.mockReturnValue({ symbol: "EUR_USD" });
+    screenshotMocks.fetchCandleRangeStats.mockResolvedValue({ high: 1.15, low: 1.08 });
+    decisionMocks.resolveOpenPositionDecision.mockReturnValue({
+      decision: "HOLD" as const,
+      confidence: 80,
+      comment: "Waiting",
+      managementAction: "NONE" as const,
+      partialClosePercent: 0,
+      newStopLoss: null,
+      tp1Reached: false,
+      tp2Reached: false,
+      riskReward: null,
+      tp1RiskReward: 1,
+      tp2RiskReward: 2,
+    });
+    positionsRepoMocks.buildPositionManagementPatch.mockReturnValue({
+      patch: null,
+      closePosition: false,
+    });
+    telegramMocks.buildPositionDecisionMessage.mockReturnValue("...");
+
+    await processPosition(position);
+
+    expect(screenshotMocks.findChartForPair).toHaveBeenCalledWith(
+      expect.anything(),
+      "EUR/USD",
+      "M15",
+    );
+  });
+
+  it("falls back to H4 when a position has no primaryTimeframe recorded", async () => {
+    const position = createMinimalPosition();
+    position.binanceSymbol = null;
+    position.primaryTimeframe = null as any;
+
+    screenshotMocks.findChartForPair.mockReturnValue({ symbol: "EUR_USD" });
+    screenshotMocks.fetchCandleRangeStats.mockResolvedValue({ high: 1.15, low: 1.08 });
+    decisionMocks.resolveOpenPositionDecision.mockReturnValue({
+      decision: "HOLD" as const,
+      confidence: 80,
+      comment: "Waiting",
+      managementAction: "NONE" as const,
+      partialClosePercent: 0,
+      newStopLoss: null,
+      tp1Reached: false,
+      tp2Reached: false,
+      riskReward: null,
+      tp1RiskReward: 1,
+      tp2RiskReward: 2,
+    });
+    positionsRepoMocks.buildPositionManagementPatch.mockReturnValue({
+      patch: null,
+      closePosition: false,
+    });
+    telegramMocks.buildPositionDecisionMessage.mockReturnValue("...");
+
+    await processPosition(position);
+
+    expect(screenshotMocks.findChartForPair).toHaveBeenCalledWith(
+      expect.anything(),
+      "EUR/USD",
+      "H4",
+    );
+  });
+});
+
+describe("runCheckOpenTrades", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("checks open positions across every timeframe by default, not just one", async () => {
+    // Regression: runCheckOpenTrades used to take a single required timeframe param, so
+    // positions opened from M15/H1 signals were never checked for SL/TP at all once the
+    // scanner started producing signals on those timeframes too.
+    positionsRepoMocks.loadOpenPositions.mockResolvedValue([]);
+
+    await runCheckOpenTrades();
+
+    const checkedTimeframes = positionsRepoMocks.loadOpenPositions.mock.calls.map((call) => call[0]);
+    expect(checkedTimeframes.sort()).toEqual(["D1", "H1", "H4", "M15", "M30"]);
+  });
+
+  it("still supports checking a specific subset of timeframes when explicitly passed", async () => {
+    positionsRepoMocks.loadOpenPositions.mockResolvedValue([]);
+
+    await runCheckOpenTrades(["H4"]);
+
+    expect(positionsRepoMocks.loadOpenPositions).toHaveBeenCalledTimes(1);
+    expect(positionsRepoMocks.loadOpenPositions).toHaveBeenCalledWith("H4");
   });
 });

@@ -210,8 +210,12 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.getConfiguredChartEngineMode.mockReturnValue("ai");
     mocks.getConfiguredChartTradingSystem.mockReturnValue("bob-volman");
     mocks.getConfiguredChartRunContext.mockReturnValue("manual");
-    mocks.getConfiguredChartTimeframeMode.mockReturnValue("multi");
-    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("M15");
+    // This describe block tests single-timeframe (H4) scan behavior specifically — "multi"
+    // mode now genuinely loops over M15/H1/H4 independently (see the dedicated
+    // "multi-timeframe scanning" describe block below), so it no longer collapses to "just
+    // H4" the way it used to.
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("single");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("H4");
     mocks.shouldUseLatestCacheForManualRun.mockReturnValue(true);
     mocks.shouldSendHeartbeatOutsideCloseWindow.mockReturnValue(true);
     mocks.shouldSendHeartbeatOnManualRun.mockReturnValue(true);
@@ -340,8 +344,8 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledWith(expectedCacheKey);
     expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith(
       "deterministic",
-      "multi",
-      "M15",
+      "single",
+      "H4",
     );
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(MOCK_RESULT, undefined, {
@@ -519,8 +523,8 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.loadChartAnalysisCache).toHaveBeenCalledTimes(1);
     expect(mocks.loadLatestChartAnalysisCache).toHaveBeenCalledWith(
       "deterministic",
-      "multi",
-      "M15",
+      "single",
+      "H4",
     );
     expect(mocks.analyzeAllChartsSmc).not.toHaveBeenCalled();
     expect(mocks.analyzeAllChartsDeterministic).not.toHaveBeenCalled();
@@ -553,5 +557,51 @@ describe("charts/index main() — H4 close guard", () => {
 
     // noSetupReason phải chứa lý do lọc open position
     expect(resultPassed.noSetupReason).toContain("Đã có vị thế mở");
+  });
+
+  test("mode=multi trong window → scan độc lập cả M15, H1, H4 (không chỉ H4)", async () => {
+    // Regression cho bug: mode="multi" trước đây bị hardcode chỉ phân tích H4, khiến
+    // signal + ảnh chart từ M15/H1 không bao giờ được tạo dù CHART_TIMEFRAME_MODE=multi.
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("multi");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("H4"); // chỉ dùng khi mode=single
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
+
+    await main();
+
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledTimes(3);
+    const scannedTimeframes = mocks.analyzeAllChartsDeterministic.mock.calls.map(
+      (call) => call[1]?.primaryTimeframe,
+    );
+    expect(scannedTimeframes.sort()).toEqual(["H1", "H4", "M15"]);
+
+    // Mỗi timeframe được key/analyze như "single" cho đúng timeframe của nó, không lệ
+    // thuộc vào mode="multi" gốc (nếu không sẽ hardcode H4 cho cả 3 lần gọi).
+    const scannedModes = mocks.analyzeAllChartsDeterministic.mock.calls.map(
+      (call) => call[1]?.timeframeMode,
+    );
+    expect(scannedModes).toEqual(["single", "single", "single"]);
+
+    // 3 bản sendAllAnalyses độc lập — mỗi timeframe 1 tin, không gộp lại thành 1.
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(3);
+
+    // runCheckOpenTrades/pollPendingEntryOrders chỉ chạy 1 lần cho toàn bộ (không lặp
+    // theo từng timeframe scan — vị thế/lệnh chờ đã tự mang timeframe riêng trong DB).
+    expect(mocks.runCheckOpenTrades).toHaveBeenCalledTimes(1);
+    expect(mocks.runCheckOpenTrades).toHaveBeenCalledWith();
+  });
+
+  test("mode=single → chỉ scan đúng 1 timeframe đã cấu hình (giữ nguyên hành vi cũ)", async () => {
+    mocks.getConfiguredChartTimeframeMode.mockReturnValue("single");
+    mocks.getConfiguredChartPrimaryTimeframe.mockReturnValue("M15");
+    mocks.isWithinTimeframeCandleCloseWindow.mockReturnValue(true);
+
+    await main();
+
+    expect(mocks.analyzeAllChartsDeterministic).toHaveBeenCalledTimes(1);
+    expect(mocks.analyzeAllChartsDeterministic.mock.calls[0][1]).toMatchObject({
+      timeframeMode: "single",
+      primaryTimeframe: "M15",
+    });
+    expect(mocks.sendAllAnalyses).toHaveBeenCalledTimes(1);
   });
 });

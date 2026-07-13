@@ -310,94 +310,123 @@ async function maybeSendHeartbeat(
   );
 }
 
-export async function main(): Promise<void> {
-  const startTime = Date.now();
-  const runContext = getConfiguredChartRunContext();
-  const timeframeMode = getConfiguredChartTimeframeMode();
-  const primaryTimeframe = getConfiguredChartPrimaryTimeframe();
-  const analysisTimeframe =
-    timeframeMode === "single" ? primaryTimeframe : "H4";
-  logger.info("Chart scanner starting", {
-    engineMode: "bob-volman",
-    runContext,
-    timeframeMode,
-    primaryTimeframe,
-    analysisTimeframe,
-  });
+// Every timeframe the deterministic engine actively trades when CHART_TIMEFRAME_MODE=multi.
+// "multi" used to just mean "hardcode H4" (a no-op relative to "single" + H4) — it now means
+// scan each of these independently: own OHLC fetch, own cache key, own Telegram signal+chart.
+const ACTIVE_SCAN_TIMEFRAMES: ChartTimeframe[] = ["M15", "H1", "H4"];
 
+async function runScanForTimeframe(
+  primaryTimeframe: ChartTimeframe,
+  runContext: ReturnType<typeof getConfiguredChartRunContext>,
+): Promise<{
+  result: AnalysisResult | null;
+  candleKey: string;
+  latestCacheCandleKey: string | null;
+  heartbeatReason: "no-cache" | "no-event" | null;
+}> {
+  const analysisTimeframe = primaryTimeframe;
   const candleBaseKey = getLastClosedCandleKey(analysisTimeframe);
   const cacheLabel = "deterministic";
+  // Always key/analyze this as a single-timeframe scan for `primaryTimeframe` specifically —
+  // the outer loop (not this "mode" string) is what makes multi-timeframe scanning work.
+  // Passing the configured "multi" mode straight through here would make
+  // analyzeAllChartsDeterministic hardcode H4 regardless of which timeframe we're looping on.
   const candleKey = buildChartAnalysisCacheKey(
     candleBaseKey,
     cacheLabel,
-    timeframeMode,
+    "single",
     primaryTimeframe,
   );
-  let latestCacheCandleKey: string | null = null;
-  let result: AnalysisResult | null = null;
-  let origin: AnalysisOrigin | null = null;
-  let heartbeatReason: "no-cache" | "no-event" | null = null;
 
   const analysisState = await loadAnalysisForRun(
     candleBaseKey,
     analysisTimeframe,
-    timeframeMode,
+    "single",
     primaryTimeframe,
     runContext,
   );
-  result = analysisState.result;
-  origin = analysisState.origin;
-  heartbeatReason = analysisState.heartbeatReason;
-  if (origin?.source === "cached") latestCacheCandleKey = origin.candleKey;
-
-  logger.info("Checking open positions");
-  const openTradeNotifications = await runCheckOpenTrades(primaryTimeframe);
+  const { result, origin, heartbeatReason } = analysisState;
+  const latestCacheCandleKey = origin?.source === "cached" ? origin.candleKey : null;
 
   if (result && origin) {
     await handleAnalysisResult(result, origin, analysisTimeframe);
   } else {
     logger.warn(
-      `⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`,
+      `⏭ Bỏ qua analyze [${primaryTimeframe}] — ngoài cửa sổ chạy cho last closed candle (${candleBaseKey}), vẫn kiểm tra trade/pending`,
       { engineMode: "bob-volman" },
     );
   }
 
-  // Poll pending entry orders (LIMIT/STOP) waiting to fill
-  if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledVolman()) {
-    logger.info("Polling pending entry orders", {
-      timeframe: primaryTimeframe,
-    });
-    await pollPendingEntryOrders(primaryTimeframe);
+  return { result, candleKey, latestCacheCandleKey, heartbeatReason };
+}
+
+export async function main(): Promise<void> {
+  const startTime = Date.now();
+  const runContext = getConfiguredChartRunContext();
+  const timeframeMode = getConfiguredChartTimeframeMode();
+  const configuredPrimaryTimeframe = getConfiguredChartPrimaryTimeframe();
+  const timeframesToScan: ChartTimeframe[] =
+    timeframeMode === "single" ? [configuredPrimaryTimeframe] : ACTIVE_SCAN_TIMEFRAMES;
+
+  logger.info("Chart scanner starting", {
+    engineMode: "bob-volman",
+    runContext,
+    timeframeMode,
+    timeframesToScan,
+  });
+
+  let anyResult = false;
+  let latestCacheCandleKey: string | null = null;
+  let heartbeatReason: "no-cache" | "no-event" | null = null;
+  let lastCandleKey = "";
+  const runStats: Array<{ timeframe: ChartTimeframe; result: AnalysisResult | null }> = [];
+
+  for (const primaryTimeframe of timeframesToScan) {
+    const scan = await runScanForTimeframe(primaryTimeframe, runContext);
+    if (scan.result) anyResult = true;
+    if (scan.latestCacheCandleKey) latestCacheCandleKey = scan.latestCacheCandleKey;
+    if (scan.heartbeatReason) heartbeatReason = scan.heartbeatReason;
+    lastCandleKey = scan.candleKey;
+    runStats.push({ timeframe: primaryTimeframe, result: scan.result });
   }
 
-  if (!result && openTradeNotifications === 0) {
+  // Open positions/pending entry orders can originate from ANY of the timeframes above
+  // (each carries its own primary_timeframe in the DB) — check across all of them in one
+  // pass rather than re-scoping per scanned timeframe.
+  logger.info("Checking open positions (all timeframes)");
+  const openTradeNotifications = await runCheckOpenTrades();
+
+  if (isBinanceLiveTradingEnabled() && isBinanceLiveTradingEnabledVolman()) {
+    logger.info("Polling pending entry orders (all timeframes)");
+    await pollPendingEntryOrders();
+  }
+
+  if (!anyResult && openTradeNotifications === 0) {
     await maybeSendHeartbeat(
       runContext,
-      candleKey,
+      lastCandleKey,
       heartbeatReason,
       latestCacheCandleKey,
     );
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const attemptedPairs =
-    result?.analysisStats?.attemptedPairs ?? result?.summaries.length ?? 0;
-  const summaryPairs = result?.summaries.length ?? 0;
-  const skippedPairs = result?.analysisStats?.skippedPairs ?? 0;
-  const setupCount =
-    result?.analysisStats?.setupCount ?? result?.setups.length ?? 0;
-  logger.info("Run complete", {
-    scannedPairs: attemptedPairs,
-    attemptedPairs,
-    summaryPairs,
-    skippedPairs,
-    setupCount,
+  for (const { timeframe, result } of runStats) {
+    logger.info("Run complete", {
+      timeframe,
+      scannedPairs: result?.analysisStats?.attemptedPairs ?? result?.summaries.length ?? 0,
+      attemptedPairs: result?.analysisStats?.attemptedPairs ?? result?.summaries.length ?? 0,
+      summaryPairs: result?.summaries.length ?? 0,
+      skippedPairs: result?.analysisStats?.skippedPairs ?? 0,
+      setupCount: result?.analysisStats?.setupCount ?? result?.setups.length ?? 0,
+      engineMode: "bob-volman",
+      runContext,
+    });
+  }
+  logger.info("All timeframes complete", {
     elapsedSeconds: Number(elapsed),
-    engineMode: "bob-volman",
-    runContext,
     timeframeMode,
-    primaryTimeframe,
-    analysisTimeframe,
+    timeframesToScan,
     openTradeNotifications,
   });
 }

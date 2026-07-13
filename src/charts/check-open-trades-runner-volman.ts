@@ -24,7 +24,7 @@ async function evaluateOpenPosition(
     return reconcileBinancePosition(position);
   }
 
-  const chart = findChartForPair(CHARTS, position.pair, "H4");
+  const chart = findChartForPair(CHARTS, position.pair, position.primaryTimeframe ?? "H4");
   if (!chart) {
     logger.warn("No chart configuration found; sending explicit warning", { pair: position.pair, id: position.id });
     await sendMessage(
@@ -113,30 +113,46 @@ export async function processPosition(position: Awaited<ReturnType<typeof loadOp
   return true;
 }
 
-export async function runCheckOpenTrades(timeframe: "M15" | "M30" | "H1" | "H4" | "D1"): Promise<number> {
-  logger.info("Check open trades starting", { timeframe });
-  const positions = await loadOpenPositions(timeframe);
-  if (positions.length === 0) {
-    logger.info("No open positions");
-    return 0;
-  }
+const ALL_POSITION_TIMEFRAMES: Array<"M15" | "M30" | "H1" | "H4" | "D1"> = [
+  "M15", "M30", "H1", "H4", "D1",
+];
 
-  logger.info("Loaded open positions", { count: positions.length });
-
+/**
+ * Checks open positions across every timeframe a position could have been opened from
+ * (not just the scanner's currently-configured primary timeframe) — a position opened
+ * from an M15 or H1 signal must still get its SL/TP checked even if the scanner is now
+ * (or has always been) configured to scan H4. Defaults to all timeframes; pass a subset
+ * only if you specifically want to scope the check.
+ */
+export async function runCheckOpenTrades(
+  timeframes: Array<"M15" | "M30" | "H1" | "H4" | "D1"> = ALL_POSITION_TIMEFRAMES,
+): Promise<number> {
   let notificationsSent = 0;
-  for (const position of positions) {
-    try {
-      logger.info("Checking open position", { id: position.id, pair: position.pair });
-      if (await processPosition(position)) {
+
+  for (const timeframe of timeframes) {
+    logger.info("Check open trades starting", { timeframe });
+    const positions = await loadOpenPositions(timeframe);
+    if (positions.length === 0) {
+      logger.info("No open positions", { timeframe });
+      continue;
+    }
+
+    logger.info("Loaded open positions", { timeframe, count: positions.length });
+
+    for (const position of positions) {
+      try {
+        logger.info("Checking open position", { id: position.id, pair: position.pair });
+        if (await processPosition(position)) {
+          notificationsSent += 1;
+        }
+        logger.info("Finished open position", { id: position.id, pair: position.pair });
+      } catch (error) {
+        logger.error("Failed to check open position", { id: position.id, pair: position.pair, error });
+        await sendMessage(
+          `⚠️ *Check Open Trades*\n\nKhông thể kiểm tra vị thế #${position.id} ${position.pair}:\n${error instanceof Error ? error.message : String(error)}`,
+        );
         notificationsSent += 1;
       }
-      logger.info("Finished open position", { id: position.id, pair: position.pair });
-    } catch (error) {
-      logger.error("Failed to check open position", { id: position.id, pair: position.pair, error });
-      await sendMessage(
-        `⚠️ *Check Open Trades*\n\nKhông thể kiểm tra vị thế #${position.id} ${position.pair}:\n${error instanceof Error ? error.message : String(error)}`,
-      );
-      notificationsSent += 1;
     }
   }
 
