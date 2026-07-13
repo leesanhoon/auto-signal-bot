@@ -3,7 +3,11 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Candle } from "../../src/charts/ohlc-provider.js";
 import { calculateEma } from "../../src/charts/indicators.js";
-import { buildSetupChartSvg, renderSetupChartPng, renderSetupChartsBatch } from "../../src/charts/setup-chart-renderer.js";
+import {
+  buildSetupChartSvg,
+  renderSetupChartPng,
+  renderSetupChartsBatch,
+} from "../../src/charts/setup-chart-renderer.js";
 
 function buildTrendingCandles(count: number): Candle[] {
   const candles: Candle[] = [];
@@ -108,20 +112,14 @@ describe("Chart renderer", () => {
       // with nothing after it) — this is what regressed before: <polyline points="M ... L ...">
       // is invalid SVG (points only accepts numeric pairs, not path commands) and silently
       // renders no line at all.
-      const pathMatch = svg.match(/<path d="([^"]+)" fill="none" stroke="#000000" stroke-width="2"/);
+      const pathMatch = svg.match(
+        /<path d="([^"]+)" fill="none" stroke="#000000" stroke-width="2"/,
+      );
       expect(pathMatch).not.toBeNull();
       const pathData = pathMatch![1];
       expect(pathData).toMatch(/^M \d/); // starts with "M <number>", not bare "M"
       expect(pathData).toContain("L");
       expect(pathData.split("L").length).toBeGreaterThan(1); // at least one line segment
-
-      const sampleOutputPath = fileURLToPath(
-        new URL(
-          "../../tasks/2026-07-14-chart-all-setups/05-renderer-restyle-and-draw-all/sample-output.svg",
-          import.meta.url,
-        ),
-      );
-      writeFileSync(sampleOutputPath, svg, "utf8");
     });
 
     test("builds SVG without geometry (backward compat)", () => {
