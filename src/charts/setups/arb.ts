@@ -189,6 +189,10 @@ export function detectArb(
     confidence,
     triggerIndex: index,
     ruleTrace: trace,
-    geometry: { boxes: [range], markers: edgeTestMarkers },
+    geometry: {
+      boxes: [range],
+      markers: edgeTestMarkers,
+      patternLabel: { index, price: entry, text: kind },
+    },
   };
 }

@@ -465,11 +465,16 @@ describe("resolveSetupConflicts", () => {
       makeSignal("BB", "EUR/USD", 80),
       makeSignal("FB", "GBP/USD", 70),
     ];
+    signals[1].ruleTrace.push("Entry LONG tai 1.10000, SL 1.09000, TP 1.12000");
     const resolved = resolveSetupConflicts(signals);
     expect(resolved).toHaveLength(2);
     const eur = resolved.find((s) => s.pair === "EUR/USD")!;
     expect(eur.setup).toBe("BB");
     expect(eur.confidence).toBe(80);
+    expect(eur.ruleTrace).toEqual([
+      "Entry LONG tai 1.10000, SL 1.09000, TP 1.12000",
+    ]);
+    expect(eur.ruleTrace.join("\n")).not.toContain("Conflict");
   });
 
   test("uses priority tiebreaker when confidence is equal", () => {

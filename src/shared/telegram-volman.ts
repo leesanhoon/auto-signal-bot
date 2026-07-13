@@ -34,6 +34,21 @@ function getCandleCloseTime(
   return Math.floor(nowMs / intervalMs) * intervalMs;
 }
 
+function formatVietnamDateTime(date: Date): string {
+  const parts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const getPart = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${getPart("hour")}:${getPart("minute")} ${getPart("day")}/${getPart("month")}`;
+}
+
 function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
   const closeTimeMs = getCandleCloseTime(timeframe);
   if (!closeTimeMs) return null;
@@ -44,12 +59,22 @@ function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
   if (minutesAgo < 0) return null;
 
   const closeTime = new Date(closeTimeMs);
-  const hh = String(closeTime.getUTCHours()).padStart(2, "0");
-  const mm = String(closeTime.getUTCMinutes()).padStart(2, "0");
-  const dd = String(closeTime.getUTCDate()).padStart(2, "0");
-  const MM = String(closeTime.getUTCMonth() + 1).padStart(2, "0");
+  const vnTimeStr = formatVietnamDateTime(closeTime);
 
-  return `🕐 Nến gốc [${timeframe}] đóng: ${hh}:${mm} ${dd}/${MM} UTC (${minutesAgo} phút trước)`;
+  return `🕐 Nến gốc [${timeframe}] đóng: ${vnTimeStr} giờ VN (${minutesAgo} phút trước)`;
+}
+
+function humanizeCandleKey(candleKey: string): string {
+  // candleKey format: "<ISO date/hour>:<engineMode>:<timeframeMode>[:<timeframe>]"
+  // Chỉ lấy phần ISO date/hour đầu tiên, bỏ các hậu tố kỹ thuật nội bộ.
+  const isoPart = candleKey.match(/^\d{4}-\d{2}-\d{2}T\d{2}(:\d{2})?/)?.[0];
+  if (!isoPart) return candleKey;
+
+  const isoWithMinutes = isoPart.length === 13 ? `${isoPart}:00` : isoPart;
+  const date = new Date(`${isoWithMinutes}:00.000Z`);
+  if (Number.isNaN(date.getTime())) return candleKey;
+
+  return formatVietnamDateTime(date);
 }
 
 function getPatternInfo(setup: string): string {
@@ -162,10 +187,10 @@ function buildCopyableSetup(setup: TradeSetup): string {
     ...setup.reasons.map((r) => `  • ${r}`),
   ].join("\n");
 
-  const risksBlock = [
-    `⚠️ *Rủi ro cần lưu ý:*`,
-    ...(setup.risks || []).map((r) => `  • ${r}`),
-  ].join("\n");
+  const risksBlock =
+    setup.risks && setup.risks.length > 0
+      ? [`⚠️ *Rủi ro cần lưu ý:*`, ...setup.risks.map((r) => `  • ${r}`)].join("\n")
+      : "";
 
   const summaryBlock = `💡 ${setup.summary}`;
 
@@ -374,7 +399,7 @@ export async function sendAllAnalysesVolman(
   const sourceLabel = isCached ? " từ cache" : " từ thuật toán";
   const cacheLine = isCached
     ? deliveryContext.candleKey
-      ? `📦 Dữ liệu phân tích lấy từ cache của *last closed candle ${deliveryContext.candleKey}*`
+      ? `📦 Dữ liệu phân tích lấy từ cache của nến đóng lúc *${humanizeCandleKey(deliveryContext.candleKey)} giờ VN*`
       : "📦 Dữ liệu phân tích lấy từ cache"
     : "";
   const setupHeaderSuffix = isCached ? " từ cache" : " từ thuật toán";

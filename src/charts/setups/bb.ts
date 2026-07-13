@@ -102,6 +102,10 @@ export function detectBb(
     confidence,
     triggerIndex: block.endIndex,
     ruleTrace: trace,
-    geometry: { boxes: [block], markers: [] },
+    geometry: {
+      boxes: [block],
+      markers: [],
+      patternLabel: { index: block.endIndex, price: entry, text: kind },
+    },
   };
 }

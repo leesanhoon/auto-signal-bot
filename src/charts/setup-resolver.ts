@@ -1,4 +1,7 @@
 import type { DetectedSignal, SetupKind } from "./setup-types.js";
+import { createLogger } from "../shared/logger.js";
+
+const logger = createLogger("charts:setup-resolver");
 
 /**
  * Priority order for setup conflict resolution (highest first).
@@ -86,12 +89,15 @@ export function resolveSetupConflicts(
     // Keep the winner
     resolved.push(pairSignals[0]);
 
-    // Log conflicts for debugging
+    // Log conflicts for debugging — KHONG push vao ruleTrace vi ruleTrace duoc dung
+    // truc tiep de build entryCondition + reasons hien thi cho user (xem
+    // signal-assembly.ts). Debug info nay chi phuc vu dev, khong lien quan quyet dinh
+    // vao lenh cua user.
     if (pairSignals.length > 1) {
       const kept = pairSignals[0];
       const dropped = pairSignals.slice(1).map((s) => `${s.setup}(conf=${s.confidence})`).join(", ");
-      kept.ruleTrace.push(
-        `[Resolver] Conflict: giu ${kept.setup}(conf=${kept.confidence}), bo ${dropped}`,
+      logger.debug(
+        `Conflict resolved for ${kept.pair}: giu ${kept.setup}(conf=${kept.confidence}), bo ${dropped}`,
       );
     }
   }

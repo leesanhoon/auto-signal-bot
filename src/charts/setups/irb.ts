@@ -191,6 +191,10 @@ export function detectIrb(
     confidence,
     triggerIndex: index,
     ruleTrace: trace,
-    geometry: { boxes: [rangeInner, rangeOuter], markers: [] },
+    geometry: {
+      boxes: [rangeInner, rangeOuter],
+      markers: [],
+      patternLabel: { index, price: entry, text: kind },
+    },
   };
 }

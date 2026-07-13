@@ -40,7 +40,7 @@ describe("charts/analyzer-volman utilities", () => {
     const checked = applyPriceSanityChecks(setup, 1.105);
     expect(checked.setup).not.toBeNull();
     expect(checked.setup?.lastPrice).toBe(1.105);
-    expect(checked.setup?.currentPriceContext).toContain("Giá thật hiện tại");
+    expect(checked.setup?.currentPriceContext).toBeUndefined();
   });
 
   test("applyPriceSanityChecks rejects MARKET_NOW with high deviation", () => {

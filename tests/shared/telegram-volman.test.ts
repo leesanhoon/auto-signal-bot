@@ -125,6 +125,40 @@ describe("sendAllAnalysesVolman", () => {
     expect(setupMessage).not.toContain("\n\n\n");
   });
 
+  test("hides empty risks and formats candle/cache times in Vietnam timezone", async () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(
+      Date.parse("2026-07-13T20:07:00.000Z"),
+    );
+    const resultWithEmptyRisks: AnalysisResult = {
+      ...result,
+      setups: [{ ...minimalSetup, risks: [], primaryTimeframe: "M15" }],
+    };
+    const mockNotifier = createMockNotifier();
+
+    try {
+      await sendAllAnalysesVolman(resultWithEmptyRisks, mockNotifier, {
+        source: "cached",
+        candleKey: "2026-07-13T20:00:deterministic:single:M15",
+        timeframe: "M15",
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    const headerMessage = mockNotifier.sentMessages[0];
+    const setupMessage = mockNotifier.sentMessages.find(
+      (msg) => msg.includes("EURUSD") && msg.includes("LONG"),
+    );
+    expect(headerMessage).toContain(
+      "Dữ liệu phân tích lấy từ cache của nến đóng lúc *03:00 14/07 giờ VN*",
+    );
+    expect(headerMessage).not.toContain("deterministic:single:M15");
+    expect(setupMessage).toContain(
+      "Nến gốc [M15] đóng: 03:00 14/07 giờ VN (7 phút trước)",
+    );
+    expect(setupMessage).not.toContain("Rủi ro cần lưu ý");
+  });
+
   test("setup message still contains all required trading data", async () => {
     const mockNotifier = createMockNotifier();
     await sendAllAnalysesVolman(result, mockNotifier);

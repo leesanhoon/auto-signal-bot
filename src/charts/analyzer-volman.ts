@@ -36,9 +36,7 @@ export function applyPriceSanityChecks(
   const stopLoss = parsePrice(setup.stopLoss);
   const takeProfit1 = parsePrice(setup.takeProfit1);
 
-  const currentPriceContext = setup.currentPriceContext
-    ? `${setup.currentPriceContext} | Giá thật hiện tại: ${formatPrice(lastPrice)}`
-    : `Giá thật hiện tại: ${formatPrice(lastPrice)}`;
+  const currentPriceContext = setup.currentPriceContext;
 
   if (entry === null || stopLoss === null || takeProfit1 === null) {
     return {
@@ -80,9 +78,13 @@ export function applyPriceSanityChecks(
   };
 
   if (setup.direction === "LONG" && lastPrice >= takeProfit1) {
-    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`;
+    updatedSetup.currentPriceContext = updatedSetup.currentPriceContext
+      ? `${updatedSetup.currentPriceContext} | Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`
+      : `Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`;
   } else if (setup.direction === "SHORT" && lastPrice <= takeProfit1) {
-    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`;
+    updatedSetup.currentPriceContext = updatedSetup.currentPriceContext
+      ? `${updatedSetup.currentPriceContext} | Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`
+      : `Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`;
   }
 
   return { setup: updatedSetup };

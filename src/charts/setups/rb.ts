@@ -1,5 +1,5 @@
 import type { Candle } from "../ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
+import type { DetectedSignal, DetectionContext, SetupKind, ChartMarker } from "../setup-types.js";
 import { detectCompression, classifyCompressionTightness } from "../indicators.js";
 import { baseConfidence, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";
@@ -101,12 +101,19 @@ export function detectRb(
       const touchTolerance = 0.15 * atr;
       const boundaryLevel = direction === "LONG" ? range.high : range.low;
       let touchCount = 0;
+      const touchMarkers: ChartMarker[] = [];
       for (let i = range.startIndex; i <= range.endIndex; i++) {
         const c = candles[i];
         if (direction === "LONG") {
-          if (c.high >= boundaryLevel - touchTolerance && c.close <= boundaryLevel) touchCount++;
+          if (c.high >= boundaryLevel - touchTolerance && c.close <= boundaryLevel) {
+            touchCount++;
+            touchMarkers.push({ index: i, price: c.high, label: `Touch #${touchCount}` });
+          }
         } else {
-          if (c.low <= boundaryLevel + touchTolerance && c.close >= boundaryLevel) touchCount++;
+          if (c.low <= boundaryLevel + touchTolerance && c.close >= boundaryLevel) {
+            touchCount++;
+            touchMarkers.push({ index: i, price: c.low, label: `Touch #${touchCount}` });
+          }
         }
       }
       if (touchCount < 2) {
@@ -149,7 +156,11 @@ export function detectRb(
         confidence,
         triggerIndex: index,
         ruleTrace: trace,
-        geometry: { boxes: [range], markers: [] },
+        geometry: {
+          boxes: [range],
+          markers: touchMarkers,
+          patternLabel: { index, price: entry, text: kind },
+        },
       };
     }
   }

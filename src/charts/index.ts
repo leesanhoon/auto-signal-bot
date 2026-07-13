@@ -82,7 +82,7 @@ async function analyzeCurrentWindow(
     timeframeMode,
     primaryTimeframe,
   );
-  logger.info(`Using Bob Volman engine (no AI vision)`, {
+  logger.info(`Using Bob Volman engine`, {
     timeframeMode,
     primaryTimeframe,
     intervals: Array.from(

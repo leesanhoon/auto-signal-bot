@@ -1,5 +1,6 @@
 ﻿import { describe, expect, test } from "vitest";
 import type { Candle } from "../../src/charts/ohlc-provider.js";
+import type { DetectedSignal, SetupKind } from "../../src/charts/setup-types.js";
 import { calculateEma, calculateAtr } from "../../src/charts/indicators.js";
 import { detectArb } from "../../src/charts/setups/arb.js";
 import { detectBb } from "../../src/charts/setups/bb.js";
@@ -314,4 +315,88 @@ describe("Stop-order configuration", () => {
       }
     }
   });
+});
+
+describe("Signal assembly — user-facing reason translations", () => {
+  const cases: Record<SetupKind, Array<[raw: string, translated: string]>> = {
+    DDB: [
+      ["2 doji lien tiep tai index 10-11", "2 nến doji liên tiếp tại nến 10-11"],
+      ["Custer doji sat EMA21, distance=0.12 ATR", "Cụm doji sát EMA21 (cách 0.12 ATR)"],
+      ["Pullback la song hieu hoa", "Sóng kéo ngược là sóng hài hòa (đơn lẻ, không nằm ngang)"],
+      ["Nen 11 xac nhan -> entry LONG tai 100.25000", "Nến 11 xác nhận — entry LONG tại 100.25000"],
+    ],
+    FB: [
+      ["Trend bat dau tu index 8", "Xu hướng mới bắt đầu hình thành tại nến 8"],
+      ["Trend chuyen tu FLAT tai ~index 8", "EMA21 chuyển từ đi ngang sang xu hướng mới quanh nến 8"],
+      ["Trend dao chieu tai ~index 8", "Xu hướng đảo chiều quanh nến 8"],
+      ["Cham EMA21, distance=0.15 ATR", "Giá chạm EMA21 (cách 0.15 ATR)"],
+      ["touchCount=1 (tu trendStartIndex 8)", "Đã chạm EMA21 1 lần kể từ khi xu hướng hình thành tại nến 8"],
+      ["Pullback la song hieu hoa", "Sóng kéo ngược là sóng hài hòa (đơn lẻ, không nằm ngang)"],
+      ["Cham EMA21, dat stop order tai bien nen tin hieu, bodyRatio hien tai=0.72", "Giá chạm EMA21; đặt stop order tại biên nến tín hiệu (tỷ lệ thân nến=0.72)"],
+      ["Entry LONG tai 102.20000, Stop=101.50000", "Entry LONG tại 102.20000, Stop tại 101.50000"],
+    ],
+    SB: [
+      ["Pattern W: low1=99.80000 @ index 12, low2=99.70000 @ index 15", "Mô hình chữ W: đáy 1=99.80000 tại nến 12, đáy 2=99.70000 tại nến 15"],
+      ["Pattern W: high1=100.20000 @ index 12, high2=100.30000 @ index 15", "Mô hình chữ M: đỉnh 1=100.20000 tại nến 12, đỉnh 2=100.30000 tại nến 15"],
+      ["Song dan toi day 1 la song hai hoa", "Sóng dẫn tới đáy thứ nhất là sóng hài hòa"],
+      ["Song dan toi dinh 1 la song hai hoa", "Sóng dẫn tới đỉnh thứ nhất là sóng hài hòa"],
+      ["Day 1 bi false break (xac nhan pattern W)", "Đáy thứ nhất bị phá vỡ mồi, xác nhận mô hình chữ W"],
+      ["Dinh 1 bi false break (xac nhan pattern W)", "Đỉnh thứ nhất bị phá vỡ mồi, xác nhận mô hình chữ M"],
+      ["Pattern W san sang, cho gia pha len tren 101.30000 de xac nhan (Alert)", "Mô hình chữ W đã sẵn sàng; chờ giá phá lên trên 101.30000 để xác nhận"],
+      ["Pattern W san sang, cho gia pha xuong duoi 98.80000 de xac nhan (Alert)", "Mô hình chữ M đã sẵn sàng; chờ giá phá xuống dưới 98.80000 để xác nhận"],
+      ["Entry SHORT tai 98.80000, Stop=101.30000", "Entry SHORT tại 98.80000, Stop tại 101.30000"],
+    ],
+    BB: [
+      ["EMA21 slope=0.44", "Độ dốc EMA21=0.44"],
+      ["Block detected w=5, range=0.32000, distanceToEma=0.18", "Phát hiện hộp nén 5 nến (biên độ=0.32000, cách EMA21 0.18 ATR)"],
+      ["Block sat EMA21, distance=0.18 ATR", "Hộp nén nằm sát EMA21 (cách 0.18 ATR)"],
+      ["Block san sang, theo trend LONG: STOP chap Binance truoc khi gia breakout", "Hộp nén đã sẵn sàng theo hướng LONG; đặt stop order được Binance chấp nhận trước khi giá phá vỡ"],
+      ["Entry LONG tai 108.18000, Stop=107.86000", "Entry LONG tại 108.18000, Stop tại 107.86000"],
+    ],
+    RB: [
+      ["Range detected w=6, range=2.20000, distanceToEma=0.10", "Phát hiện vùng tích lũy 6 nến (biên độ=2.20000, cách EMA21 0.10 ATR)"],
+      ["EMA21 phang truoc breakout (slopeBefore=0.02), chuyen sang doc (slopeNow=0.42)", "EMA21 phẳng trước phá vỡ (độ dốc trước=0.02), sau đó chuyển sang dốc (độ dốc hiện tại=0.42)"],
+      ["3 lan cham bat bien tren (>=2, dat)", "Đã chạm bật biên quan trọng 3 lần (đạt yêu cầu tối thiểu 2 lần)"],
+      ["Entry LONG tai 101.10000, rangeHeight=2.20000", "Entry LONG tại 101.10000, chiều cao vùng=2.20000"],
+    ],
+    IRB: [
+      ["Breakout LONG pha ca RangeInner va RangeOuter", "Phá vỡ LONG xuyên qua cả vùng nén trong và vùng nén ngoài"],
+      ["RangeInner pha index 33, RangeOuter pha index 34 -> chap nhan (LONG)", "Vùng nén trong bị phá tại nến 33, vùng nén ngoài bị phá tại nến 34 — chấp nhận hướng LONG"],
+      ["RangeOuter detected w=10, range=1.50000, high=101.10000, low=99.60000", "Phát hiện vùng nén ngoài 10 nến (biên độ=1.50000, đỉnh=101.10000, đáy=99.60000)"],
+      ["RangeInner detected w=4, range=0.15000", "Phát hiện vùng nén trong 4 nến (biên độ=0.15000)"],
+      ["RangeInner nam giua RangeOuter (centerOffset=0.01000 <= 0.15000)", "Vùng nén trong nằm giữa vùng nén ngoài (độ lệch tâm=0.01000 <= 0.15000)"],
+      ["Entry LONG tai 101.10000, Stop=99.60000", "Entry LONG tại 101.10000, Stop tại 99.60000"],
+      ["RangeInner TIGHT, RangeOuter LOOSE", "Vùng nén trong chặt, vùng nén ngoài lỏng"],
+    ],
+    ARB: [
+      ["Entry SHORT tai 99.88000, rangeHeight=0.24000", "Entry SHORT tại 99.88000, chiều cao vùng=0.24000"],
+      ["Edge test bonus: +20 (2 tests x 10)", "Thưởng độ tin cậy: +20 (đã test biên 2 lần)"],
+      ["Bonus confidence: nen chặt, phá vỡ đáng tin cậy (+5)", "Thưởng độ tin cậy: +5 (đoạn nén chặt, phá vỡ đáng tin cậy)"],
+    ],
+  };
+
+  for (const [setupKind, reasonCases] of Object.entries(cases) as Array<
+    [SetupKind, Array<[string, string]>]
+  >) {
+    test(`translates all ${setupKind} success-path traces`, () => {
+      for (const [raw, translated] of reasonCases) {
+        const signal: DetectedSignal = {
+          setup: setupKind,
+          pair: "EUR/USD",
+          timeframe: "H4",
+          direction: raw.includes("SHORT") ? "SHORT" : "LONG",
+          entry: 100,
+          stopLoss: 99,
+          takeProfit: 102,
+          confidence: 80,
+          triggerIndex: 1,
+          ruleTrace: [raw],
+        };
+
+        const tradeSetup = buildTradeSetupFromSignal(signal, { lastPrice: null });
+        expect(tradeSetup?.reasons).toEqual([translated]);
+        expect(tradeSetup?.entryCondition).toBe(translated);
+      }
+    });
+  }
 });
