@@ -9,11 +9,39 @@ export type ChartMarker = {
   label: string;   // ví dụ "Edge test #1", "Doji"
 };
 
+export type ChartLinePoint = {
+  index: number;   // vị trí trong mảng candles
+  price: number;
+};
+
+export type ChartLine = {
+  points: ChartLinePoint[];   // >= 2 điểm, nối tuần tự bằng đoạn thẳng
+  label?: string;             // ví dụ "Pullback", "W-pattern"
+  style?: "pullback" | "pattern";  // gợi ý màu/nét vẽ cho renderer
+};
+
+export type ChartHighlight = {
+  index: number;   // vị trí nến cần tô đậm
+  label?: string;  // ví dụ "Doji", "Bottom 2"
+};
+
+export type ChartPatternLabel = {
+  index: number;   // vị trí gần điểm breakout/tín hiệu
+  price: number;   // giá đặt label (thường gần đỉnh/đáy pattern)
+  text: string;    // tên setup hiển thị, ví dụ "BB", "DDB", "ARB"
+};
+
 export type SetupChartGeometry = {
   /** Box chính (range/block) — BB, RB, ARB dùng 1 box; IRB dùng boxes[0]=inner, boxes[1]=outer. */
   boxes: CompressionWindow[];
   /** Điểm mốc phụ, ví dụ các nến edge-test bị false break (ARB). */
   markers: ChartMarker[];
+  /** Đường nối nhiều điểm — sóng pullback (DDB/FB), mô hình W/M (SB). Optional, không set thì không vẽ. */
+  lines?: ChartLine[];
+  /** Nến cần tô đậm — cụm doji (DDB), đáy/đỉnh W-M (SB). Optional. */
+  highlightCandles?: ChartHighlight[];
+  /** Vị trí + text label tên setup (kèm đường chỉ nhỏ khi vẽ). Optional — nếu không set, renderer dùng title mặc định như hiện tại. */
+  patternLabel?: ChartPatternLabel;
 };
 
 export type DetectedSignal = {

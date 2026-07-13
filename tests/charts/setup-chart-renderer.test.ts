@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Candle } from "../../src/charts/ohlc-provider.js";
 import { calculateEma } from "../../src/charts/indicators.js";
 import { buildSetupChartSvg, renderSetupChartPng, renderSetupChartsBatch } from "../../src/charts/setup-chart-renderer.js";
@@ -24,6 +26,11 @@ describe("Chart renderer", () => {
       // 25 candles so calculateEma(candles, 20) actually produces non-null values
       // (period 20 needs >=20 candles) — otherwise the EMA draw branch never runs.
       const candles = buildTrendingCandles(25);
+      candles[1] = {
+        ...candles[1],
+        open: 100.3,
+        close: 100.1,
+      };
       const ma21 = calculateEma(candles, 21);
       expect(ma21.some((v) => v !== null)).toBe(true);
 
@@ -54,6 +61,26 @@ describe("Chart renderer", () => {
               { index: 3, price: 100.4, label: "Edge test #1" },
               { index: 5, price: 100.3, label: "Edge test #2" },
             ],
+            lines: [
+              {
+                points: [
+                  { index: 8, price: candles[8].close },
+                  { index: 12, price: candles[12].close },
+                ],
+                label: "Pullback",
+                style: "pullback",
+              },
+              {
+                points: [
+                  { index: 12, price: candles[12].close },
+                  { index: 16, price: candles[16].close },
+                ],
+                label: "Pattern",
+                style: "pattern",
+              },
+            ],
+            highlightCandles: [{ index: 12, label: "Signal candle" }],
+            patternLabel: { index: 16, price: 101.8, text: "ARB" },
           },
         },
       });
@@ -67,17 +94,34 @@ describe("Chart renderer", () => {
       expect(svg).not.toContain("TP2");
       expect(svg).toMatch(/<rect/g);
       expect(svg).toContain("Edge test #1");
+      expect(svg).toContain('fill="url(#bgGrad)"');
+      expect(svg).toContain('fill="none" stroke="#000000" stroke-width="1.5"');
+      expect(svg).toContain('fill="#FFFFFF" stroke="#000000"');
+      expect(svg).toContain('fill="#000000" stroke="#000000"');
+      expect(svg).toContain('stroke-dasharray="3,2"');
+      expect(svg).toContain('stroke="#555555"');
+      expect(svg).toContain('stroke="#1E5AFF"');
+      expect(svg).toContain('stroke="#FFB300"');
+      expect(svg).toContain('font-style="italic" fill="#000000">ARB</text>');
 
       // EMA20 must actually render as a <path> with real coordinate data (not just "M"
       // with nothing after it) — this is what regressed before: <polyline points="M ... L ...">
       // is invalid SVG (points only accepts numeric pairs, not path commands) and silently
       // renders no line at all.
-      const pathMatch = svg.match(/<path d="([^"]+)" fill="none" stroke="#FF8800"/);
+      const pathMatch = svg.match(/<path d="([^"]+)" fill="none" stroke="#000000" stroke-width="2"/);
       expect(pathMatch).not.toBeNull();
       const pathData = pathMatch![1];
       expect(pathData).toMatch(/^M \d/); // starts with "M <number>", not bare "M"
       expect(pathData).toContain("L");
       expect(pathData.split("L").length).toBeGreaterThan(1); // at least one line segment
+
+      const sampleOutputPath = fileURLToPath(
+        new URL(
+          "../../tasks/2026-07-14-chart-all-setups/05-renderer-restyle-and-draw-all/sample-output.svg",
+          import.meta.url,
+        ),
+      );
+      writeFileSync(sampleOutputPath, svg, "utf8");
     });
 
     test("builds SVG without geometry (backward compat)", () => {

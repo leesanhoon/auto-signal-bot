@@ -47,6 +47,7 @@ export function detectBb(
     block = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, w, kBlock);
     if (block !== null) {
       trace.push(`Block detected w=${w}, range=${block.range.toFixed(5)}, distanceToEma=${block.distanceToEma.toFixed(2)}`);
+      trace.push(`Hop nen: dinh=${block.high.toFixed(5)}, day=${block.low.toFixed(5)}`);
       break;
     }
   }

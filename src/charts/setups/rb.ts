@@ -32,6 +32,7 @@ export function detectRb(
     range = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, w, kBlockRb);
     if (range !== null) {
       trace.push(`Range detected w=${w}, range=${range.range.toFixed(5)}, distanceToEma=${range.distanceToEma.toFixed(2)}`);
+      trace.push(`Hop range: dinh=${range.high.toFixed(5)}, day=${range.low.toFixed(5)}`);
       break;
     }
   }

@@ -32,6 +32,7 @@ export function detectArb(
     range = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, w, kBlockArb);
     if (range !== null) {
       trace.push(`Range detected w=${w}, range=${range.range.toFixed(5)}`);
+      trace.push(`Vung moi: high=${range.high.toFixed(5)}, low=${range.low.toFixed(5)}`);
       break;
     }
   }
@@ -150,6 +151,10 @@ export function detectArb(
     return null;
   }
   trace.push(`Current breakout khong bi false`);
+
+  const breakoutLevel = direction === "LONG" ? levelHigh : levelLow;
+  const gap = Math.abs(candles[index].close - breakoutLevel);
+  trace.push(`Pha vo muc moi tai gia ${breakoutLevel.toFixed(5)}, gap=${gap.toFixed(5)}`);
 
   // Entry/Stop/Target (same as RB)
   const entry = direction === "LONG" ? range.high : range.low;

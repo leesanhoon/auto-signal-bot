@@ -82,10 +82,14 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
 
   const coord = buildCoordMap(candles, stopLoss, takeProfit);
 
-  let svg = `<svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" style="background:white;font-family:Arial,sans-serif">`;
+  let svg = `<svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" style="font-family:Arial,sans-serif">`;
 
   // Background
-  svg += `<rect width="900" height="500" fill="white"/>`;
+  svg += `<defs><linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#b8bcc4"/>
+    <stop offset="100%" stop-color="#8f95a0"/>
+  </linearGradient></defs>`;
+  svg += `<rect width="900" height="500" fill="url(#bgGrad)"/>`;
 
   // Draw geometry boxes (outer first, then inner)
   if (geometry?.boxes) {
@@ -100,12 +104,9 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
       const y1 = mapYCoord(box.high, coord);
       const y2 = mapYCoord(box.low, coord);
 
-      // Outer box (index 1) lighter, inner box (index 0) slightly darker
-      const fillColor = i === 0 ? "rgba(100, 150, 200, 0.15)" : "rgba(100, 150, 200, 0.08)";
-
       svg += `<rect x="${Math.min(x1, x2)}" y="${Math.min(y1, y2)}" width="${Math.abs(
         x2 - x1,
-      )}" height="${Math.abs(y2 - y1)}" fill="${fillColor}" stroke="none"/>`;
+      )}" height="${Math.abs(y2 - y1)}" fill="none" stroke="#000000" stroke-width="1.5"/>`;
     }
   }
 
@@ -119,8 +120,8 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
     const yClose = mapYCoord(candle.close, coord);
 
     const isUp = candle.close >= candle.open;
-    const candleColor = isUp ? "#00AA00" : "#AA0000";
-    const bodyColor = candleColor;
+    const candleColor = "#000000";
+    const bodyColor = isUp ? "#FFFFFF" : "#000000";
 
     // Wick
     svg += `<line x1="${xCenter}" y1="${yHigh}" x2="${xCenter}" y2="${yLow}" stroke="${candleColor}" stroke-width="0.5"/>`;
@@ -130,6 +131,21 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
     const bodyHeight = Math.abs(yClose - yOpen);
     const bodyWidth = 8;
     svg += `<rect x="${xCenter - bodyWidth / 2}" y="${bodyTop}" width="${bodyWidth}" height="${bodyHeight || 1}" fill="${bodyColor}" stroke="${candleColor}" stroke-width="0.5"/>`;
+  }
+
+  // Highlight candles that are significant to the setup pattern
+  if (geometry?.highlightCandles) {
+    for (const h of geometry.highlightCandles) {
+      const idx = h.index - sliceStartIndex;
+      if (idx < 0 || idx >= candles.length) continue;
+      const candle = candles[idx];
+      const xCenter = mapXCoord(idx, coord);
+      const yHigh = mapYCoord(candle.high, coord);
+      const yLow = mapYCoord(candle.low, coord);
+      svg += `<rect x="${xCenter - 8}" y="${yHigh - 4}" width="16" height="${
+        yLow - yHigh + 8
+      }" fill="none" stroke="#FFB300" stroke-width="1.5" rx="3"/>`;
+    }
   }
 
   // Draw EMA21
@@ -148,7 +164,23 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
         }
       }
     }
-    svg += `<path d="${emaPath}" fill="none" stroke="#FF8800" stroke-width="2"/>`;
+    svg += `<path d="${emaPath}" fill="none" stroke="#000000" stroke-width="2"/>`;
+  }
+
+  // Draw pullback and pattern lines
+  if (geometry?.lines) {
+    for (const line of geometry.lines) {
+      if (line.points.length < 2) continue;
+      const color = line.style === "pattern" ? "#1E5AFF" : "#555555";
+      let path = "M";
+      line.points.forEach((p, i) => {
+        const idx = p.index - sliceStartIndex;
+        const x = mapXCoord(idx, coord);
+        const y = mapYCoord(p.price, coord);
+        path += i === 0 ? ` ${x},${y}` : ` L${x},${y}`;
+      });
+      svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="3,2"/>`;
+    }
   }
 
   // Draw markers
@@ -181,6 +213,17 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
 
     // Label on the right
     svg += `<text x="${x2 + 5}" y="${y + 4}" font-size="10" fill="${line.color}">${line.label}</text>`;
+  }
+
+  // Draw the setup label near its breakout/signal point
+  if (geometry?.patternLabel) {
+    const idx = geometry.patternLabel.index - sliceStartIndex;
+    const x = mapXCoord(idx, coord);
+    const y = mapYCoord(geometry.patternLabel.price, coord);
+    const labelX = x + 20;
+    const labelY = y - 30;
+    svg += `<line x1="${labelX + 5}" y1="${labelY + 5}" x2="${x}" y2="${y}" stroke="#1E5AFF" stroke-width="1.5"/>`;
+    svg += `<text x="${labelX}" y="${labelY}" font-size="16" font-weight="bold" font-style="italic" fill="#000000">${geometry.patternLabel.text}</text>`;
   }
 
   // Title

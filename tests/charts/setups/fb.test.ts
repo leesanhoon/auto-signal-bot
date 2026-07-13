@@ -31,6 +31,53 @@ function buildContext(
 }
 
 describe("FB — First Break take-profit calculation", () => {
+  test("returns pullback geometry from trend start to the signal candle", () => {
+    const candles = makeCandles(
+      Array.from({ length: 13 }, (_, index) => {
+        if (index >= 8 && index <= 11) {
+          const close = 103 - (index - 8) * 0.2;
+          return {
+            o: close + 0.2,
+            h: close + 0.4,
+            l: close - 0.4,
+            c: close,
+          };
+        }
+
+        if (index === 12) {
+          return { o: 102.05, h: 102.2, l: 101.5, c: 101.85 };
+        }
+
+        return { o: 100.3, h: 100.8, l: 100.1, c: 100.5 };
+      }),
+    );
+
+    const ctx: DetectionContext = {
+      ma21: [100, 100, 100, 100, 100, 100, 100, 100, 101, 101.2, 101.4, 101.6, 101.8],
+      atr14: candles.map(() => 1),
+      pair: "EUR/USD",
+      timeframe: "H4",
+    };
+
+    const signal = detectFb(candles, 12, ctx);
+
+    expect(signal).not.toBeNull();
+    expect(signal!.geometry!.lines).toHaveLength(1);
+    expect(signal!.geometry!.lines![0]).toEqual({
+      points: [
+        { index: 8, price: candles[8].close },
+        { index: 12, price: candles[12].close },
+      ],
+      label: "Pullback",
+      style: "pullback",
+    });
+    expect(signal!.geometry!.patternLabel).toEqual({
+      index: 12,
+      price: signal!.entry,
+      text: "FB",
+    });
+  });
+
   test("LONG FB uses the configured 2R take profit", () => {
     // Build uptrend followed by pullback to EMA, then FB break
     const candles: Candle[] = [];

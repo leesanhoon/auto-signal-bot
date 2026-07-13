@@ -1,5 +1,5 @@
 import type { Candle } from "../ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
+import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../setup-types.js";
 import { classifyTrend } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
 
@@ -144,6 +144,26 @@ export function detectFb(
   const slope = computeSlope(ctx.ma21, ctx.atr14, index);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
+  const geometry: SetupChartGeometry = {
+    boxes: [],
+    markers: [],
+    lines: [
+      {
+        points: [
+          { index: trendStartIndex, price: candles[trendStartIndex].close },
+          { index, price: candles[index].close },
+        ],
+        label: "Pullback",
+        style: "pullback",
+      },
+    ],
+    patternLabel: {
+      index,
+      price: entry,
+      text: kind,
+    },
+  };
+
   return {
     setup: kind,
     pair: ctx.pair,
@@ -155,5 +175,6 @@ export function detectFb(
     confidence,
     triggerIndex: index,
     ruleTrace: trace,
+    geometry,
   };
 }

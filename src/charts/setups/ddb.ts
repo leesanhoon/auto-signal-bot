@@ -1,5 +1,5 @@
 import type { Candle } from "../ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
+import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../setup-types.js";
 import { classifyTrend, isDoji } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
 
@@ -74,6 +74,7 @@ export function detectDdb(
   const direction = trend === "UPTREND" ? "LONG" : "SHORT";
   const dojiHigh = Math.max(...candles.slice(dojiStart, index + 1).map((c) => c.high));
   const dojiLow = Math.min(...candles.slice(dojiStart, index + 1).map((c) => c.low));
+  trace.push(`Cum doji: dinh=${dojiHigh.toFixed(5)}, day=${dojiLow.toFixed(5)}`);
   const entry = direction === "LONG" ? dojiHigh : dojiLow;
   const stopBuffer = 0.1 * atr;
   const stopLoss = direction === "LONG" ? dojiLow - stopBuffer : dojiHigh + stopBuffer;
@@ -87,6 +88,32 @@ export function detectDdb(
   const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
+  const highlightCandles = [];
+  for (let i = dojiStart; i <= index; i++) {
+    highlightCandles.push({ index: i, label: "Doji" });
+  }
+
+  const geometry: SetupChartGeometry = {
+    boxes: [],
+    markers: [],
+    highlightCandles,
+    lines: [
+      {
+        points: [
+          { index: pullbackStartIndex, price: candles[pullbackStartIndex].close },
+          { index: dojiStart, price: candles[dojiStart].close },
+        ],
+        label: "Pullback",
+        style: "pullback",
+      },
+    ],
+    patternLabel: {
+      index,
+      price: direction === "LONG" ? entry : entry,
+      text: kind,
+    },
+  };
+
   return {
     setup: kind,
     pair: ctx.pair,
@@ -98,5 +125,6 @@ export function detectDdb(
     confidence,
     triggerIndex: index,
     ruleTrace: trace,
+    geometry,
   };
 }

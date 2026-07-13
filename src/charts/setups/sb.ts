@@ -1,5 +1,5 @@
 import type { Candle } from "../ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
+import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../setup-types.js";
 import { classifyTrend, isFalseBreak } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
 
@@ -138,6 +138,38 @@ export function detectSb(
     const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
     confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
+    const geometry: SetupChartGeometry = {
+      boxes: [],
+      markers: [],
+      highlightCandles: [
+        { index: firstLowIndex, label: "Bottom 1" },
+        { index: secondLowIndex, label: "Bottom 2" },
+      ],
+      lines: [
+        {
+          points: [
+            { index: pullbackStart, price: candles[pullbackStart].close },
+            { index: firstLowIndex, price: firstLow },
+          ],
+          label: "Pullback",
+          style: "pullback",
+        },
+        {
+          points: [
+            { index: firstLowIndex, price: firstLow },
+            { index: secondLowIndex, price: secondLow },
+          ],
+          label: "W-pattern",
+          style: "pattern",
+        },
+      ],
+      patternLabel: {
+        index,
+        price: entry,
+        text: kind,
+      },
+    };
+
     return {
       setup: kind,
       pair: ctx.pair,
@@ -149,6 +181,7 @@ export function detectSb(
       confidence,
       triggerIndex: index,
       ruleTrace: trace,
+      geometry,
     };
   } else {
     // SHORT: find 2 highs
@@ -237,6 +270,38 @@ export function detectSb(
     const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
     confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
+    const geometry: SetupChartGeometry = {
+      boxes: [],
+      markers: [],
+      highlightCandles: [
+        { index: firstHighIndex, label: "Top 1" },
+        { index: secondHighIndex, label: "Top 2" },
+      ],
+      lines: [
+        {
+          points: [
+            { index: pullbackStartShort, price: candles[pullbackStartShort].close },
+            { index: firstHighIndex, price: firstHigh },
+          ],
+          label: "Pullback",
+          style: "pullback",
+        },
+        {
+          points: [
+            { index: firstHighIndex, price: firstHigh },
+            { index: secondHighIndex, price: secondHigh },
+          ],
+          label: "M-pattern",
+          style: "pattern",
+        },
+      ],
+      patternLabel: {
+        index,
+        price: entry,
+        text: kind,
+      },
+    };
+
     return {
       setup: kind,
       pair: ctx.pair,
@@ -248,6 +313,7 @@ export function detectSb(
       confidence,
       triggerIndex: index,
       ruleTrace: trace,
+      geometry,
     };
   }
 }

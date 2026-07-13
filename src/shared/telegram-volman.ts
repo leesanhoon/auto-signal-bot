@@ -416,11 +416,17 @@ export async function sendAllAnalysesVolman(
   // Build batch input for chart rendering
   const chartInputs: Array<{ setup: TradeSetup; input: SetupChartInput }> = [];
   for (const setup of setups) {
-    if (!setup.chartContext) continue;
+    if (!setup.chartContext) {
+      logger.warn(`Bỏ qua chart cho ${setup.pair} — thiếu chartContext (OHLC candles/ma21 không đủ dữ liệu khi build setup)`);
+      continue;
+    }
     const entry = Number(setup.entry);
     const stopLoss = Number(setup.stopLoss);
     const takeProfit = Number(setup.takeProfit1);
-    if (![entry, stopLoss, takeProfit].every(Number.isFinite)) continue;
+    if (![entry, stopLoss, takeProfit].every(Number.isFinite)) {
+      logger.warn(`Bỏ qua chart cho ${setup.pair} — entry/stopLoss/takeProfit không hợp lệ (entry=${setup.entry}, stopLoss=${setup.stopLoss}, takeProfit1=${setup.takeProfit1})`);
+      continue;
+    }
     chartInputs.push({
       setup,
       input: {
