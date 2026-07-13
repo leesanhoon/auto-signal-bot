@@ -29,11 +29,6 @@ services:
       ofelia.job-exec.analyze.command: "npm run analyze"
       ofelia.job-exec.analyze.no-overlap: "true"
 
-      # SMC Chart Analysis — mỗi 15 phút, T2-T6
-      ofelia.job-exec.analyze-smc.schedule: "0 */15 * * * 1-5"
-      ofelia.job-exec.analyze-smc.command: "npm run analyze:smc"
-      ofelia.job-exec.analyze-smc.no-overlap: "true"
-
       # === Betting ===
 
       # Fetch Matches List — 00:00 UTC (07:00 VN) hằng ngày

@@ -5,12 +5,13 @@ import { calculateEma, calculateAtr, isTradableWindow, averageAtr } from "../../
 import { resolveSetupConflicts } from "../../src/charts/setup-resolver.js";
 
 // Import all detectors
-import { detectDd } from "../../src/charts/setups/dd.js";
+import { detectDdb } from "../../src/charts/setups/ddb.js";
 import { detectFb } from "../../src/charts/setups/fb.js";
 import { detectBb } from "../../src/charts/setups/bb.js";
 import { detectRb } from "../../src/charts/setups/rb.js";
 import { detectArb } from "../../src/charts/setups/arb.js";
 import { detectIrb } from "../../src/charts/setups/irb.js";
+import { detectSb } from "../../src/charts/setups/sb.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,7 +36,7 @@ function buildContext(
   timeframe: "M15" | "H4" | "D1" = "H4",
 ): DetectionContext {
   return {
-    ema20: calculateEma(candles, 20),
+    ma21: calculateEma(candles, 21),
     atr14: calculateAtr(candles, 14),
     pair,
     timeframe,
@@ -46,8 +47,8 @@ function buildContext(
 // DD — Double Doji Break
 // ---------------------------------------------------------------------------
 
-describe("DD — Double Doji Break", () => {
-  test("detects DD in uptrend with 2 dojis near EMA", () => {
+describe("DDB — Double Doji Break", () => {
+  test("detects DDB in uptrend with 2 dojis near EMA", () => {
     // Build a stronger uptrend — prices rising fast enough for EMA20 to be clearly uptrend
     // but with a pullback at the end
     const candles: Candle[] = [];
@@ -84,10 +85,10 @@ describe("DD — Double Doji Break", () => {
 
     const ctx = buildContext(candles);
     const last = candles.length - 1;
-    const signal = detectDd(candles, last, ctx);
+    const signal = detectDdb(candles, last, ctx);
     // This may be null if the fixture doesn't perfectly align with EMA
     // But we can at least check it doesn't crash
-    expect(signal === null || signal!.setup === "DD").toBe(true);
+    expect(signal === null || signal!.setup === "DDB").toBe(true);
   });
 
   test("returns null in FLAT market", () => {
@@ -100,7 +101,7 @@ describe("DD — Double Doji Break", () => {
       })),
     );
     const ctx = buildContext(candles);
-    const signal = detectDd(candles, candles.length - 1, ctx);
+    const signal = detectDdb(candles, candles.length - 1, ctx);
     expect(signal).toBeNull();
   });
 });
@@ -188,7 +189,11 @@ describe("RB — Range Break", () => {
   test("detects RB on a confirmed range breakout", () => {
     const candles: Candle[] = [];
 
-    for (let i = 0; i < 23; i++) {
+    // EMA21 needs 1 more warm-up candle than the EMA20 baseline this fixture was
+    // originally sized for (first valid EMA21 index is 20, not 19) — extra candle
+    // added here so ma21[index-10] is non-null when detectRb checks the FLAT->sloping
+    // transition; detection thresholds/logic unchanged.
+    for (let i = 0; i < 24; i++) {
       const base = 100;
       candles.push({
         time: 1700000000000 + i * 3600000,
@@ -201,7 +206,7 @@ describe("RB — Range Break", () => {
     }
 
     candles.push(
-      { time: 1700000000000 + 23 * 3600000, open: 100, high: 101.0, low: 99.0, close: 100.0, volume: 90 },
+      { time: 1700000000000 + 24 * 3600000, open: 100, high: 101.0, low: 99.0, close: 100.0, volume: 90 },
       { time: 1700000000000 + 24 * 3600000, open: 100.0, high: 101.1, low: 99.1, close: 100.05, volume: 90 },
       { time: 1700000000000 + 25 * 3600000, open: 100.05, high: 101.05, low: 99.05, close: 100.02, volume: 90 },
       { time: 1700000000000 + 26 * 3600000, open: 100.02, high: 101.0, low: 99.0, close: 100.03, volume: 90 },
@@ -245,7 +250,10 @@ describe("ARB — Advanced Range Break", () => {
       { time: 1700000000000 + 1 * 3600000, open: 100.05, high: 100.75, low: 99.97, close: 100.02, volume: 100 },
     );
 
-    for (let i = 2; i < 24; i++) {
+    // EMA21 needs 1 more warm-up candle than this fixture was originally sized for
+    // (first valid EMA21 index is 20, not 19) — extra candle added here so
+    // computeSlope's index-5 lookup is non-null; detection thresholds unchanged.
+    for (let i = 2; i < 25; i++) {
       candles.push({
         time: 1700000000000 + i * 3600000,
         open: 100,
@@ -257,7 +265,7 @@ describe("ARB — Advanced Range Break", () => {
     }
 
     candles.push({
-      time: 1700000000000 + 24 * 3600000,
+      time: 1700000000000 + 25 * 3600000,
       open: 100.1,
       high: 101.2,
       low: 100.0,
@@ -323,7 +331,8 @@ describe("ARB — Advanced Range Break", () => {
       { time: 1700000000000 + 1 * 3600000, open: 99.95, high: 100.03, low: 99.25, close: 99.98, volume: 100 },
     );
 
-    for (let i = 2; i < 24; i++) {
+    // EMA21 warm-up — see comment on the "upper-edge failures" test above.
+    for (let i = 2; i < 25; i++) {
       candles.push({
         time: 1700000000000 + i * 3600000,
         open: 100,
@@ -335,7 +344,7 @@ describe("ARB — Advanced Range Break", () => {
     }
 
     candles.push({
-      time: 1700000000000 + 24 * 3600000,
+      time: 1700000000000 + 25 * 3600000,
       open: 99.9,
       high: 99.95,
       low: 98.9,
@@ -369,32 +378,44 @@ describe("IRB — Inside Range Break", () => {
   test("detects IRB with nested ranges and a breakout through both ranges", () => {
     const candles: Candle[] = [];
 
-    for (let i = 0; i < 14; i++) {
+    // Warm-up flat candles: đủ lịch sử EMA21 + không ảnh hưởng biên RangeOuter.
+    for (let i = 0; i < 20; i++) {
       const base = 100;
       candles.push({
         time: 1700000000000 + i * 3600000,
-        open: base,
-        high: base + 2.2,
-        low: base - 1.8,
-        close: base + 0.4,
+        open: base, high: base + 0.2, low: base - 0.2, close: base + 0.05,
         volume: 100,
       });
     }
 
-    candles.push(
-      { time: 1700000000000 + 14 * 3600000, open: 102.0, high: 102.3, low: 101.8, close: 102.06, volume: 90 },
-      { time: 1700000000000 + 15 * 3600000, open: 102.03, high: 102.32, low: 101.83, close: 102.09, volume: 90 },
-      { time: 1700000000000 + 16 * 3600000, open: 102.06, high: 102.34, low: 101.86, close: 102.12, volume: 90 },
-      { time: 1700000000000 + 17 * 3600000, open: 102.09, high: 102.33, low: 101.84, close: 102.08, volume: 90 },
-      { time: 1700000000000 + 18 * 3600000, open: 102.12, high: 102.35, low: 101.85, close: 102.11, volume: 90 },
-      { time: 1700000000000 + 19 * 3600000, open: 102.15, high: 102.36, low: 101.87, close: 102.14, volume: 90 },
-    );
+    // RangeOuter: 10 nến dao động trong [99.6, 101.1] (height ~1.5), tâm ~100.35.
+    const outerVals: Array<[number, number, number]> = [
+      [99.8, 100.9, 100.2], [99.7, 101.0, 100.5], [99.9, 100.8, 100.1], [99.65, 101.05, 100.6],
+      [99.85, 100.85, 99.9], [99.7, 101.0, 100.4], [99.9, 100.75, 100.05], [99.6, 101.1, 100.5],
+      [99.8, 100.9, 100.15], [99.7, 101.0, 100.6],
+    ];
+    outerVals.forEach(([low, high, close], i) => {
+      const t = 20 + i;
+      candles.push({ time: 1700000000000 + t * 3600000, open: close - 0.1, high, low, close, volume: 100 });
+    });
+
+    // RangeInner: 4 nến nén CHẶT, nằm GẦN CHÍNH GIỮA RangeOuter (mid ~100.35) —
+    // đúng tài liệu Bob Volman ("hộp nhỏ trong hộp lớn" nằm chính giữa, không sát biên).
+    const innerVals: Array<[number, number, number]> = [
+      [100.28, 100.42, 100.35],
+      [100.3, 100.4, 100.33],
+      [100.27, 100.38, 100.32],
+      [100.29, 100.41, 100.36],
+    ];
+    innerVals.forEach(([low, high, close], i) => {
+      const t = 30 + i;
+      candles.push({ time: 1700000000000 + t * 3600000, open: close - 0.02, high, low, close, volume: 90 });
+    });
+
+    // Breakout: đóng cửa vượt cả RangeInner lẫn RangeOuter cùng lúc (LONG).
     candles.push({
-      time: 1700000000000 + 20 * 3600000,
-      open: 102.2,
-      high: 102.8,
-      low: 102.1,
-      close: 102.6,
+      time: 1700000000000 + 34 * 3600000,
+      open: 100.5, high: 101.8, low: 100.45, close: 101.6,
       volume: 120,
     });
 
@@ -431,8 +452,7 @@ describe("resolveSetupConflicts", () => {
       direction: "LONG",
       entry: 1.1,
       stopLoss: 1.09,
-      takeProfit1: 1.115,
-      takeProfit2: 1.12,
+      takeProfit: 1.12,
       confidence,
       triggerIndex: index,
       ruleTrace: [],
@@ -441,7 +461,7 @@ describe("resolveSetupConflicts", () => {
 
   test("keeps highest confidence signal per pair", () => {
     const signals = [
-      makeSignal("DD", "EUR/USD", 65),
+      makeSignal("DDB", "EUR/USD", 65),
       makeSignal("BB", "EUR/USD", 80),
       makeSignal("FB", "GBP/USD", 70),
     ];
@@ -454,7 +474,7 @@ describe("resolveSetupConflicts", () => {
 
   test("uses priority tiebreaker when confidence is equal", () => {
     const signals = [
-      makeSignal("DD", "EUR/USD", 70),
+      makeSignal("DDB", "EUR/USD", 70),
       makeSignal("BB", "EUR/USD", 70),
       makeSignal("ARB", "EUR/USD", 70),
     ];
@@ -468,7 +488,7 @@ describe("resolveSetupConflicts", () => {
   });
 
   test("single signal stays as-is", () => {
-    const s = makeSignal("DD", "EUR/USD", 70);
+    const s = makeSignal("DDB", "EUR/USD", 70);
     expect(resolveSetupConflicts([s])).toHaveLength(1);
   });
 });

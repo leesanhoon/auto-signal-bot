@@ -7,7 +7,10 @@ import type { ChartTimeframe } from "../charts/chart-types-common.js";
 import type { Notifier } from "./notifier.js";
 import { createLogger } from "./logger.js";
 import type { PerformanceReport, ClosedPositionSnapshot } from "../charts/performance-tracking-volman.js";
-import { getConfiguredChartSignalConfidenceThreshold } from "../charts/volman-config-env.js";
+import {
+  getConfiguredChartSignalConfidenceThreshold,
+  getConfiguredTpRMultiple,
+} from "../charts/volman-config-env.js";
 import { sendMessage, telegramNotifier } from "./telegram-client.js";
 import { renderSetupChartsBatch, type SetupChartInput } from "../charts/setup-chart-renderer.js";
 
@@ -52,19 +55,19 @@ function formatCandleAge(timeframe: ChartTimeframe | undefined): string | null {
 function getPatternInfo(setup: string): string {
   const s = setup.toUpperCase();
   if (s.includes("RB") && !s.includes("ARB") && !s.includes("IRB"))
-    return "📦 _Range Break — vùng tích lũy phá theo EMA20_";
+    return "📦 _Range Break — vùng phạm vi (EMA21 phẳng), nén chặt sát biên rồi phá vỡ_";
   if (s.includes("ARB"))
-    return "📦🔄 _Advanced RB — nhiều false break trước khi break thật_";
+    return "📦🔄 _Advanced Range Break — phá vỡ mồi để lại khoảng trống, nén lại trong vùng rồi phá vỡ lần nữa_";
   if (s.includes("IRB"))
-    return "📦📦 _Inside RB — range nhỏ phá luôn range lớn_";
+    return "📦📦 _Inside Range Break — hộp nén giữa vùng phạm vi, phá vỡ hướng về biên vùng_";
   if (s.includes("BB"))
-    return "🧱 _Block Break — block sát EMA20, theo trend_";
+    return "🧱 _Block Break — pullback nằm ngang thành hộp nén trên/dưới EMA21, tôn trọng EMA21 rõ_";
   if (s.includes("FB"))
-    return "💥 _First Break — breakout đầu tiên, nến thân dài_";
+    return "💥 _First Break — pullback hài hòa đầu tiên của xu hướng mới về EMA21_";
   if (s.includes("SB"))
-    return "🔄 _Second Break — false break rồi break thật_";
+    return "🔄 _Second Break — phá vỡ đầu thất bại, mô hình W/M quanh EMA21, vào lần phá vỡ thứ hai_";
   if (s.includes("DD"))
-    return "🎯 _Double Doji — doji sát EMA20, theo trend_";
+    return "🎯 _Double Doji Break — cụm ≥2 nến doji sát EMA21 sau pullback hài hòa_";
   return "";
 }
 
@@ -94,6 +97,7 @@ function formatLastPrice(value: number): string {
 
 function buildCopyableSetup(setup: TradeSetup): string {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
+  const tpRMultiple = getConfiguredTpRMultiple();
   const arrow = setup.direction === "LONG" ? "🟢" : "🔴";
   const confidence = setup.confidence ?? 0;
   const confBar =
@@ -148,8 +152,7 @@ function buildCopyableSetup(setup: TradeSetup): string {
     `Direction : ${setup.direction}`,
     `Entry     : ${setup.entry} (${setup.orderType === "MARKET_NOW" ? "market nếu còn đúng vùng" : "trigger/pending"})`,
     `Stop Loss : ${setup.stopLoss}`,
-    `TP1       : ${setup.takeProfit1}`,
-    `TP2       : ${setup.takeProfit2}`,
+    `TP        : ${setup.takeProfit1} (${tpRMultiple}R)`,
     `R:R       : ${setup.riskReward}`,
     "```",
   ].join("\n");
@@ -238,23 +241,12 @@ export function buildPositionDecisionMessage(
     lastDecisionConfidence?: number | null;
     lastDecisionComment?: string | null;
     tradeStage?: string | null;
-    tp1ClosedPercent?: number | null;
-    trailingStopLoss?: string | null;
   },
   decision: {
     decision: "HOLD" | "CLOSE" | "STOP";
     confidence: number;
     comment: string;
-    managementAction?:
-      | "NONE"
-      | "PARTIAL_TP1"
-      | "MOVE_SL_TO_BE"
-      | "TRAIL_SL"
-      | "TP2_CLOSE";
-    partialClosePercent?: number;
-    newStopLoss?: string | null;
-    tp1Reached?: boolean;
-    tp2Reached?: boolean;
+    managementAction?: "NONE" | "TAKE_PROFIT_CLOSE";
   },
 ): string {
   const emoji =
@@ -268,15 +260,9 @@ export function buildPositionDecisionMessage(
       ? "🟢 Tiếp tục giữ lệnh."
       : "🔴 Bot đã tự động đóng vị thế trong hệ thống theo dõi.";
   const managementLine =
-    decision.managementAction === "PARTIAL_TP1"
-      ? `🟡 Partial TP1: đóng ${decision.partialClosePercent ?? 50}% và dời SL${decision.newStopLoss ? ` về ${decision.newStopLoss}` : " về breakeven"}.`
-      : decision.managementAction === "MOVE_SL_TO_BE"
-        ? `🟡 SL đã được dời về breakeven${decision.newStopLoss ? ` (${decision.newStopLoss})` : ""}.`
-        : decision.managementAction === "TRAIL_SL"
-          ? `🟡 SL trailing đã được cập nhật${decision.newStopLoss ? `: ${decision.newStopLoss}` : ""}.`
-          : decision.managementAction === "TP2_CLOSE"
-            ? "🟢 TP2 đã đạt, đóng toàn bộ vị thế."
-            : "";
+    decision.managementAction === "TAKE_PROFIT_CLOSE"
+      ? "🟢 Take profit đã đạt, đóng toàn bộ vị thế."
+      : "";
   const lines = [
     `${emoji} *Vị thế #${position.id}* — ${position.pair} ${position.direction}`,
     position.setup ? `📋 *${position.setup}*` : "",
@@ -287,16 +273,8 @@ export function buildPositionDecisionMessage(
     position.openedAt ? `*Đã mở:* ${position.openedAt}` : "",
     `Entry: ${position.entry}`,
     `SL: ${position.stopLoss}`,
-    `TP1: ${position.takeProfit1}`,
-    position.takeProfit2 ? `TP2: ${position.takeProfit2}` : "",
+    `TP: ${position.takeProfit1}`,
     position.tradeStage ? `*Trạng thái:* ${position.tradeStage}` : "",
-    position.tp1ClosedPercent !== undefined &&
-    position.tp1ClosedPercent !== null
-      ? `*TP1 đã đóng:* ${position.tp1ClosedPercent}%`
-      : "",
-    position.trailingStopLoss
-      ? `*Trailing SL:* ${position.trailingStopLoss}`
-      : "",
     "",
     `*Nhận định:* ${decision.comment || "Không có nhận xét chi tiết."}`,
   ].filter(Boolean);
@@ -330,8 +308,8 @@ export function buildPositionClosedMessage(
     snapshot.outcome === "win" ? "THẮNG" : snapshot.outcome === "loss" ? "THUA" : "HOÀ VỐN";
   const closeReasonLabel = options.isFailSafeClose
     ? "Đóng khẩn cấp do lỗi thực thi trên sàn (fail-safe)"
-    : snapshot.closeReason === "take_profit_2"
-      ? "Chạm TP2"
+    : snapshot.closeReason === "take_profit"
+      ? "Chạm Take Profit"
       : snapshot.closeReason === "manual_close"
         ? "Đóng thủ công (tín hiệu đảo chiều)"
         : "Chạm Stop Loss";
@@ -441,9 +419,8 @@ export async function sendAllAnalysesVolman(
     if (!setup.chartContext) continue;
     const entry = Number(setup.entry);
     const stopLoss = Number(setup.stopLoss);
-    const takeProfit1 = Number(setup.takeProfit1);
-    const takeProfit2 = Number(setup.takeProfit2);
-    if (![entry, stopLoss, takeProfit1, takeProfit2].every(Number.isFinite)) continue;
+    const takeProfit = Number(setup.takeProfit1);
+    if (![entry, stopLoss, takeProfit].every(Number.isFinite)) continue;
     chartInputs.push({
       setup,
       input: {
@@ -452,8 +429,7 @@ export async function sendAllAnalysesVolman(
         direction: setup.direction,
         entry,
         stopLoss,
-        takeProfit1,
-        takeProfit2,
+        takeProfit,
         chartContext: setup.chartContext,
       },
     });

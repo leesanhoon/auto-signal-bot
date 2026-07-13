@@ -35,7 +35,6 @@ export function applyPriceSanityChecks(
   const entry = parsePrice(setup.entry);
   const stopLoss = parsePrice(setup.stopLoss);
   const takeProfit1 = parsePrice(setup.takeProfit1);
-  const takeProfit2 = setup.takeProfit2 ? parsePrice(setup.takeProfit2) : null;
 
   const currentPriceContext = setup.currentPriceContext
     ? `${setup.currentPriceContext} | Giá thật hiện tại: ${formatPrice(lastPrice)}`
@@ -80,22 +79,10 @@ export function applyPriceSanityChecks(
     currentPriceContext,
   };
 
-  if (
-    setup.direction === "LONG" &&
-    takeProfit2 !== null &&
-    lastPrice >= takeProfit2
-  ) {
-    updatedSetup.currentPriceContext += ` | Giá đã vượt TP2 ${formatPrice(takeProfit2)}.`;
-  } else if (
-    setup.direction === "SHORT" &&
-    takeProfit2 !== null &&
-    lastPrice <= takeProfit2
-  ) {
-    updatedSetup.currentPriceContext += ` | Giá đã vượt TP2 ${formatPrice(takeProfit2)}.`;
-  } else if (setup.direction === "LONG" && lastPrice >= takeProfit1) {
-    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP1 ${formatPrice(takeProfit1)}.`;
+  if (setup.direction === "LONG" && lastPrice >= takeProfit1) {
+    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`;
   } else if (setup.direction === "SHORT" && lastPrice <= takeProfit1) {
-    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP1 ${formatPrice(takeProfit1)}.`;
+    updatedSetup.currentPriceContext += ` | Giá đã chạm/vượt TP ${formatPrice(takeProfit1)}.`;
   }
 
   return { setup: updatedSetup };
@@ -117,8 +104,7 @@ export function buildPendingOrderCheckPrompt(
     `- Primary timeframe: ${order.primaryTimeframe ?? "H4"}`,
     `- Entry: ${order.entry}`,
     `- Stop loss: ${order.stopLoss}`,
-    `- Take profit 1: ${order.takeProfit1}`,
-    `- Take profit 2: ${order.takeProfit2 ?? ""}`,
+    `- Take profit: ${order.takeProfit1}`,
     `- Confidence: ${order.confidence ?? 0}%`,
     `- Reasons: ${(order.reasons ?? []).slice(0, 3).join(" | ")}`,
     `- Risks: ${(order.risks ?? []).slice(0, 3).join(" | ")}`,

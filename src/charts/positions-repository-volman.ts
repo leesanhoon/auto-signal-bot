@@ -37,20 +37,13 @@ export type OpenPosition = {
   lastDecisionComment: string | null;
   lastCheckedAt: string | null;
   closedAt: string | null;
-  tradeStage: "open" | "tp1_partial" | "trailing" | "closed" | null;
-  tp1ClosePercent: number | null;
-  tp1ClosedPercent: number | null;
-  tp1ClosedAt: string | null;
-  trailingStopLoss: string | null;
-  trailingStartedAt: string | null;
+  tradeStage: "open" | "closed" | null;
   riskRewardRatio: number | null;
-  tp1RiskRewardRatio: number | null;
-  tp2RiskRewardRatio: number | null;
   minRiskRewardRatio: number | null;
   lastManagementAction: string | null;
   lastManagementComment: string | null;
   lastManagementAt: string | null;
-  closeReason: "stop_loss" | "take_profit_2" | "manual_close" | null;
+  closeReason: "stop_loss" | "take_profit" | "take_profit_2" | "manual_close" | null;
   realizedRiskRewardRatio: number | null;
   realizedExitPrice: string | null;
   binanceSymbol: string | null;
@@ -59,7 +52,6 @@ export type OpenPosition = {
   binanceEntryOrderId: number | null;
   binanceSlOrderId: number | null;
   binanceTp1OrderId: number | null;
-  binanceTp2OrderId: number | null;
   binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed" | null;
   binanceFailureReason: string | null;
   binanceFailureAt: string | null;
@@ -238,7 +230,7 @@ export async function loadOpenPairs(): Promise<Set<string>> {
 export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" | "D1"): Promise<OpenPosition[]> {
   const { data, error } = await (getDb().from("open_positions_volman") as any)
     .select(
-      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, tp1_close_percent, tp1_closed_percent, tp1_closed_at, trailing_stop_loss, trailing_started_at, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_tp2_order_id, binance_execution_status, binance_failure_reason, binance_failure_at, primary_timeframe",
+      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, reasons, opened_at, status, last_decision, last_decision_confidence, last_decision_comment, last_checked_at, closed_at, trade_stage, risk_reward_ratio, min_risk_reward_ratio, last_management_action, last_management_comment, last_management_at, close_reason, realized_risk_reward_ratio, realized_exit_price, binance_symbol, binance_leverage, binance_quantity, binance_entry_order_id, binance_sl_order_id, binance_tp1_order_id, binance_execution_status, binance_failure_reason, binance_failure_at, primary_timeframe",
     )
     .eq("status", "open")
     .eq("primary_timeframe", timeframe)
@@ -263,20 +255,13 @@ export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" |
       last_decision_comment: string | null;
       last_checked_at: string | null;
       closed_at: string | null;
-      trade_stage: "open" | "tp1_partial" | "trailing" | "closed" | null;
-      tp1_close_percent: number | null;
-      tp1_closed_percent: number | null;
-      tp1_closed_at: string | null;
-      trailing_stop_loss: string | null;
-      trailing_started_at: string | null;
+      trade_stage: "open" | "closed" | null;
       risk_reward_ratio: number | null;
-      tp1_risk_reward_ratio: number | null;
-      tp2_risk_reward_ratio: number | null;
       min_risk_reward_ratio: number | null;
       last_management_action: string | null;
       last_management_comment: string | null;
       last_management_at: string | null;
-      close_reason?: "stop_loss" | "take_profit_2" | "manual_close" | null;
+      close_reason?: "stop_loss" | "take_profit" | "take_profit_2" | "manual_close" | null;
       realized_risk_reward_ratio?: number | null;
       realized_exit_price?: string | null;
       binance_symbol: string | null;
@@ -285,7 +270,6 @@ export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" |
       binance_entry_order_id: number | null;
       binance_sl_order_id: number | null;
       binance_tp1_order_id: number | null;
-      binance_tp2_order_id: number | null;
       binance_execution_status: "pending" | "placed" | "failed" | "close_failed" | null;
       binance_failure_reason: string | null;
       binance_failure_at: string | null;
@@ -310,14 +294,7 @@ export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" |
     lastCheckedAt: row.last_checked_at,
     closedAt: row.closed_at,
     tradeStage: row.trade_stage,
-    tp1ClosePercent: row.tp1_close_percent,
-    tp1ClosedPercent: row.tp1_closed_percent,
-    tp1ClosedAt: row.tp1_closed_at,
-    trailingStopLoss: row.trailing_stop_loss,
-    trailingStartedAt: row.trailing_started_at,
     riskRewardRatio: row.risk_reward_ratio,
-    tp1RiskRewardRatio: row.tp1_risk_reward_ratio,
-    tp2RiskRewardRatio: row.tp2_risk_reward_ratio,
     minRiskRewardRatio: row.min_risk_reward_ratio,
     lastManagementAction: row.last_management_action,
     lastManagementComment: row.last_management_comment,
@@ -331,7 +308,6 @@ export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" |
     binanceEntryOrderId: row.binance_entry_order_id ?? null,
     binanceSlOrderId: row.binance_sl_order_id ?? null,
     binanceTp1OrderId: row.binance_tp1_order_id ?? null,
-    binanceTp2OrderId: row.binance_tp2_order_id ?? null,
     binanceExecutionStatus: row.binance_execution_status ?? null,
     binanceFailureReason: row.binance_failure_reason ?? null,
     binanceFailureAt: row.binance_failure_at ?? null,
@@ -341,7 +317,7 @@ export async function loadOpenPositions(timeframe: "M15" | "M30" | "H1" | "H4" |
 export async function loadClosedPositions(since?: string): Promise<ClosedPositionRecord[]> {
   let query = (getDb().from("open_positions_volman") as any)
     .select(
-      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, status, closed_at, tp1_closed_percent, trailing_stop_loss, risk_reward_ratio, tp1_risk_reward_ratio, tp2_risk_reward_ratio, last_management_action, close_reason, realized_risk_reward_ratio, realized_exit_price",
+      "id, pair, direction, setup, entry, stop_loss, take_profit_1, take_profit_2, status, closed_at, risk_reward_ratio, last_management_action, close_reason, realized_risk_reward_ratio, realized_exit_price",
     )
     .eq("status", "closed")
     .order("closed_at", { ascending: true });
@@ -364,13 +340,9 @@ export async function loadClosedPositions(since?: string): Promise<ClosedPositio
     take_profit_2: string | null;
     status: "closed";
     closed_at: string;
-    tp1_closed_percent: number | null;
-    trailing_stop_loss: string | null;
     risk_reward_ratio: number | null;
-    tp1_risk_reward_ratio: number | null;
-    tp2_risk_reward_ratio: number | null;
     last_management_action: string | null;
-    close_reason: "stop_loss" | "take_profit_2" | "manual_close" | null;
+    close_reason: "stop_loss" | "take_profit" | "take_profit_2" | "manual_close" | null;
     realized_risk_reward_ratio: number | null;
     realized_exit_price: string | null;
   }>).map((row) => ({
@@ -384,11 +356,7 @@ export async function loadClosedPositions(since?: string): Promise<ClosedPositio
     takeProfit2: row.take_profit_2,
     status: row.status,
     closedAt: row.closed_at,
-    tp1ClosedPercent: row.tp1_closed_percent,
-    trailingStopLoss: row.trailing_stop_loss,
     riskRewardRatio: row.risk_reward_ratio,
-    tp1RiskRewardRatio: row.tp1_risk_reward_ratio,
-    tp2RiskRewardRatio: row.tp2_risk_reward_ratio,
     lastManagementAction: row.last_management_action,
     closeReason: row.close_reason,
     realizedRiskRewardRatio: row.realized_risk_reward_ratio,
@@ -408,14 +376,9 @@ export async function updatePositionDecision(
       last_decision_comment: decision.comment,
       last_checked_at: new Date().toISOString(),
       ...(patch?.tradeStage !== undefined ? { trade_stage: patch.tradeStage } : {}),
-      ...(patch?.tp1ClosedPercent !== undefined ? { tp1_closed_percent: patch.tp1ClosedPercent } : {}),
-      ...(patch?.tp1ClosedAt !== undefined ? { tp1_closed_at: patch.tp1ClosedAt } : {}),
-      ...(patch?.trailingStopLoss !== undefined ? { trailing_stop_loss: patch.trailingStopLoss } : {}),
-      ...(patch?.trailingStartedAt !== undefined ? { trailing_started_at: patch.trailingStartedAt } : {}),
       ...(patch?.lastManagementAction !== undefined ? { last_management_action: patch.lastManagementAction } : {}),
       ...(patch?.lastManagementComment !== undefined ? { last_management_comment: patch.lastManagementComment } : {}),
       ...(patch?.lastManagementAt !== undefined ? { last_management_at: patch.lastManagementAt } : {}),
-      ...(patch?.stopLoss !== undefined ? { stop_loss: patch.stopLoss } : {}),
     })
     .eq("id", id);
 
@@ -426,10 +389,7 @@ export function buildPositionManagementPatch(
   position: OpenPosition,
   decision: PositionDecisionOutcome,
 ): { patch: OpenPositionManagementPatch | null; closePosition: boolean } {
-  return deriveManagementPatch(position.stopLoss, position.entry, decision, {
-    partialClosePercent: position.tp1ClosePercent ?? undefined,
-    existingTp1ClosedPercent: position.tp1ClosedPercent ?? 0,
-  });
+  return deriveManagementPatch(decision);
 }
 
 export async function closePosition(
@@ -438,8 +398,8 @@ export async function closePosition(
   patch: OpenPositionManagementPatch | null = null,
 ): Promise<ClosedPositionSnapshot> {
   const closeReason =
-    decision.tp2Reached || decision.managementAction === "TP2_CLOSE"
-      ? "TP2_CLOSE"
+    decision.managementAction === "TAKE_PROFIT_CLOSE"
+      ? "TAKE_PROFIT_CLOSE"
       : decision.decision === "CLOSE"
         ? "MANUAL_CLOSE"
         : "STOP";
@@ -451,23 +411,19 @@ export async function closePosition(
       direction: position.direction,
       setup: position.setup,
       entry: position.entry,
-      stopLoss: patch?.stopLoss ?? position.stopLoss,
+      stopLoss: position.stopLoss,
       takeProfit1: position.takeProfit1,
       takeProfit2: position.takeProfit2,
       status: "closed",
       closedAt: new Date().toISOString(),
-      tp1ClosedPercent: patch?.tp1ClosedPercent ?? position.tp1ClosedPercent,
-      trailingStopLoss: patch?.trailingStopLoss ?? position.trailingStopLoss,
       riskRewardRatio: position.riskRewardRatio,
-      tp1RiskRewardRatio: position.tp1RiskRewardRatio,
-      tp2RiskRewardRatio: position.tp2RiskRewardRatio,
       lastManagementAction: patch?.lastManagementAction ?? position.lastManagementAction,
       closeReason: null,
       realizedRiskRewardRatio: null,
       realizedExitPrice: null,
     },
     closeReason,
-    { stopLoss: patch?.stopLoss ?? position.stopLoss },
+    { stopLoss: position.stopLoss },
   );
 
   const { error } = await (getDb().from("open_positions_volman") as any)
@@ -493,7 +449,6 @@ export type BinanceExecutionDetails = {
   binanceEntryOrderId: number;
   binanceSlOrderId: number | null;
   binanceTp1OrderId: number | null;
-  binanceTp2OrderId: number | null;
   binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed";
 };
 
@@ -509,7 +464,6 @@ export async function saveBinanceExecutionDetails(
       binance_entry_order_id: details.binanceEntryOrderId,
       binance_sl_order_id: details.binanceSlOrderId,
       binance_tp1_order_id: details.binanceTp1OrderId,
-      binance_tp2_order_id: details.binanceTp2OrderId,
       binance_execution_status: details.binanceExecutionStatus,
     })
     .eq("id", positionId);
@@ -535,21 +489,6 @@ export async function saveBinanceExecutionFailure(
     .eq("id", positionId);
 
   if (error) throw new Error(`saveBinanceExecutionFailure failed: ${error.message}`);
-}
-
-export async function updateBinanceSlOrder(
-  positionId: number,
-  newSlOrderId: number,
-  newStopLoss: string,
-): Promise<void> {
-  const { error } = await (getDb().from("open_positions_volman") as any)
-    .update({
-      binance_sl_order_id: newSlOrderId,
-      stop_loss: newStopLoss,
-    })
-    .eq("id", positionId);
-
-  if (error) throw new Error(`updateBinanceSlOrder failed: ${error.message}`);
 }
 
 export {

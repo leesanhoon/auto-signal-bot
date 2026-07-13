@@ -53,16 +53,8 @@ export function getConfiguredBinanceApiSecret(): string | undefined {
   return process.env.BINANCE_API_SECRET?.trim();
 }
 
-export function isBinanceLiveTradingEnabledSmc(): boolean {
-  return readBooleanEnv("BINANCE_LIVE_TRADING_ENABLED_SMC", false);
-}
-
 export function isBinanceLiveTradingEnabledVolman(): boolean {
   return readBooleanEnv("BINANCE_LIVE_TRADING_ENABLED_VOLMAN", false);
-}
-
-export function isBinanceHonorOrderTypeEnabledSmc(): boolean {
-  return readBooleanEnv("BINANCE_HONOR_ORDER_TYPE_SMC", false);
 }
 
 export function isBinanceHonorOrderTypeEnabledVolman(): boolean {

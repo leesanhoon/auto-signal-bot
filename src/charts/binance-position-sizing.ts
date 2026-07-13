@@ -38,23 +38,6 @@ export function roundToTickSize(price: number, tickSize: number): number {
   return Number(rounded.toFixed(decimalsOf(tickSize)));
 }
 
-// Chia totalQuantity thành phần TP1 (theo partialClosePercent) và TP2.
-// tp1 làm tròn XUỐNG theo stepSize, phần dư dồn hết về tp2 để tp1 + tp2 === totalQuantity
-// (totalQuantity đã khớp stepSize từ computeOrderQuantity nên tp2 cũng tự khớp).
-export function splitTpQuantities(
-  totalQuantity: number,
-  partialClosePercent: number,
-  stepSize: number,
-): { tp1Quantity: number; tp2Quantity: number } {
-  const decimals = decimalsOf(stepSize);
-  const tp1Quantity = roundDownToStep(
-    totalQuantity * (partialClosePercent / 100),
-    stepSize,
-  );
-  const tp2Quantity = Number((totalQuantity - tp1Quantity).toFixed(decimals));
-  return { tp1Quantity, tp2Quantity };
-}
-
 export function computeOrderQuantity(
   input: PositionSizingInput,
 ): PositionSizingResult | Error {

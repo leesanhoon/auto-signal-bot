@@ -12,7 +12,6 @@ import {
 import { calculateRiskRewardPlan } from "./position-engine-volman.js";
 import {
   saveBinanceExecutionDetails,
-  updateBinanceSlOrder,
   saveBinanceExecutionFailure,
   saveBinancePendingEntryOrder,
   updateBinanceEntryOrderStatus,
@@ -31,8 +30,6 @@ const config = {
     saveBinanceExecutionDetails(positionId, details),
   saveBinanceExecutionFailure: (positionId: number, reason: string) =>
     saveBinanceExecutionFailure(positionId, reason),
-  updateBinanceSlOrder: (positionId: number, orderId: number, stopLoss: string) =>
-    updateBinanceSlOrder(positionId, orderId, stopLoss),
   getConfiguredRiskUsdt: getConfiguredBinanceRiskUsdPerTrade,
   guardFailPrefix: "*Binance Futures (Volman)*",
   failSafeMessagePrefix: "*Binance Futures (Volman)*",
@@ -41,7 +38,6 @@ const config = {
   successPrefix: "*Binance Futures (Volman)*",
   entryErrorPrefix: "*Binance Futures (Volman)*",
   closeFailedUrgentPrefix: "*Binance Futures (Volman) — KHẨN CẤP nhắc lại*",
-  tp1MoveSLFailPrefix: "*Binance Futures (Volman) — KHẨN CẤP*",
   silentFailureWarnPrefix: "*Binance Futures (Volman)*",
   // Entry order type support (new in subtask 03, wired in subtask 05)
   entryExecutionMode: (isBinanceHonorOrderTypeEnabledVolman() ? "HONOR_ORDER_TYPE" : "MARKET_ONLY") as "MARKET_ONLY" | "HONOR_ORDER_TYPE",

@@ -4,12 +4,19 @@ import type { DetectedSignal, SetupKind } from "./setup-types.js";
  * Priority order for setup conflict resolution (highest first).
  * When two signals on the same pair have equal confidence,
  * the higher-priority setup wins.
+ *
+ * Order rationale: Range breakout setups (ARB/IRB/RB/BB) prioritized over
+ * pullback-trend setups (SB/FB/DDB) as they have longer validation history.
+ * Within each group, more conservative/selective setups ranked higher.
  */
 const SETUP_PRIORITY: SetupKind[] = [
-  "ARB",
-  "IRB",
-  "RB",
-  "BB",
+  "ARB",  // Advanced Range Break — best edge-test reliability
+  "IRB",  // Inside Range Break
+  "RB",   // Range Break
+  "BB",   // Block Break
+  "SB",   // Second Break — new, harmonic pullback validated
+  "FB",   // First Break — very rare signals
+  "DDB",  // Double Doji Break — very rare signals
 ];
 
 /**
@@ -26,7 +33,7 @@ function priorityRank(kind: SetupKind): number {
  * Strategy:
  * 1. Group signals by pair.
  * 2. Within each group, keep the signal with the highest confidence.
- * 3. If confidence is tied, use setup priority: ARB > IRB > RB > BB.
+ * 3. If confidence is tied, use setup priority: ARB > IRB > RB > BB > SB > FB > DDB.
  * 4. If both confidence AND priority are equal (same setup), keep the one
  *    with the most recent triggerIndex.
  *

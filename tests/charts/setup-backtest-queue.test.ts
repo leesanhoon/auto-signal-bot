@@ -59,8 +59,7 @@ function makeBbSignal(index: number) {
     direction: "LONG" as const,
     entry: 100.4,
     stopLoss: 99.6,
-    takeProfit1: 101.6,
-    takeProfit2: 102.4,
+    takeProfit: 102.0,
     confidence: 55,
     triggerIndex: index,
     ruleTrace: ["mock BB"],
@@ -75,8 +74,7 @@ function makeRbSignal(index: number) {
     direction: "LONG" as const,
     entry: 150.4,
     stopLoss: 149.6,
-    takeProfit1: 151.6,
-    takeProfit2: 152.4,
+    takeProfit: 152.0,
     confidence: 52,
     triggerIndex: index,
     ruleTrace: ["mock RB"],
@@ -117,8 +115,7 @@ describe("runSetupBacktest queue behavior", () => {
           ...makeBbSignal(index),
           entry: 100.4,
           stopLoss: 90.0,
-          takeProfit1: 110.0,
-          takeProfit2: 120.0,
+          takeProfit: 120.0,
         };
       }
       return null;

@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   computeOrderQuantity,
   roundToTickSize,
-  splitTpQuantities,
   type PositionSizingInput,
   type BinanceSymbolFilters,
 } from "../../src/charts/binance-position-sizing.js";
@@ -186,48 +185,4 @@ describe("charts/binance-position-sizing", () => {
     });
   });
 
-  describe("splitTpQuantities", () => {
-    it("splits total quantity into tp1 and tp2 respecting stepSize", () => {
-      const result = splitTpQuantities(0.007, 50, 0.001);
-      expect(result.tp1Quantity).toBe(0.003);
-      expect(result.tp2Quantity).toBe(0.004);
-      expect(result.tp1Quantity + result.tp2Quantity).toBe(0.007);
-    });
-
-    it("ensures tp1Quantity is rounded down to stepSize", () => {
-      const result = splitTpQuantities(1.0, 33, 0.01);
-      // 1.0 * (33/100) = 0.33, rounded down to 0.01 step = 0.33
-      expect(result.tp1Quantity).toBe(0.33);
-      expect(result.tp2Quantity).toBe(0.67);
-      expect(result.tp1Quantity + result.tp2Quantity).toBeCloseTo(1.0, 5);
-    });
-
-    it("handles 100% partial close (tp2Quantity = 0)", () => {
-      const result = splitTpQuantities(1.0, 100, 0.001);
-      expect(result.tp1Quantity).toBe(1.0);
-      expect(result.tp2Quantity).toBe(0);
-    });
-
-    it("handles small quantities with micro stepSize", () => {
-      const result = splitTpQuantities(0.0001, 50, 0.00001);
-      // 0.0001 * 0.5 = 0.00005, rounded down to 0.00001 = 0.00005
-      expect(result.tp1Quantity).toBe(0.00005);
-      expect(result.tp2Quantity).toBeCloseTo(0.00005, 8);
-      expect(result.tp1Quantity + result.tp2Quantity).toBeCloseTo(0.0001, 8);
-    });
-
-    it("maintains sum exactly equal to totalQuantity", () => {
-      const testCases = [
-        { total: 1.0, percent: 40, step: 0.001 },
-        { total: 10.5, percent: 60, step: 0.01 },
-        { total: 0.007, percent: 75, step: 0.001 },
-      ];
-
-      for (const { total, percent, step } of testCases) {
-        const result = splitTpQuantities(total, percent, step);
-        const sum = result.tp1Quantity + result.tp2Quantity;
-        expect(sum).toBeCloseTo(total, 8);
-      }
-    });
-  });
 });

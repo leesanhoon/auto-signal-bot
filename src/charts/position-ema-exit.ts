@@ -1,19 +1,6 @@
 import type { Candle } from "./ohlc-provider.js";
 import { calculateEma } from "./indicators.js";
-
-export type EmaExitDecisionOutcome = {
-  decision: "HOLD" | "CLOSE" | "STOP";
-  confidence: number;
-  comment: string;
-  managementAction: "NONE" | "PARTIAL_TP1" | "MOVE_SL_TO_BE" | "TRAIL_SL" | "TP2_CLOSE";
-  partialClosePercent: number;
-  newStopLoss: string | null;
-  tp1Reached: boolean;
-  tp2Reached: boolean;
-  riskReward: number | null;
-  tp1RiskReward: number | null;
-  tp2RiskReward: number | null;
-};
+import type { PositionDecisionOutcome } from "./position-engine-volman.js";
 
 function formatPrice(value: number): string {
   const precision = value >= 1000 ? 2 : value >= 100 ? 2 : value >= 10 ? 3 : 5;
@@ -44,7 +31,7 @@ export function resolveEmaExitDecision(
   lastClose: number | null,
   emaValue: number | null,
   period: number,
-): EmaExitDecisionOutcome | null {
+): PositionDecisionOutcome | null {
   if (lastClose === null || emaValue === null) return null;
 
   const triggered =
@@ -61,12 +48,5 @@ export function resolveEmaExitDecision(
     confidence: 95,
     comment,
     managementAction: "NONE",
-    partialClosePercent: 0,
-    newStopLoss: null,
-    tp1Reached: false,
-    tp2Reached: false,
-    riskReward: null,
-    tp1RiskReward: null,
-    tp2RiskReward: null,
   };
 }

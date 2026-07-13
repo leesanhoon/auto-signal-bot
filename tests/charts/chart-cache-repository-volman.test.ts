@@ -52,7 +52,7 @@ const MOCK_RESULT = {
       summary: "Setup long",
       chartContext: {
         candles: [],
-        ema20: [],
+        ma21: [],
         triggerIndex: 0,
         sliceStartIndex: 0,
       },
@@ -178,7 +178,7 @@ describe("charts/chart-cache-repository-volman", () => {
       summary: "Setup long",
       chartContext: {
         candles: [],
-        ema20: [],
+        ma21: [],
         triggerIndex: 0,
         sliceStartIndex: 0,
       },
@@ -192,6 +192,13 @@ describe("charts/chart-cache-repository-volman", () => {
 
     test("valid analysis result → true", () => {
       expect(chartCacheRepository.isValidAnalysisResult(validResult)).toBe(true);
+    });
+
+    test("single-TP result with nullable takeProfit2 → true", () => {
+      expect(chartCacheRepository.isValidAnalysisResult({
+        ...validResult,
+        setups: [{ ...validSetup, takeProfit2: null }],
+      })).toBe(true);
     });
 
     test("null → false", () => {

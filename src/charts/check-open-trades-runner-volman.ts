@@ -7,7 +7,7 @@ import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
 import { resolveOpenPositionDecision } from "./position-decision-volman.js";
 import { reconcileBinancePosition } from "./binance-execution-volman.js";
-import { isEmaExitEnabled, getEmaExitPeriod } from "./smc-config-env.js";
+import { isEmaExitEnabled, getEmaExitPeriod } from "./volman-config-env.js";
 import { calculateLatestEma } from "./position-ema-exit.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 
@@ -103,8 +103,6 @@ export async function processPosition(position: Awaited<ReturnType<typeof loadOp
       lastDecisionConfidence: position.lastDecisionConfidence,
       lastDecisionComment: position.lastDecisionComment,
       tradeStage: patch?.tradeStage ?? position.tradeStage,
-      tp1ClosedPercent: patch?.tp1ClosedPercent ?? position.tp1ClosedPercent,
-      trailingStopLoss: patch?.trailingStopLoss ?? position.trailingStopLoss,
     },
     decision,
   );

@@ -1,5 +1,9 @@
 import { describe, test, expect, vi } from "vitest";
-import { sendAllAnalysesVolman, buildPositionClosedMessage } from "../../src/shared/telegram-volman.js";
+import {
+  sendAllAnalysesVolman,
+  buildPositionClosedMessage,
+  buildPositionDecisionMessage,
+} from "../../src/shared/telegram-volman.js";
 import type {
   AnalysisResult,
   TradeSetup,
@@ -28,7 +32,7 @@ const minimalSetup: TradeSetup = {
   entry: "1.1000",
   stopLoss: "1.0950",
   takeProfit1: "1.1100",
-  takeProfit2: "1.1200",
+  takeProfit2: null,
   riskReward: "1:2",
   summary: "Test summary",
 };
@@ -45,7 +49,7 @@ describe("sendAllAnalysesVolman", () => {
       ...minimalSetup,
       chartContext: {
         candles: [],
-        ema20: [],
+        ma21: [],
         triggerIndex: 10,
         sliceStartIndex: 0,
         geometry: {
@@ -132,10 +136,15 @@ describe("sendAllAnalysesVolman", () => {
     expect(setupMessage).toContain("EURUSD");
     expect(setupMessage).toContain("LONG");
     expect(setupMessage).toContain("RB");
+    expect(setupMessage).toContain(
+      "Range Break — vùng phạm vi (EMA21 phẳng), nén chặt sát biên rồi phá vỡ",
+    );
     expect(setupMessage).toContain("1.1000");
     expect(setupMessage).toContain("1.0950");
     expect(setupMessage).toContain("1.1100");
-    expect(setupMessage).toContain("1.1200");
+    expect(setupMessage).toContain("TP        : 1.1100 (2R)");
+    expect(setupMessage).not.toContain("TP1");
+    expect(setupMessage).not.toContain("TP2");
     expect(setupMessage).toContain("1:2");
     expect(setupMessage).toContain("Reason A");
     expect(setupMessage).toContain("Reason B");
@@ -186,7 +195,7 @@ describe("sendAllAnalysesVolman", () => {
       ...minimalSetup,
       chartContext: {
         candles: [],
-        ema20: [],
+        ma21: [],
         triggerIndex: 10,
         sliceStartIndex: 0,
         geometry: {
@@ -223,7 +232,7 @@ describe("sendAllAnalysesVolman", () => {
       pair: "GBPUSD",
       chartContext: {
         candles: [],
-        ema20: [],
+        ma21: [],
         triggerIndex: 10,
         sliceStartIndex: 0,
       },
@@ -262,7 +271,7 @@ describe("buildPositionClosedMessage", () => {
     };
 
     const snapshot = {
-      closeReason: "take_profit_2",
+      closeReason: "take_profit",
       realizedExitPrice: "1.1200",
       realizedRiskRewardRatio: 2,
       outcome: "win" as const,
@@ -274,7 +283,7 @@ describe("buildPositionClosedMessage", () => {
     expect(message).toContain("EUR/USD LONG");
     expect(message).toContain("📋 Breakout");
     expect(message).toContain("🟢 *THẮNG* — 2R");
-    expect(message).toContain("Lý do: Chạm TP2");
+    expect(message).toContain("Lý do: Chạm Take Profit");
     expect(message).toContain("Entry: 1.1000 → Exit: 1.1200");
     expect(message).toContain("Đã mở: 2026-07-01T12:00:00.000Z");
   });
@@ -385,5 +394,33 @@ describe("buildPositionClosedMessage", () => {
       "Lý do: Đóng khẩn cấp do lỗi thực thi trên sàn (fail-safe)",
     );
     expect(message).not.toContain("Đóng thủ công (tín hiệu đảo chiều)");
+  });
+});
+
+describe("buildPositionDecisionMessage", () => {
+  test("renders one TP line and omits the legacy TP2 display", () => {
+    const message = buildPositionDecisionMessage(
+      {
+        id: 6,
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "Range Break",
+        entry: "1.1000",
+        stopLoss: "1.0950",
+        takeProfit1: "1.1100",
+        takeProfit2: null,
+        reasons: ["EMA21 đang đi ngang, phù hợp bối cảnh Range"],
+      },
+      {
+        decision: "HOLD",
+        confidence: 85,
+        comment: "Tiếp tục giữ theo kế hoạch.",
+        managementAction: "NONE",
+      },
+    );
+
+    expect(message).toContain("TP: 1.1100");
+    expect(message).not.toContain("TP1:");
+    expect(message).not.toContain("TP2:");
   });
 });

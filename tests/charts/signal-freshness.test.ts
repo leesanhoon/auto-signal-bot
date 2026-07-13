@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { TradeSetup } from "../../src/charts/chart-types-smc.js";
+import type { TradeSetup } from "../../src/charts/chart-types-volman.js";
 import { applySignalFreshnessGuard } from "../../src/charts/signal-freshness.js";
 import * as ohlcProvider from "../../src/charts/ohlc-provider.js";
 
@@ -10,7 +10,7 @@ const mockFetchLastPrice = vi.mocked(ohlcProvider.fetchLastPrice);
 const mockSetupLong: TradeSetup = {
   pair: "OANDA:EURUSD",
   direction: "LONG",
-  setup: "SMC",
+  setup: "RB",
   reasons: ["reason1"],
   risks: ["risk1"],
   confidence: 75,
@@ -25,7 +25,7 @@ const mockSetupLong: TradeSetup = {
 const mockSetupShort: TradeSetup = {
   pair: "OANDA:EURUSD",
   direction: "SHORT",
-  setup: "SMC",
+  setup: "RB",
   reasons: ["reason1"],
   risks: ["risk1"],
   confidence: 75,
@@ -204,7 +204,7 @@ describe("applySignalFreshnessGuard", () => {
 
     expect(result.pair).toBe("OANDA:EURUSD");
     expect(result.direction).toBe("LONG");
-    expect(result.setup).toBe("SMC");
+    expect(result.setup).toBe("RB");
     expect(result.confidence).toBe(75);
     expect(result.entry).toBe("1.1000");
   });
@@ -216,7 +216,7 @@ describe("applySignalFreshnessGuard", () => {
 
     expect(result.pair).toBe("OANDA:EURUSD");
     expect(result.direction).toBe("LONG");
-    expect(result.setup).toBe("SMC");
+    expect(result.setup).toBe("RB");
     expect(result.confidence).toBe(75);
     expect(result.entry).toBe("1.1000");
     expect(result.noSetupReason).toBeDefined();

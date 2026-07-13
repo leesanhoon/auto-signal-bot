@@ -224,10 +224,9 @@ function printReport(
       }
     }
     if (exitMode === "trailing") {
-      console.log(`\n🔁 EXIT BREAKDOWN (trailing SL: TP1->BE, TP2->TP1)`);
-      console.log(`   stop (SL goc, chua cham TP1): ${outcomeCounts.stop ?? 0}`);
-      console.log(`   trail_be (cham TP1, dong hoa von): ${outcomeCounts.trail_be ?? 0}`);
-      console.log(`   trail_tp1 (cham TP2, dong tai TP1): ${outcomeCounts.trail_tp1 ?? 0}`);
+      console.log(`\n🔁 EXIT BREAKDOWN (trailing SL: TP->BE)`);
+      console.log(`   stop (SL goc, chua cham TP): ${outcomeCounts.stop ?? 0}`);
+      console.log(`   trail_be (cham TP, dong hoa von): ${outcomeCounts.trail_be ?? 0}`);
     } else {
       console.log(`\n🔁 EXIT BREAKDOWN (swing trail sau TP1)`);
       console.log(`   stop (SL goc, chua cham TP1): ${outcomeCounts.stop ?? 0}`);

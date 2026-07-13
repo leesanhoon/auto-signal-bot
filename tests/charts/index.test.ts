@@ -32,7 +32,6 @@ const mocks = vi.hoisted(() => ({
   savePendingOrder: vi.fn(),
   validateTradeSetupForOpen: vi.fn(),
   analyzeAllChartsDeterministic: vi.fn(),
-  analyzeAllChartsSmc: vi.fn(),
   openBinanceFuturesPosition: vi.fn(),
   pollPendingEntryOrders: vi.fn(),
   findOpenPositionIdByPair: vi.fn(),
@@ -129,10 +128,6 @@ vi.mock("../../src/charts/deterministic-pipeline.js", () => ({
   analyzeAllChartsDeterministic: mocks.analyzeAllChartsDeterministic,
 }));
 
-vi.mock("../../src/charts/smc/smc-pipeline.js", () => ({
-  analyzeAllChartsSmc: mocks.analyzeAllChartsSmc,
-}));
-
 vi.mock("../../src/charts/binance-execution-volman.js", () => ({
   openBinanceFuturesPosition: mocks.openBinanceFuturesPosition,
   pollPendingEntryOrders: mocks.pollPendingEntryOrders,
@@ -225,7 +220,6 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.loadOpenPairs.mockResolvedValue(new Set());
     mocks.captureAllCharts.mockResolvedValue([{ filepath: "/tmp/chart.png" }]);
     mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
-    mocks.analyzeAllChartsSmc.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
     mocks.pollPendingEntryOrders.mockResolvedValue(undefined);
     mocks.openBinanceFuturesPosition.mockResolvedValue(undefined);
@@ -520,7 +514,6 @@ describe("charts/index main() — H4 close guard", () => {
       "single",
       "H4",
     );
-    expect(mocks.analyzeAllChartsSmc).not.toHaveBeenCalled();
     expect(mocks.analyzeAllChartsDeterministic).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(
       MOCK_RESULT,

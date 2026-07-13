@@ -19,7 +19,7 @@ describe("setup-sb-runner: boundary guard", () => {
   beforeEach(() => {
     detectSbMock.mockReset();
     ctx = {
-      ema20: Array(10).fill(100),
+      ma21: Array(10).fill(100),
       atr14: Array(10).fill(2),
       pair: "EUR/USD",
       timeframe: "H4",
@@ -40,8 +40,7 @@ describe("setup-sb-runner: boundary guard", () => {
       direction: "LONG",
       entry: 105,
       stopLoss: 100,
-      takeProfit1: 108,
-      takeProfit2: 110,
+      takeProfit: 110,
       confidence: 70,
       triggerIndex: 1,
       ruleTrace: ["FB trigger"],

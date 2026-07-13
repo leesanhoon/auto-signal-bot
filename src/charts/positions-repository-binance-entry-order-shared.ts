@@ -1,7 +1,7 @@
 import { getDb } from "../shared/db.js";
 
-// Factory shared bởi positions-repository-smc.ts và positions-repository-volman.ts —
-// logic pending-entry-order tracking giống hệt nhau giữa 2 hệ, chỉ khác tên bảng.
+// Factory shared cho cac repository entry-order —
+// logic pending-entry-order tracking giống hệt nhau, chỉ khác tên bảng.
 
 export type BinanceEntryOrderDetails = {
   binanceSymbol: string;
@@ -21,12 +21,9 @@ export type PendingEntryOrderPosition = {
   direction: "LONG" | "SHORT";
   stopLoss: string;
   takeProfit1: string;
-  takeProfit2: string | null;
   binanceQuantity: number;
   binanceLeverage: number;
-  partialClosePercent: number | null;
-  // Chi co gia tri thuc su khi table nay co cot primary_timeframe (hien chi
-  // open_positions_volman co, open_positions_smc KHONG co) — xem includeTimeframe.
+  // Chi co gia tri thuc su khi table nay co cot primary_timeframe — xem includeTimeframe.
   primaryTimeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
 };
 
@@ -67,13 +64,12 @@ export function createUpdateBinanceEntryOrderStatus(table: string) {
   };
 }
 
-// includeTimeframe: chi truyen true cho table co cot primary_timeframe that
-// (hien chi open_positions_volman — open_positions_smc KHONG co cot nay, select
-// them se loi "column does not exist").
+// includeTimeframe: chi truyen true cho table co cot primary_timeframe that;
+// neu khong co cot nay, select them se loi "column does not exist".
 export function createGetPendingEntryOrderPositions(table: string, includeTimeframe = false) {
   return async function getPendingEntryOrderPositions(): Promise<PendingEntryOrderPosition[]> {
     const baseColumns =
-      "id, pair, binance_symbol, binance_entry_order_id, binance_entry_order_type, binance_entry_order_placed_at, direction, stop_loss, take_profit_1, take_profit_2, binance_quantity, binance_leverage, tp1_close_percent";
+      "id, pair, binance_symbol, binance_entry_order_id, binance_entry_order_type, binance_entry_order_placed_at, direction, stop_loss, take_profit_1, binance_quantity, binance_leverage";
     const { data, error } = await (getDb().from(table) as any)
       .select(includeTimeframe ? `${baseColumns}, primary_timeframe` : baseColumns)
       .eq("status", "open")
@@ -93,10 +89,8 @@ export function createGetPendingEntryOrderPositions(table: string, includeTimefr
         direction: "LONG" | "SHORT";
         stop_loss: string;
         take_profit_1: string;
-        take_profit_2: string | null;
         binance_quantity: number;
         binance_leverage: number | null;
-        tp1_close_percent: number | null;
         primary_timeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
       }>
     ).map((row) => ({
@@ -109,10 +103,8 @@ export function createGetPendingEntryOrderPositions(table: string, includeTimefr
       direction: row.direction,
       stopLoss: row.stop_loss,
       takeProfit1: row.take_profit_1,
-      takeProfit2: row.take_profit_2,
       binanceQuantity: row.binance_quantity,
       binanceLeverage: row.binance_leverage ?? 1,
-      partialClosePercent: row.tp1_close_percent,
       ...(includeTimeframe ? { primaryTimeframe: row.primary_timeframe ?? null } : {}),
     }));
   };

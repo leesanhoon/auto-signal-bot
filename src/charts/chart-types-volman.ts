@@ -14,7 +14,7 @@ export type {
 
 export type ChartContext = {
   candles: Candle[];       // slice gần triggerIndex, KHÔNG phải toàn bộ 200 nến
-  ema20: (number | null)[]; // slice cùng độ dài, cùng offset với candles ở trên
+  ma21: (number | null)[]; // slice cùng độ dài, cùng offset với candles ở trên
   triggerIndex: number;     // index của triggerIndex GỐC (trong mảng đầy đủ) — renderer cần biết offset
   sliceStartIndex: number;  // index gốc của candles[0] trong mảy đầy đủ (để map lại geometry.boxes[].startIndex/endIndex)
   geometry?: SetupChartGeometry;
@@ -32,7 +32,7 @@ export type TradeSetup = {
   entry: string;
   stopLoss: string;
   takeProfit1: string;
-  takeProfit2: string;
+  takeProfit2: string | null;
   riskReward: string;
   summary: string;
   orderType?: ChartOrderType;

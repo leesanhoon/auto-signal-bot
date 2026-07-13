@@ -1,12 +1,13 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
-import { detectCompression } from "../indicators.js";
-import { baseConfidence, computeBodyRatio, applyStandardConfidenceAdjustments } from "./shared.js";
+import { detectCompression, classifyCompressionTightness } from "../indicators.js";
+import { baseConfidence, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
+import { COMPRESSION_PARAMS } from "./compression-params.js";
 
 /**
  * RB — Range Break
  * Sideways market (no clear trend needed). Compression with larger range,
- * ≥6 candles, EMA20 transitioning from FLAT to sloping in breakout direction.
+ * ≥6 candles, EMA21 transitioning from FLAT to sloping in breakout direction.
  */
 export function detectRb(
   candles: Candle[],
@@ -18,18 +19,17 @@ export function detectRb(
 
   if (index < 1) return null;
 
-  const ema = ctx.ema20[index];
+  const ema = ctx.ma21[index];
   const atr = ctx.atr14[index];
   if (ema === null || atr === null || atr === 0) return null;
 
-  // Detect compression with larger window (6-10) and larger kBlock
+  // Detect compression with larger window using centralized params
   // RB uses a range that is wider than a BB block
-  const windowSizes = [10, 8, 6];
-  const kBlockRb = 2.0; // Larger threshold for range vs block
+  const { windows: windowSizes, kBlock: kBlockRb } = COMPRESSION_PARAMS.RB;
   let range: ReturnType<typeof detectCompression> = null;
 
   for (const w of windowSizes) {
-    range = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, kBlockRb);
+    range = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, w, kBlockRb);
     if (range !== null) {
       trace.push(`Range detected w=${w}, range=${range.range.toFixed(5)}, distanceToEma=${range.distanceToEma.toFixed(2)}`);
       break;
@@ -48,12 +48,16 @@ export function detectRb(
     return null;
   }
 
-  // Check EMA20 transitioning from FLAT to sloping in breakout direction
+  // Classify compression tightness
+  const tightness = classifyCompressionTightness(range, kBlockRb, atr);
+  trace.push(`Nen ${tightness} (range=${range.range.toFixed(5)}, max=${(kBlockRb * atr).toFixed(5)})`)
+
+  // Check EMA21 transitioning from FLAT to sloping in breakout direction
   // Look at slope progression: 5 candles ago was near FLAT, now sloping
   if (index >= 10) {
-    const emaNow = ctx.ema20[index];
-    const ema5 = ctx.ema20[index - 5];
-    const ema10 = ctx.ema20[Math.max(0, index - 10)];
+    const emaNow = ctx.ma21[index];
+    const ema5 = ctx.ma21[index - 5];
+    const ema10 = ctx.ma21[Math.max(0, index - 10)];
     const atrNow = ctx.atr14[index];
     const atr5 = ctx.atr14[index - 5];
 
@@ -77,32 +81,45 @@ export function detectRb(
       const slopeAligned = direction === "LONG" ? slopeNow > 0 : slopeNow < 0;
 
       if (!slopeAligned) {
-        trace.push(`EMA20 slope=${slopeNow.toFixed(2)} khong cung huong breakout ${direction}`);
+        trace.push(`EMA21 slope=${slopeNow.toFixed(2)} khong cung huong breakout ${direction}`);
         return null;
       }
 
-      if (absSlopeBefore > 0.15 && absSlopeNow > 0.15) {
-        trace.push(`EMA20 da doc tu truoc (slopeBefore=${slopeBefore.toFixed(2)}), khong phai FLAT->doc`);
-        // Still allow but note it
-      } else if (absSlopeBefore <= 0.15 && absSlopeNow > 0.15) {
-        trace.push(`EMA20 chuyen tu FLAT (slopeBefore=${slopeBefore.toFixed(2)}) sang doc (slopeNow=${slopeNow.toFixed(2)})`);
-      } else {
-        trace.push(`EMA20 slope chua du manh: before=${slopeBefore.toFixed(2)}, now=${slopeNow.toFixed(2)}`);
-        // Still proceed but mark it
+      // Bối cảnh Range theo tài liệu Bob Volman BẮT BUỘC "MA21 nằm phẳng" trước khi
+      // phá vỡ — đây là điều kiện định nghĩa, không phải gợi ý phụ. Nếu EMA21 đã dốc
+      // sẵn TRƯỚC breakout thì đây không phải bối cảnh Range thật, phải loại.
+      if (absSlopeBefore > 0.15) {
+        trace.push(`EMA21 da doc tu truoc (slopeBefore=${slopeBefore.toFixed(2)}) -> khong phai boi canh Range (MA phang)`);
+        return null;
       }
+      trace.push(`EMA21 phang truoc breakout (slopeBefore=${slopeBefore.toFixed(2)}), chuyen sang doc (slopeNow=${slopeNow.toFixed(2)})`);
+
+      // Tài liệu yêu cầu hộp Range phải có "ít nhất 2 lần chạm bật" ở đường biên quan
+      // trọng (biên bị phá vỡ) trước khi được coi là Range hợp lệ — nến chỉ chạm gần
+      // biên rồi đóng cửa lại bên trong hộp (không phải nến phá vỡ thật).
+      const touchTolerance = 0.15 * atr;
+      const boundaryLevel = direction === "LONG" ? range.high : range.low;
+      let touchCount = 0;
+      for (let i = range.startIndex; i <= range.endIndex; i++) {
+        const c = candles[i];
+        if (direction === "LONG") {
+          if (c.high >= boundaryLevel - touchTolerance && c.close <= boundaryLevel) touchCount++;
+        } else {
+          if (c.low <= boundaryLevel + touchTolerance && c.close >= boundaryLevel) touchCount++;
+        }
+      }
+      if (touchCount < 2) {
+        trace.push(`Chi ${touchCount} lan cham bat bien ${direction === "LONG" ? "tren" : "duoi"} (can >=2) -> chua du xac nhan Range`);
+        return null;
+      }
+      trace.push(`${touchCount} lan cham bat bien ${direction === "LONG" ? "tren" : "duoi"} (>=2, dat)`);
 
       // Entry/Stop/Target
       const entry = direction === "LONG" ? range.high : range.low;
       const stopLoss = direction === "LONG" ? range.low : range.high;
 
-      // TP based on range height (Volman standard)
       const rangeHeight = range.high - range.low;
-      const takeProfit1 = direction === "LONG"
-        ? entry + rangeHeight
-        : entry - rangeHeight;
-      const takeProfit2 = direction === "LONG"
-        ? entry + 1.5 * rangeHeight
-        : entry - 1.5 * rangeHeight;
+      const takeProfit = computeTakeProfit(direction, entry, stopLoss);
 
       trace.push(`Entry ${direction} tai ${entry.toFixed(5)}, rangeHeight=${rangeHeight.toFixed(5)}`);
 
@@ -118,6 +135,7 @@ export function detectRb(
       const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
       // Reuse slopeNow (already calculated above) instead of recalculating
       confidence = applyStandardConfidenceAdjustments(confidence, slopeNow, bodyRatio, trace);
+      confidence = applyCompressionTightnessBonus(confidence, tightness, trace);
 
       return {
         setup: kind,
@@ -126,8 +144,7 @@ export function detectRb(
         direction,
         entry,
         stopLoss,
-        takeProfit1,
-        takeProfit2,
+        takeProfit,
         confidence,
         triggerIndex: index,
         ruleTrace: trace,
@@ -136,6 +153,6 @@ export function detectRb(
     }
   }
 
-  trace.push(`Khong du du lieu de kiem tra EMA20 transition (index<10)`);
+  trace.push(`Khong du du lieu de kiem tra EMA21 transition (index<10)`);
   return null;
 }

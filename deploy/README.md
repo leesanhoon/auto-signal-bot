@@ -1,4 +1,4 @@
-# Deploy trên Mini PC (Windows Server 2019) bằng Docker
+﻿# Deploy trên Mini PC (Windows Server 2019) bằng Docker
 
 Thay thế toàn bộ lịch chạy của GitHub Actions bằng Docker + [Ofelia](https://github.com/mcuadros/ofelia) chạy trên mini PC.
 
@@ -63,7 +63,7 @@ docker compose logs -f scheduler     # Ofelia in ra danh sách job đã đăng k
 Chạy thử một job ngay lập tức (không chờ lịch):
 
 ```bash
-docker compose exec bot npm run analyze:smc
+docker compose exec bot npm run analyze
 ```
 
 ## Bước 4 — Cập nhật code
@@ -83,7 +83,6 @@ Toàn bộ lịch định nghĩa trong labels của service `bot` trong [docker-
 | Job | Lịch (UTC) | Giờ VN |
 |---|---|---|
 | analyze (Volman) | 00:05, 04:05 … 20:05 T2–T6 | 07:05, 11:05 … |
-| analyze:smc | mỗi 15 phút T2–T6 | — |
 | fetch-matches-list | 00:00 hằng ngày | 07:00 |
 | match-odds | 05:00 hằng ngày | 12:00 |
 | performance-report | T2 01:15 (weekly), ngày 1 01:20 (monthly) | 08:15 / 08:20 |

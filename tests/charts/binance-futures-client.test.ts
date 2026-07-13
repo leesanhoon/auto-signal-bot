@@ -46,7 +46,7 @@ describe("charts/binance-futures-client", () => {
     // Regression test cho bug phat hien qua testnet 2026-07-11: mot algo order
     // (SL/TP) da khop that tren Binance tra ve algoStatus "FINISHED", KHONG PHAI
     // "TRIGGERED" — ban goc chi map "TRIGGERED" -> "FILLED" nen reconcileBinancePosition
-    // (ca Volman lan SMC) khong bao gio phat hien duoc fill that, position treo o HOLD
+    // Cac pipeline lien quan khong bao gio phat hien duoc fill that, position treo o HOLD
     // vinh vien du da khop that tren san.
     beforeEach(() => {
       process.env.BINANCE_API_KEY = "test_key";
@@ -452,7 +452,6 @@ describe("charts/binance-futures-client", () => {
         "BTCUSDT",
         "SELL",
         52000,
-        0.01,
         { workingType: "CONTRACT_PRICE" },
       );
       expect(result).not.toBeInstanceOf(Error);
@@ -474,7 +473,7 @@ describe("charts/binance-futures-client", () => {
         }),
       );
 
-      const result = await placeTakeProfitMarketOrder("BTCUSDT", "SELL", 52000, 0.01);
+      const result = await placeTakeProfitMarketOrder("BTCUSDT", "SELL", 52000);
       expect(result).not.toBeInstanceOf(Error);
       expect(capturedUrl).not.toContain("workingType");
     });

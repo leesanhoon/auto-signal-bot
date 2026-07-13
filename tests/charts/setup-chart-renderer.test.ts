@@ -24,8 +24,8 @@ describe("Chart renderer", () => {
       // 25 candles so calculateEma(candles, 20) actually produces non-null values
       // (period 20 needs >=20 candles) — otherwise the EMA draw branch never runs.
       const candles = buildTrendingCandles(25);
-      const ema20 = calculateEma(candles, 20);
-      expect(ema20.some((v) => v !== null)).toBe(true);
+      const ma21 = calculateEma(candles, 21);
+      expect(ma21.some((v) => v !== null)).toBe(true);
 
       const svg = buildSetupChartSvg({
         pair: "BTC/USDT",
@@ -33,11 +33,10 @@ describe("Chart renderer", () => {
         direction: "LONG",
         entry: 100.5,
         stopLoss: 99.5,
-        takeProfit1: 101.5,
-        takeProfit2: 102.5,
+        takeProfit: 102.5,
         chartContext: {
           candles,
-          ema20,
+          ma21,
           triggerIndex: 24,
           sliceStartIndex: 0,
           geometry: {
@@ -63,8 +62,9 @@ describe("Chart renderer", () => {
       expect(svg).toContain("BTC/USDT LONG — ARB");
       expect(svg).toContain("Entry");
       expect(svg).toContain("SL");
-      expect(svg).toContain("TP1");
-      expect(svg).toContain("TP2");
+      expect(svg).toContain("TP 102.50000");
+      expect(svg).not.toContain("TP1");
+      expect(svg).not.toContain("TP2");
       expect(svg).toMatch(/<rect/g);
       expect(svg).toContain("Edge test #1");
 
@@ -82,18 +82,17 @@ describe("Chart renderer", () => {
 
     test("builds SVG without geometry (backward compat)", () => {
       const candles = buildTrendingCandles(10);
-      const ema20 = calculateEma(candles, 20);
+      const ma21 = calculateEma(candles, 21);
       const svg = buildSetupChartSvg({
         pair: "ETH/USDT",
         setup: "BB",
         direction: "SHORT",
         entry: 100.0,
         stopLoss: 101.0,
-        takeProfit1: 99.0,
-        takeProfit2: 98.0,
+        takeProfit: 98.0,
         chartContext: {
           candles,
-          ema20,
+          ma21,
           triggerIndex: 9,
           sliceStartIndex: 0,
         },
@@ -108,18 +107,17 @@ describe("Chart renderer", () => {
   describe("renderSetupChartPng", () => {
     test("renders SVG to PNG buffer with valid PNG signature", async () => {
       const candles = buildTrendingCandles(10);
-      const ema20 = calculateEma(candles, 20);
+      const ma21 = calculateEma(candles, 21);
       const svg = buildSetupChartSvg({
         pair: "BTC/USDT",
         setup: "ARB",
         direction: "LONG",
         entry: 100.5,
         stopLoss: 99.5,
-        takeProfit1: 101.5,
-        takeProfit2: 102.5,
+        takeProfit: 102.5,
         chartContext: {
           candles,
-          ema20,
+          ma21,
           triggerIndex: 9,
           sliceStartIndex: 0,
         },
@@ -139,7 +137,7 @@ describe("Chart renderer", () => {
   describe("renderSetupChartsBatch", () => {
     test("renders batch of charts, returns nulls for failed items", async () => {
       const candles = buildTrendingCandles(10);
-      const ema20 = calculateEma(candles, 20);
+      const ma21 = calculateEma(candles, 21);
 
       const inputs = [
         {
@@ -148,11 +146,10 @@ describe("Chart renderer", () => {
           direction: "LONG" as const,
           entry: 100.5,
           stopLoss: 99.5,
-          takeProfit1: 101.5,
-          takeProfit2: 102.5,
+          takeProfit: 102.5,
           chartContext: {
             candles,
-            ema20,
+            ma21,
             triggerIndex: 9,
             sliceStartIndex: 0,
           },
@@ -163,11 +160,10 @@ describe("Chart renderer", () => {
           direction: "SHORT" as const,
           entry: 100.0,
           stopLoss: 101.0,
-          takeProfit1: 99.0,
-          takeProfit2: 98.0,
+          takeProfit: 98.0,
           chartContext: {
             candles,
-            ema20,
+            ma21,
             triggerIndex: 9,
             sliceStartIndex: 0,
           },

@@ -45,7 +45,7 @@ export const SETUP_FIELD_CHECKS: Array<{
   { field: "entry", check: (v) => typeof v === "string" },
   { field: "stopLoss", check: (v) => typeof v === "string" },
   { field: "takeProfit1", check: (v) => typeof v === "string" },
-  { field: "takeProfit2", check: (v) => typeof v === "string" },
+  { field: "takeProfit2", check: (v) => v === null || typeof v === "string" },
   { field: "confidence", check: (v) => typeof v === "number" },
   { field: "reasons", check: (v) => Array.isArray(v) },
   { field: "risks", check: (v) => Array.isArray(v) },

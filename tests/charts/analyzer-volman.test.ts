@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { TradeSetup } from "../../src/charts/chart-types-volman.js";
 import {
   applyPriceSanityChecks,
+  buildPendingOrderCheckPrompt,
   formatPrice,
   parseAnalysisResponse,
 } from "../../src/charts/analyzer-volman.js";
@@ -106,7 +107,7 @@ describe("charts/analyzer-volman utilities", () => {
     expect(checked.note).toContain("stop loss");
   });
 
-  test("applyPriceSanityChecks detects TP2 breach for LONG", () => {
+  test("applyPriceSanityChecks detects TP breach for LONG", () => {
     const setup: TradeSetup = {
       pair: "EUR/USD",
       direction: "LONG",
@@ -123,7 +124,39 @@ describe("charts/analyzer-volman utilities", () => {
     };
 
     const checked = applyPriceSanityChecks(setup, 1.135);
-    expect(checked.setup?.currentPriceContext).toContain("TP2");
+    expect(checked.setup?.currentPriceContext).toContain("Giá đã chạm/vượt TP 1.12000");
+    expect(checked.setup?.currentPriceContext).not.toContain("TP1");
+    expect(checked.setup?.currentPriceContext).not.toContain("TP2");
+  });
+
+  test("buildPendingOrderCheckPrompt includes one take-profit target", () => {
+    const prompt = buildPendingOrderCheckPrompt({
+      id: 1,
+      pair: "EUR/USD",
+      direction: "LONG",
+      setup: "RB",
+      orderType: "BUY_STOP",
+      entry: "1.1000",
+      stopLoss: "1.0900",
+      takeProfit1: "1.1200",
+      takeProfit2: null,
+      confidence: 80,
+      reasons: [],
+      risks: [],
+      primaryTimeframe: "H4",
+      sourceChartFilepath: null,
+      status: "PENDING",
+      runCount: 0,
+      expiryRuns: 3,
+      createdAt: "2026-07-14T00:00:00.000Z",
+      resolvedAt: null,
+      resolvedReason: null,
+      triggeredPositionId: null,
+    });
+
+    expect(prompt).toContain("- Take profit: 1.1200");
+    expect(prompt).not.toContain("Take profit 1");
+    expect(prompt).not.toContain("Take profit 2");
   });
 
   test("parseAnalysisResponse normalizes setup shape and applies price checks", () => {

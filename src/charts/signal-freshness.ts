@@ -1,4 +1,4 @@
-import type { TradeSetup } from "./chart-types-smc.js";
+import type { TradeSetup } from "./chart-types-volman.js";
 import { fetchLastPrice } from "./ohlc-provider.js";
 import { createLogger } from "../shared/logger.js";
 

@@ -1,4 +1,4 @@
-# Deploy trên Mini PC Windows Server 2019 — KHÔNG cần Docker
+﻿# Deploy trên Mini PC Windows Server 2019 — KHÔNG cần Docker
 
 Chạy bot trực tiếp bằng Node.js trên Windows, lập lịch bằng **Task Scheduler** có sẵn của Windows. Không cần Hyper-V, không cần Docker.
 
@@ -41,17 +41,17 @@ notepad .env   # điền giá trị thật (chép từ GitHub -> Settings -> Sec
 Get-ScheduledTask -TaskPath "\AutoSignalBot\"
 
 # Chạy thử ngay một job, không chờ lịch
-Start-ScheduledTask -TaskPath "\AutoSignalBot\" -TaskName "analyze-smc"
+Start-ScheduledTask -TaskPath "\AutoSignalBot\" -TaskName "analyze"
 
 # Xem log (mỗi job 1 file theo ngày, tự xoá sau 30 ngày)
-Get-Content .\logs\analyze-smc-*.log -Tail 50
+Get-Content .\logs\analyze-*.log -Tail 50
 
 # Xem lần chạy gần nhất + kết quả (0 = thành công)
 Get-ScheduledTask -TaskPath "\AutoSignalBot\" | Get-ScheduledTaskInfo |
     Select-Object TaskName, LastRunTime, LastTaskResult, NextRunTime
 ```
 
-Hoặc chạy tay không qua Task Scheduler: `.\deploy\windows\run-job.ps1 -Job analyze-smc`
+Hoặc chạy tay không qua Task Scheduler: `.\deploy\windows\run-job.ps1 -Job analyze`
 
 ## Cập nhật code — tự động
 
@@ -63,7 +63,7 @@ Hoặc chạy tay không qua Task Scheduler: `.\deploy\windows\run-job.ps1 -Job 
 
 Nghĩa là: push code lên `main` xong, chậm nhất 02:00 đêm đó mini PC tự cập nhật, không cần bạn làm gì. Log ghi vào `logs\auto-update-YYYY-MM-DD.log`.
 
-Lưu ý: 02:00 rơi vào khung `analyze-smc` đang chạy lặp mỗi 15 phút (T2–T6), nên về lý thuyết có xác suất rất nhỏ `git pull` trùng đúng lúc một job khác đang đọc file nguồn. Rủi ro thấp và tự phục hồi (job kế tiếp 15 phút sau chạy bình thường với code mới), nhưng nếu bạn cần chắc chắn 100% không chồng lấn, đổi giờ trigger `auto-update` sang cuối tuần (T7/CN, ngoài khung `analyze-smc`) trong `register-tasks.ps1`.
+Lưu ý: 02:00 rơi vào khung các job `analyze-volman-*` đang chạy lặp (M15 mỗi 15 phút), nên về lý thuyết có xác suất rất nhỏ `git pull` trùng đúng lúc một job khác đang đọc file nguồn. Rủi ro thấp và tự phục hồi (job kế tiếp chạy bình thường với code mới); nếu cần chắc chắn 100% không chồng lấn, đổi giờ trigger `auto-update` trong `register-tasks.ps1`.
 
 ## Cập nhật code — chạy tay (bắt buộc npm ci)
 
@@ -81,7 +81,6 @@ cd C:\bots\auto-signal-bot
 | Task | Lịch (giờ VN) | Gốc UTC |
 |---|---|---|
 | analyze | 07:05, 11:05, 15:05, 19:05, 23:05 (T2–T6) + 03:05 (T3–T7) | 00:05,04:05…20:05 T2–T6 |
-| analyze-smc | mỗi 15 phút, từ T2 07:00 đến T7 06:45 | */15 T2–T6 |
 | **analyze-volman-m15** | **mỗi 15 phút, suốt ngày** | ***/15** |
 | **analyze-volman-h1** | **mỗi 60 phút (1 giờ), suốt ngày** | ***/60** |
 | **analyze-volman-h4** | **mỗi 240 phút (4 giờ), suốt ngày** | ***/240** |

@@ -1,7 +1,8 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
-import { detectCompression } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, applyStandardConfidenceAdjustments } from "./shared.js";
+import { detectCompression, classifyCompressionTightness } from "../indicators.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
+import { COMPRESSION_PARAMS } from "./compression-params.js";
 
 function checkShiftedFallback(
   candles: Candle[],
@@ -18,7 +19,7 @@ function checkShiftedFallback(
   // the breakout candle at `index - 1` and only inspects data that was actually closed.
   const fallbackInner = detectCompression(
     candles,
-    ctx.ema20,
+    ctx.ma21,
     ctx.atr14,
     index - 2,
     matchedInnerWindow,
@@ -32,7 +33,7 @@ function checkShiftedFallback(
     : prevCandle.low < fallbackInner.low && candles[index].low < rangeOuter.low;
 }
 
-function resolveIrbBreakout(
+function breaksInDirection(
   candles: Candle[],
   ctx: DetectionContext,
   index: number,
@@ -46,37 +47,33 @@ function resolveIrbBreakout(
   const breaksInner = direction === "LONG"
     ? candles[index].close > rangeInner.high
     : candles[index].close < rangeInner.low;
-  if (!breaksInner) {
-    trace.push(
-      direction === "LONG"
-        ? `Chua pha RangeInner high (close=${candles[index].close.toFixed(5)} <= innerHigh=${rangeInner.high.toFixed(5)})`
-        : `Chua pha RangeInner low (close=${candles[index].close.toFixed(5)} >= innerLow=${rangeInner.low.toFixed(5)})`,
-    );
-    return false;
-  }
+  if (!breaksInner) return false;
 
   const breaksOuter = direction === "LONG"
     ? candles[index].close > rangeOuter.high
     : candles[index].close < rangeOuter.low;
-  if (!breaksOuter) {
-    trace.push(
-      direction === "LONG"
-        ? `Pha RangeInner nhung chua pha RangeOuter high (close=${candles[index].close.toFixed(5)} <= outerHigh=${rangeOuter.high.toFixed(5)})`
-        : `Pha RangeInner nhung chua pha RangeOuter low`,
-    );
-    if (!checkShiftedFallback(candles, ctx, index, matchedInnerWindow, kBlockInner, direction, rangeOuter)) {
-      return false;
-    }
-    trace.push(`RangeInner pha index ${index - 1}, RangeOuter pha index ${index} -> chap nhan`);
+  if (breaksOuter) {
+    trace.push(`Breakout ${direction} pha ca RangeInner va RangeOuter`);
+    return true;
   }
 
-  return true;
+  if (checkShiftedFallback(candles, ctx, index, matchedInnerWindow, kBlockInner, direction, rangeOuter)) {
+    trace.push(`RangeInner pha index ${index - 1}, RangeOuter pha index ${index} -> chap nhan (${direction})`);
+    return true;
+  }
+
+  return false;
 }
 
 /**
  * IRB — Inside Range Break
- * RangeOuter (W=10-15) with RangeInner (W=4-6) near RangeOuter boundary.
- * RangeInner breakout simultaneously pushes through RangeOuter.
+ * RangeOuter (W=10-15) chứa RangeInner (W=4-6) nằm GẦN CHÍNH GIỮA RangeOuter (theo
+ * tài liệu Bob Volman: "đoạn nén tích lũy nằm chính giữa vùng phạm vi" — hộp nhỏ
+ * trong hộp lớn, không phải sát biên). Hướng breakout được xác định bằng chính hành
+ * vi giá (đóng cửa vượt cả RangeInner lẫn RangeOuter cùng phía), KHÔNG suy ra từ vị
+ * trí của RangeInner như bản cũ.
+ * Target = biên vùng phạm vi lớn (RangeOuter), đúng "Chốt lời kỳ vọng: Tiệm cận
+ * đường biên trên/dưới của vùng phạm vi lớn".
  */
 export function detectIrb(
   candles: Candle[],
@@ -88,17 +85,16 @@ export function detectIrb(
 
   if (index < 1) return null;
 
-  const ema = ctx.ema20[index];
+  const ema = ctx.ma21[index];
   const atr = ctx.atr14[index];
   if (ema === null || atr === null || atr === 0) return null;
 
-  // 1. Detect RangeOuter — larger window (10-15), kBlock wide enough for any range
-  const outerWindows = [10, 12, 15];
-  const kBlockOuter = 2.5;
+  // 1. Detect RangeOuter using centralized params
+  const { windows: outerWindows, kBlock: kBlockOuter } = COMPRESSION_PARAMS.IRB_OUTER;
   let rangeOuter: ReturnType<typeof detectCompression> = null;
 
   for (const w of outerWindows) {
-    rangeOuter = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, kBlockOuter);
+    rangeOuter = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, w, kBlockOuter);
     if (rangeOuter !== null) {
       trace.push(`RangeOuter detected w=${w}, range=${rangeOuter.range.toFixed(5)}, high=${rangeOuter.high.toFixed(5)}, low=${rangeOuter.low.toFixed(5)}`);
       break;
@@ -110,14 +106,13 @@ export function detectIrb(
     return null;
   }
 
-  // 2. Detect RangeInner — smaller window (4-6) contained within RangeOuter
-  const innerWindows = [4, 5, 6];
-  const kBlockInner = 1.5;
+  // 2. Detect RangeInner using centralized params
+  const { windows: innerWindows, kBlock: kBlockInner } = COMPRESSION_PARAMS.IRB_INNER;
   let rangeInner: ReturnType<typeof detectCompression> = null;
-  let matchedInnerWindow = innerWindows[0];
+  let matchedInnerWindow: number = innerWindows[0];
 
   for (const w of innerWindows) {
-    rangeInner = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, w, kBlockInner);
+    rangeInner = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, w, kBlockInner);
     if (rangeInner !== null) {
       // RangeInner must be inside RangeOuter
       if (rangeInner.high <= rangeOuter.high && rangeInner.low >= rangeOuter.low) {
@@ -134,55 +129,54 @@ export function detectIrb(
     return null;
   }
 
-  // 3. RangeInner must be near RangeOuter boundary (top for LONG, bottom for SHORT)
-  const innerToOuterTop = rangeOuter.high - rangeInner.high;
-  const innerToOuterBottom = rangeInner.low - rangeOuter.low;
-  const nearThreshold = 0.3 * atr;
+  // 3. RangeInner phải nằm GẦN CHÍNH GIỮA RangeOuter — không sát biên nào (đúng tài
+  // liệu: "hộp nhỏ trong hộp lớn", tách biệt với RB/BB vốn nén sát biên/EMA).
+  const outerHeight = rangeOuter.high - rangeOuter.low;
+  const outerCenter = (rangeOuter.high + rangeOuter.low) / 2;
+  const innerCenter = (rangeInner.high + rangeInner.low) / 2;
+  const centerOffset = Math.abs(innerCenter - outerCenter);
+  const maxCenterOffset = 0.25 * outerHeight;
 
-  // Determine which boundary RangeInner is near
-  const nearTop = innerToOuterTop <= nearThreshold;
-  const nearBottom = innerToOuterBottom <= nearThreshold;
-
-  if (!nearTop && !nearBottom) {
-    trace.push(`RangeInner khong sat bien RangeOuter (topGap=${innerToOuterTop.toFixed(5)}, bottomGap=${innerToOuterBottom.toFixed(5)})`);
+  if (centerOffset > maxCenterOffset) {
+    trace.push(`RangeInner khong nam giua RangeOuter (centerOffset=${centerOffset.toFixed(5)} > ${maxCenterOffset.toFixed(5)})`);
     return null;
   }
+  trace.push(`RangeInner nam giua RangeOuter (centerOffset=${centerOffset.toFixed(5)} <= ${maxCenterOffset.toFixed(5)})`);
 
-  const direction = nearTop ? "LONG" : "SHORT";
-  trace.push(`RangeInner sat bien ${direction === "LONG" ? "tren" : "duoi"} cua RangeOuter`);
-
-  // 4. Breakout: RangeInner boundary breaks AND simultaneously pushes through RangeOuter
-  if (!resolveIrbBreakout(candles, ctx, index, direction, rangeInner, rangeOuter, matchedInnerWindow, kBlockInner, trace)) {
-    return null;
+  // 4. Xác định hướng breakout từ hành vi giá thật (thử LONG truoc, roi SHORT) —
+  // khong suy dien tu vi tri RangeInner nhu ban cu.
+  let direction: "LONG" | "SHORT" | null = null;
+  if (breaksInDirection(candles, ctx, index, "LONG", rangeInner, rangeOuter, matchedInnerWindow, kBlockInner, trace)) {
+    direction = "LONG";
+  } else if (breaksInDirection(candles, ctx, index, "SHORT", rangeInner, rangeOuter, matchedInnerWindow, kBlockInner, trace)) {
+    direction = "SHORT";
   }
 
-  trace.push(`Breakout pha ca RangeInner va RangeOuter`);
+  if (direction === null) {
+    trace.push(`Gia chua pha dong thoi RangeInner va RangeOuter o huong nao (close=${candles[index].close.toFixed(5)})`);
+    return null;
+  }
 
   // Entry at RangeInner breakout
   const entry = direction === "LONG" ? rangeInner.high : rangeInner.low;
   const stopLoss = direction === "LONG" ? rangeInner.low : rangeInner.high;
-  const risk = Math.abs(entry - stopLoss);
 
-  // Target = RangeOuter height
-  const outerHeight = rangeOuter.high - rangeOuter.low;
-  const takeProfit1 = direction === "LONG"
-    ? entry + outerHeight
-    : entry - outerHeight;
-  const takeProfit2 = direction === "LONG"
-    ? entry + 1.5 * outerHeight
-    : entry - 1.5 * outerHeight;
+  const takeProfit = computeTakeProfit(direction, entry, stopLoss);
 
-  trace.push(`Entry ${direction} tai ${entry.toFixed(5)}, outerHeight=${outerHeight.toFixed(5)}`);
+  trace.push(`Entry ${direction} tai ${entry.toFixed(5)}, Stop=${stopLoss.toFixed(5)}`);
 
-  // Invalidation check: RangeInner breakout didn't push through RangeOuter in <=2 candles
-  // (This can only be checked retroactively with lookahead — we note it here)
-  trace.push(`Kiem tra: RangeInner breakout dong thoi pha RangeOuter trong 1-2 nen`);
+  // Classify compression tightness for both ranges
+  const tightnessInner = classifyCompressionTightness(rangeInner, kBlockInner, atr);
+  const tightnessOuter = classifyCompressionTightness(rangeOuter, kBlockOuter, atr);
+  trace.push(`RangeInner ${tightnessInner}, RangeOuter ${tightnessOuter}`);
 
   // Confidence
   let confidence = baseConfidence;
-  const slope = computeSlope(ctx.ema20, ctx.atr14, index);
+  const slope = computeSlope(ctx.ma21, ctx.atr14, index);
   const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
+  // Apply bonus for inner range tightness (inner is what breaks out, so it's more critical)
+  confidence = applyCompressionTightnessBonus(confidence, tightnessInner, trace);
 
   confidence = Math.max(0, Math.min(100, confidence));
 
@@ -193,8 +187,7 @@ export function detectIrb(
     direction,
     entry,
     stopLoss,
-    takeProfit1,
-    takeProfit2,
+    takeProfit,
     confidence,
     triggerIndex: index,
     ruleTrace: trace,

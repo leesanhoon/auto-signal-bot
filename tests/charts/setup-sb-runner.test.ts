@@ -9,7 +9,7 @@ describe("setup-sb-runner: runSbDetection", () => {
 
   beforeEach(() => {
     ctx = {
-      ema20: Array(100).fill(100),
+      ma21: Array(100).fill(100),
       atr14: Array(100).fill(2),
       pair: "EUR/USD",
       timeframe: "H4",
@@ -32,7 +32,7 @@ describe("setup-sb-runner: runSbDetection", () => {
   it("should keep signal that is not false-break", () => {
     const signal: DetectedSignal = {
       setup: "DD", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
-      entry: 100, stopLoss: 99, takeProfit1: 101, takeProfit2: 102,
+      entry: 100, stopLoss: 99, takeProfit: 102,
       confidence: 75, triggerIndex: 50, ruleTrace: ["test"],
     };
     const { resolved } = runSbDetection(candles, [signal], 60, ctx);
@@ -48,7 +48,7 @@ describe("setup-sb-runner: runSbDetection", () => {
     ];
     const signal: DetectedSignal = {
       setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
-      entry: 105, stopLoss: 100, takeProfit1: 108, takeProfit2: 110,
+      entry: 105, stopLoss: 100, takeProfit: 115,
       confidence: 70, triggerIndex: 1, ruleTrace: ["FB trigger"],
     };
     const { resolved } = runSbDetection(rangeCandles, [signal], 2, ctx);
@@ -64,7 +64,7 @@ describe("setup-sb-runner: runSbDetection", () => {
     ];
     const signal: DetectedSignal = {
       setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
-      entry: 105, stopLoss: 100, takeProfit1: 108, takeProfit2: 110,
+      entry: 105, stopLoss: 100, takeProfit: 115,
       confidence: 70, triggerIndex: 1, ruleTrace: ["FB trigger"],
     };
     const { resolved } = runSbDetection(rangeCandles, [signal], 2, ctx);
@@ -74,12 +74,12 @@ describe("setup-sb-runner: runSbDetection", () => {
   it("should handle multiple signals correctly", () => {
     const s1: DetectedSignal = {
       setup: "DD", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
-      entry: 100, stopLoss: 99, takeProfit1: 101, takeProfit2: 102,
+      entry: 100, stopLoss: 99, takeProfit: 102,
       confidence: 75, triggerIndex: 40, ruleTrace: ["DD trigger"],
     };
     const s2: DetectedSignal = {
       setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "SHORT",
-      entry: 99.5, stopLoss: 101, takeProfit1: 98, takeProfit2: 97,
+      entry: 99.5, stopLoss: 101, takeProfit: 96.5,
       confidence: 60, triggerIndex: 50, ruleTrace: ["FB trigger"],
     };
     const { resolved } = runSbDetection(candles, [s1, s2], 60, ctx);
@@ -92,7 +92,7 @@ describe("setup-sb-runner: runSbDetection", () => {
   it("should not process signal if triggerIndex too close to end", () => {
     const signal: DetectedSignal = {
       setup: "BB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
-      entry: 100, stopLoss: 99, takeProfit1: 102, takeProfit2: 104,
+      entry: 100, stopLoss: 99, takeProfit: 102,
       confidence: 80, triggerIndex: 99, ruleTrace: ["BB trigger"],
     };
     const { resolved } = runSbDetection(candles, [signal], 99, ctx);
@@ -109,7 +109,7 @@ describe("setup-sb-runner: runSbDetection", () => {
     ];
     const signal: DetectedSignal = {
       setup: "FB", pair: "EUR/USD", timeframe: "H4", direction: "LONG",
-      entry: 101.2, stopLoss: 99.8, takeProfit1: 108, takeProfit2: 110,
+      entry: 101.2, stopLoss: 99.8, takeProfit: 104,
       confidence: 70, triggerIndex: 1, ruleTrace: ["FB trigger"],
     };
     const { resolved } = runSbDetection(rangeCandles, [signal], 4, ctx);

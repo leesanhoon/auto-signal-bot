@@ -12,9 +12,11 @@ export type CompressionWindow = {
   high: number;
   low: number;
   range: number;
-  /** |mean(Close của cửa sổ) - EMA20[endIndex]| / ATR14[endIndex] */
+  /** |mean(Close của cửa sổ) - EMA21[endIndex]| / ATR14[endIndex] */
   distanceToEma: number;
 };
+
+export type CompressionTightness = "TIGHT" | "LOOSE";
 
 // ---------------------------------------------------------------------------
 // 1. EMA — Exponential Moving Average
@@ -93,23 +95,23 @@ export function calculateAtr(
 // ---------------------------------------------------------------------------
 
 /**
- * Phân loại trend tại index dựa trên slope của EMA20 chuẩn hóa theo ATR.
+ * Phân loại trend tại index dựa trên slope của EMA21 chuẩn hóa theo ATR.
  *
- * slope = (EMA20[i] - EMA20[i-5]) / ATR14[i]
- * - UPTREND: slope > 0.15 và đa số (≥6/10) nến gần nhất có Close > EMA20
- * - DOWNTREND: slope < -0.15 và đa số (≥6/10) nến gần nhất có Close < EMA20
+ * slope = (EMA21[i] - EMA21[i-5]) / ATR14[i]
+ * - UPTREND: slope > 0.15 và đa số (≥6/10) nến gần nhất có Close > EMA21
+ * - DOWNTREND: slope < -0.15 và đa số (≥6/10) nến gần nhất có Close < EMA21
  * - FLAT: còn lại, hoặc thiếu dữ liệu
  */
 export function classifyTrend(
   candles: Candle[],
-  ema20: (number | null)[],
+  ma21: (number | null)[],
   atr14: (number | null)[],
   index: number,
 ): TrendState {
   if (index < 5 || index >= candles.length) return "FLAT";
 
-  const ema = ema20[index];
-  const emaPrev = ema20[index - 5];
+  const ema = ma21[index];
+  const emaPrev = ma21[index - 5];
   const atr = atr14[index];
 
   if (ema === null || emaPrev === null || atr === null || atr === 0)
@@ -117,12 +119,12 @@ export function classifyTrend(
 
   const slope = (ema - emaPrev) / atr;
 
-  // Count recent candles: how many have close > EMA20
+  // Count recent candles: how many have close > EMA21
   let aboveCount = 0;
   let belowCount = 0;
   const lookback = Math.min(10, index + 1);
   for (let i = index - lookback + 1; i <= index; i++) {
-    const e = ema20[i];
+    const e = ma21[i];
     if (e === null) continue;
     if (candles[i].close > e) aboveCount++;
     else if (candles[i].close < e) belowCount++;
@@ -174,7 +176,7 @@ export function isDoji(
  */
 export function detectCompression(
   candles: Candle[],
-  ema20: (number | null)[],
+  ma21: (number | null)[],
   atr14: (number | null)[],
   endIndex: number,
   windowSize: number,
@@ -191,7 +193,7 @@ export function detectCompression(
     return null;
   }
 
-  const ema = ema20[endIndex];
+  const ema = ma21[endIndex];
   const atr = atr14[endIndex];
   if (ema === null || atr === null || atr === 0) return null;
 
@@ -289,4 +291,30 @@ export function averageAtr(
     }
   }
   return count > 0 ? sum / count : null;
+}
+
+// ---------------------------------------------------------------------------
+// 7. Compression Tightness Classification
+// ---------------------------------------------------------------------------
+
+/**
+ * Phân loại mức độ chặt của một compression block.
+ *
+ * Một CompressionWindow đã pass detectCompression (range <= kBlock * ATR) được coi là:
+ * - TIGHT: range <= tightThreshold_ratio * (kBlock * ATR) — không còn khoảng trống đáng kể
+ * - LOOSE: range > tightThreshold_ratio * (kBlock * ATR) — còn khoảng trống lớn, độ tin cậy thấp hơn
+ *
+ * Tham số tightThreshold mặc định 0.5 (50%) — block chỉ sử dụng ≤50% biên độ cho phép thì coi là TIGHT.
+ * Lý do: theo Bob Volman, "nén chặt" = "không còn khoảng trống đáng kể" → phá vỡ mạnh.
+ */
+export function classifyCompressionTightness(
+  window: CompressionWindow,
+  kBlock: number,
+  atr: number,
+  tightThreshold = 0.5,
+): CompressionTightness {
+  if (atr === 0) return "LOOSE";
+  const maxRange = kBlock * atr;
+  const isTight = window.range <= tightThreshold * maxRange;
+  return isTight ? "TIGHT" : "LOOSE";
 }

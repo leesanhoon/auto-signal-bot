@@ -97,7 +97,6 @@ async function main(): Promise<void> {
       saveBinanceExecutionDetails: async (positionId, details) => {
         executionDetails.set(positionId, details);
       },
-      updateBinanceSlOrder: async () => {},
       entryExecutionMode: "HONOR_ORDER_TYPE",
       entryOrderExpiryMinutes: 60,
       saveBinancePendingEntryOrder: async (
@@ -114,10 +113,8 @@ async function main(): Promise<void> {
           direction: "LONG",
           stopLoss: String(currentPlan.stopLoss),
           takeProfit1: String(currentPlan.takeProfit1),
-          takeProfit2: currentPlan.takeProfit2 !== null ? String(currentPlan.takeProfit2) : null,
           binanceQuantity: details.binanceQuantity,
           binanceLeverage: details.binanceLeverage,
-          partialClosePercent: currentPlan.partialClosePercent ?? null,
         });
       },
       updateBinanceEntryOrderStatus: async (positionId, status) => {
@@ -135,7 +132,6 @@ async function main(): Promise<void> {
       successPrefix: `*[TEST ${label}]*`,
       entryErrorPrefix: `*[TEST ${label}]*`,
       closeFailedUrgentPrefix: `*[TEST ${label}] — KHẨN CẤP nhắc lại*`,
-      tp1MoveSLFailPrefix: `*[TEST ${label}] — KHẨN CẤP*`,
       entryOrderExpiredPrefix: `*[TEST ${label}]*`,
       silentFailureWarnPrefix: `*[TEST ${label}]*`,
     };
@@ -184,8 +180,6 @@ async function main(): Promise<void> {
       entry: entryPrice,
       stopLoss: roundToTickSize(markPrice * 0.95, filters.tickSize),
       takeProfit1: roundToTickSize(markPrice * 1.05, filters.tickSize),
-      takeProfit2: roundToTickSize(markPrice * 1.08, filters.tickSize),
-      partialClosePercent: 50,
     };
     const setup = {
       pair: `[TEST]${symbol}`,
@@ -222,14 +216,13 @@ async function main(): Promise<void> {
         "Step 3: SL/TP orders placed on fill (placeProtectionOrdersAndFinalize)",
         !!details && details.binanceSlOrderId !== null && details.binanceTp1OrderId !== null,
         details
-          ? `slOrderId=${details.binanceSlOrderId} tp1OrderId=${details.binanceTp1OrderId} tp2OrderId=${details.binanceTp2OrderId} status=${details.binanceExecutionStatus} qty=${details.binanceQuantity}`
+          ? `slOrderId=${details.binanceSlOrderId} tpOrderId=${details.binanceTp1OrderId} status=${details.binanceExecutionStatus} qty=${details.binanceQuantity}`
           : "no execution details recorded — SL/TP were not placed",
       );
 
       // Cleanup: cancel any leftover algo orders (SL/TP) and flatten the position.
       if (details?.binanceSlOrderId) await cancelOrder(symbol, details.binanceSlOrderId);
       if (details?.binanceTp1OrderId) await cancelOrder(symbol, details.binanceTp1OrderId);
-      if (details?.binanceTp2OrderId) await cancelOrder(symbol, details.binanceTp2OrderId);
       await flattenSymbol();
     }
   }
@@ -249,8 +242,6 @@ async function main(): Promise<void> {
       entry: farStopPrice,
       stopLoss: roundToTickSize(markPrice * 0.95, filters.tickSize),
       takeProfit1: roundToTickSize(markPrice * 1.4, filters.tickSize),
-      takeProfit2: null,
-      partialClosePercent: 50,
     };
     const setup = {
       pair: `[TEST]${symbol}`,

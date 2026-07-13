@@ -7,7 +7,7 @@ export type ForexBacktestRow = {
   realizedRiskRewardRatio: number;
   directionCorrect: boolean;
   entryHit: boolean;
-  closeReason: "stop_loss" | "take_profit_2" | "manual_close" | null;
+  closeReason: "stop_loss" | "take_profit" | "take_profit_2" | "manual_close" | null;
 };
 
 export type ForexBacktestReport = {
@@ -42,7 +42,8 @@ export function runForexBacktest(positions: ClosedPositionRecord[]): ForexBackte
   const rows: ForexBacktestRow[] = positions.map((position) => {
     const realizedRiskRewardRatio = position.realizedRiskRewardRatio ?? 0;
     const directionCorrect = realizedRiskRewardRatio > 0;
-    const entryHit = (position.tp1ClosedPercent ?? 0) > 0 || position.closeReason === "take_profit_2";
+    const entryHit =
+      position.closeReason === "take_profit" || position.closeReason === "take_profit_2";
     return {
       id: position.id,
       pair: position.pair,

@@ -1,5 +1,11 @@
 import type { PositionDecisionAction } from "./position-engine-volman.js";
 
+export type PositionCloseReason =
+  | "stop_loss"
+  | "take_profit"
+  | "take_profit_2"
+  | "manual_close";
+
 export type ClosedPositionRecord = {
   id: number;
   pair: string;
@@ -11,19 +17,15 @@ export type ClosedPositionRecord = {
   takeProfit2: string | null;
   status: "closed";
   closedAt: string;
-  tp1ClosedPercent: number | null;
-  trailingStopLoss: string | null;
   riskRewardRatio: number | null;
-  tp1RiskRewardRatio: number | null;
-  tp2RiskRewardRatio: number | null;
   lastManagementAction: string | null;
   realizedRiskRewardRatio?: number | null;
   realizedExitPrice?: string | null;
-  closeReason?: "stop_loss" | "take_profit_2" | "manual_close" | null;
+  closeReason?: PositionCloseReason | null;
 };
 
 export type ClosedPositionSnapshot = {
-  closeReason: "stop_loss" | "take_profit_2" | "manual_close";
+  closeReason: Exclude<PositionCloseReason, "take_profit_2">;
   realizedExitPrice: string | null;
   realizedRiskRewardRatio: number;
   outcome: "win" | "loss" | "breakeven";
@@ -60,66 +62,38 @@ function parsePrice(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function clampPercent(value: number | null | undefined): number {
-  if (!Number.isFinite(Number(value))) return 0;
-  return Math.max(0, Math.min(100, Math.round(Number(value))));
-}
-
-function inferCloseReason(action: string | null): "stop_loss" | "take_profit_2" | "manual_close" {
-  if (action === "TP2_CLOSE") return "take_profit_2";
+function inferCloseReason(action: string | null): PositionCloseReason {
+  if (action === "TAKE_PROFIT_CLOSE") return "take_profit";
   if (action === "MANUAL_CLOSE") return "manual_close";
   return "stop_loss";
 }
 
-function calculateInitialRisk(position: ClosedPositionRecord): number | null {
+function calculateExitRiskReward(
+  position: ClosedPositionRecord,
+  exitPriceText: string | null,
+): number {
   const entry = parsePrice(position.entry);
-  const takeProfit1 = parsePrice(position.takeProfit1);
-  const tp1RiskReward = position.tp1RiskRewardRatio;
-  if (entry === null || takeProfit1 === null || !tp1RiskReward || tp1RiskReward <= 0) {
-    return null;
-  }
+  const stopLoss = parsePrice(position.stopLoss);
+  const exitPrice = parsePrice(exitPriceText);
+  if (entry === null || stopLoss === null || exitPrice === null) return 0;
 
-  const rewardToTp1 = Math.abs(takeProfit1 - entry);
-  if (rewardToTp1 <= 0) {
-    return null;
-  }
-
-  return rewardToTp1 / tp1RiskReward;
-}
-
-function calculateExitRiskRewardFromStop(position: ClosedPositionRecord, exitPrice: string | null): number {
-  const entry = parsePrice(position.entry);
-  const stop = parsePrice(exitPrice ?? position.trailingStopLoss ?? position.stopLoss);
-  const initialRisk = calculateInitialRisk(position);
-  if (entry === null || stop === null || initialRisk === null || initialRisk <= 0) {
-    return 0;
-  }
-
-  const reward = position.direction === "LONG" ? stop - entry : entry - stop;
+  const initialRisk = Math.abs(entry - stopLoss);
+  if (initialRisk <= 0) return 0;
+  const reward =
+    position.direction === "LONG" ? exitPrice - entry : entry - exitPrice;
   return round2(reward / initialRisk);
 }
 
-function calculateRemainingRiskReward(position: ClosedPositionRecord, closeReason: "stop_loss" | "take_profit_2" | "manual_close"): number {
-  if (closeReason === "take_profit_2") {
-    return round2(position.tp2RiskRewardRatio ?? position.riskRewardRatio ?? position.tp1RiskRewardRatio ?? 0);
-  }
-
-  return calculateExitRiskRewardFromStop(position, position.realizedExitPrice ?? position.trailingStopLoss ?? position.stopLoss);
-}
-
-function calculateTotalRealizedRiskReward(
+function resolveExitPrice(
   position: ClosedPositionRecord,
-  closeReason: "stop_loss" | "take_profit_2" | "manual_close",
-  explicitTotal?: number | null,
-): number {
-  if (explicitTotal !== null && explicitTotal !== undefined && Number.isFinite(explicitTotal)) {
-    return round2(explicitTotal);
+  closeReason: PositionCloseReason,
+): string | null {
+  if (position.realizedExitPrice) return position.realizedExitPrice;
+  if (closeReason === "take_profit") return position.takeProfit1;
+  if (closeReason === "take_profit_2") {
+    return position.takeProfit2 ?? position.takeProfit1;
   }
-
-  const tp1ClosedPercent = clampPercent(position.tp1ClosedPercent);
-  const remainingPercent = 100 - tp1ClosedPercent;
-  const remainingRiskReward = calculateRemainingRiskReward(position, closeReason);
-  return round2((tp1ClosedPercent / 100) * (position.tp1RiskRewardRatio ?? 0) + (remainingPercent / 100) * remainingRiskReward);
+  return position.stopLoss;
 }
 
 export function buildClosedPositionSnapshot(
@@ -128,23 +102,18 @@ export function buildClosedPositionSnapshot(
   options: { stopLoss?: string | null } = {},
 ): ClosedPositionSnapshot {
   const closeReason =
-    closeAction === "TP2_CLOSE"
-      ? "take_profit_2"
+    closeAction === "TAKE_PROFIT_CLOSE"
+      ? "take_profit"
       : closeAction === "MANUAL_CLOSE"
         ? "manual_close"
         : "stop_loss";
-  const tp1ClosedPercent = clampPercent(position.tp1ClosedPercent);
-  const remainingPercent = 100 - tp1ClosedPercent;
   const realizedExitPrice =
-    closeReason === "take_profit_2"
-      ? position.takeProfit2 ?? position.takeProfit1
-      : options.stopLoss ?? position.trailingStopLoss ?? position.stopLoss;
-  const remainingRiskReward =
-    closeReason === "take_profit_2"
-      ? round2(position.tp2RiskRewardRatio ?? position.riskRewardRatio ?? position.tp1RiskRewardRatio ?? 0)
-      : calculateExitRiskRewardFromStop(position, realizedExitPrice);
-  const realizedRiskRewardRatio = round2(
-    (tp1ClosedPercent / 100) * (position.tp1RiskRewardRatio ?? 0) + (remainingPercent / 100) * remainingRiskReward,
+    closeReason === "take_profit"
+      ? position.takeProfit1
+      : options.stopLoss ?? position.stopLoss;
+  const realizedRiskRewardRatio = calculateExitRiskReward(
+    position,
+    realizedExitPrice,
   );
 
   return {
@@ -152,7 +121,11 @@ export function buildClosedPositionSnapshot(
     realizedExitPrice,
     realizedRiskRewardRatio,
     outcome:
-      realizedRiskRewardRatio > 0 ? "win" : realizedRiskRewardRatio < 0 ? "loss" : "breakeven",
+      realizedRiskRewardRatio > 0
+        ? "win"
+        : realizedRiskRewardRatio < 0
+          ? "loss"
+          : "breakeven",
   };
 }
 
@@ -160,19 +133,32 @@ export function summarizeClosedPositionsPerformance(
   positions: ClosedPositionRecord[],
   options: { periodLabel: string; startAt: string; endAt: string },
 ): PerformanceReport {
-  const sorted = [...positions].sort((a, b) => a.closedAt.localeCompare(b.closedAt));
+  const sorted = [...positions].sort((a, b) =>
+    a.closedAt.localeCompare(b.closedAt),
+  );
   const withRealized = sorted.map((position) => {
-    const closeReason = position.closeReason ?? inferCloseReason(position.lastManagementAction);
-    const totalRealizedRiskReward = calculateTotalRealizedRiskReward(position, closeReason, position.realizedRiskRewardRatio);
-    return {
-      ...position,
-      closeReason,
-      totalRealizedRiskReward,
-    };
+    const closeReason =
+      position.closeReason ?? inferCloseReason(position.lastManagementAction);
+    const totalRealizedRiskReward =
+      position.realizedRiskRewardRatio !== null &&
+      position.realizedRiskRewardRatio !== undefined &&
+      Number.isFinite(position.realizedRiskRewardRatio)
+        ? round2(position.realizedRiskRewardRatio)
+        : calculateExitRiskReward(
+            position,
+            resolveExitPrice(position, closeReason),
+          );
+    return { ...position, closeReason, totalRealizedRiskReward };
   });
 
-  const buildSummary = (label: string, rows: typeof withRealized): PerformanceSummary => {
-    const total = rows.reduce((sum, row) => sum + row.totalRealizedRiskReward, 0);
+  const buildSummary = (
+    label: string,
+    rows: typeof withRealized,
+  ): PerformanceSummary => {
+    const total = rows.reduce(
+      (sum, row) => sum + row.totalRealizedRiskReward,
+      0,
+    );
     let equity = 0;
     let peak = 0;
     let maxDrawdown = 0;
@@ -185,7 +171,6 @@ export function summarizeClosedPositionsPerformance(
     const wins = rows.filter((row) => row.totalRealizedRiskReward > 0).length;
     const losses = rows.filter((row) => row.totalRealizedRiskReward < 0).length;
     const breakevens = rows.length - wins - losses;
-
     return {
       label,
       trades: rows.length,
@@ -194,40 +179,46 @@ export function summarizeClosedPositionsPerformance(
       breakevens,
       winRate: rows.length === 0 ? 0 : round2((wins / rows.length) * 100),
       totalRealizedRiskReward: round2(total),
-      averageRealizedRiskReward: rows.length === 0 ? 0 : round2(total / rows.length),
+      averageRealizedRiskReward:
+        rows.length === 0 ? 0 : round2(total / rows.length),
       maxDrawdown: round2(maxDrawdown),
     };
   };
 
   const byPairMap = new Map<string, typeof withRealized>();
-  for (const row of withRealized) {
-    const existing = byPairMap.get(row.pair) ?? [];
-    existing.push(row);
-    byPairMap.set(row.pair, existing);
-  }
-
-  const byPair = [...byPairMap.entries()]
-    .map(([pair, rows]) => buildSummary(pair, rows))
-    .sort((a, b) => b.totalRealizedRiskReward - a.totalRealizedRiskReward || a.label.localeCompare(b.label));
-
   const byPatternMap = new Map<string, typeof withRealized>();
   for (const row of withRealized) {
-    const pattern = row.setup && row.setup.trim() ? row.setup.trim() : "Unknown";
-    const existing = byPatternMap.get(pattern) ?? [];
-    existing.push(row);
-    byPatternMap.set(pattern, existing);
+    const pairRows = byPairMap.get(row.pair) ?? [];
+    pairRows.push(row);
+    byPairMap.set(row.pair, pairRows);
+
+    const pattern = row.setup?.trim() || "Unknown";
+    const patternRows = byPatternMap.get(pattern) ?? [];
+    patternRows.push(row);
+    byPatternMap.set(pattern, patternRows);
   }
 
-  const byPattern = [...byPatternMap.entries()]
-    .map(([pattern, rows]) => buildSummary(pattern, rows))
-    .sort((a, b) => b.totalRealizedRiskReward - a.totalRealizedRiskReward || a.label.localeCompare(b.label));
+  const sortSummaries = (items: PerformanceSummary[]) =>
+    items.sort(
+      (a, b) =>
+        b.totalRealizedRiskReward - a.totalRealizedRiskReward ||
+        a.label.localeCompare(b.label),
+    );
 
   return {
     periodLabel: options.periodLabel,
     startAt: options.startAt,
     endAt: options.endAt,
     portfolio: buildSummary("Portfolio", withRealized),
-    byPair,
-    byPattern,
+    byPair: sortSummaries(
+      [...byPairMap.entries()].map(([pair, rows]) =>
+        buildSummary(pair, rows),
+      ),
+    ),
+    byPattern: sortSummaries(
+      [...byPatternMap.entries()].map(([pattern, rows]) =>
+        buildSummary(pattern, rows),
+      ),
+    ),
   };
 }

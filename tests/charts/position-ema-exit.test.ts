@@ -174,13 +174,12 @@ describe("resolveEmaExitDecision", () => {
       expect(result).toHaveProperty("confidence", 95);
       expect(result).toHaveProperty("comment");
       expect(result).toHaveProperty("managementAction", "NONE");
-      expect(result).toHaveProperty("partialClosePercent", 0);
-      expect(result).toHaveProperty("newStopLoss", null);
-      expect(result).toHaveProperty("tp1Reached", false);
-      expect(result).toHaveProperty("tp2Reached", false);
-      expect(result).toHaveProperty("riskReward", null);
-      expect(result).toHaveProperty("tp1RiskReward", null);
-      expect(result).toHaveProperty("tp2RiskReward", null);
+      expect(Object.keys(result!)).toEqual([
+        "decision",
+        "confidence",
+        "comment",
+        "managementAction",
+      ]);
     });
   });
 

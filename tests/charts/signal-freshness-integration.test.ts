@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { TradeSetup } from "../../src/charts/chart-types-smc.js";
+import type { TradeSetup } from "../../src/charts/chart-types-volman.js";
 import { applySignalFreshnessGuard } from "../../src/charts/signal-freshness.js";
 import * as ohlcProvider from "../../src/charts/ohlc-provider.js";
 
@@ -20,7 +20,7 @@ describe("Signal Freshness Guard — Integration with Real Scenarios", () => {
     const usdcadStaleSetup: TradeSetup = {
       pair: "USD/CAD", // Production pair format (NOT "OANDA:USDCAD")
       direction: "SHORT",
-      setup: "SMC",
+      setup: "RB",
       reasons: ["ABCD pattern confirmed"],
       risks: ["Liquidity risk"],
       confidence: 75,
@@ -51,7 +51,7 @@ describe("Signal Freshness Guard — Integration with Real Scenarios", () => {
     const freshSetup: TradeSetup = {
       pair: "EUR/USD",
       direction: "LONG",
-      setup: "SMC",
+      setup: "RB",
       reasons: ["Reason"],
       risks: ["Risk"],
       confidence: 80,
@@ -75,7 +75,7 @@ describe("Signal Freshness Guard — Integration with Real Scenarios", () => {
     const setupAtSL: TradeSetup = {
       pair: "GBP/USD",
       direction: "LONG",
-      setup: "SMC",
+      setup: "RB",
       reasons: ["Reason"],
       risks: ["Risk"],
       confidence: 70,
@@ -99,7 +99,7 @@ describe("Signal Freshness Guard — Integration with Real Scenarios", () => {
     const shortSetup: TradeSetup = {
       pair: "USD/JPY",
       direction: "SHORT",
-      setup: "SMC",
+      setup: "RB",
       reasons: ["Reason"],
       risks: ["Risk"],
       confidence: 75,
@@ -124,7 +124,7 @@ describe("Signal Freshness Guard — Integration with Real Scenarios", () => {
     const setup: TradeSetup = {
       pair: "XAU/USD",
       direction: "LONG",
-      setup: "SMC",
+      setup: "RB",
       reasons: ["Reason"],
       risks: ["Risk"],
       confidence: 80,
@@ -149,7 +149,7 @@ describe("Signal Freshness Guard — Integration with Real Scenarios", () => {
     const setup: TradeSetup = {
       pair: "TestPair",
       direction: "LONG",
-      setup: "SMC",
+      setup: "RB",
       reasons: ["Reason"],
       risks: ["Risk"],
       confidence: 75,
@@ -176,7 +176,7 @@ describe("Signal Freshness Guard — Integration with Real Scenarios", () => {
     const staleSetup: TradeSetup = {
       pair: "USD/CAD",
       direction: "SHORT",
-      setup: "SMC",
+      setup: "RB",
       reasons: ["Reason"],
       risks: ["Risk"],
       confidence: 75,

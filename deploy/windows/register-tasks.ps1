@@ -64,11 +64,6 @@ Register-BotTask "analyze" @(
     (New-ScheduledTaskTrigger -Daily -At "23:05")
 )
 
-# analyze-smc — mỗi 15 phút, chạy từ thứ 2 đến chủ nhật, bắt đầu từ 00:00 và lặp 15 phút suốt ngày
-Register-BotTask "analyze-smc" @(
-    (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 15 (New-TimeSpan -Days 1))
-)
-
 # Volman multi-timeframe independent tasks — mỗi timeframe chạy riêng
 # M15: mỗi 15 phút
 Register-BotTask "analyze-volman-m15" @(
@@ -147,4 +142,4 @@ Write-Host "Registered: ${taskPath}auto-update"
 
 Write-Host ""
 Write-Host "Xong. Kiểm tra: Get-ScheduledTask -TaskPath '$taskPath'"
-Write-Host "Chạy thử ngay:  Start-ScheduledTask -TaskPath '$taskPath' -TaskName 'analyze-smc'"
+Write-Host "Chạy thử ngay:  Start-ScheduledTask -TaskPath '$taskPath' -TaskName 'analyze'"

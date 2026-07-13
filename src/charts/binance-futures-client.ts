@@ -300,7 +300,6 @@ export async function placeTakeProfitMarketOrder(
   symbol: string,
   side: BinanceOrderSide,
   stopPrice: number,
-  quantity: number,
   options: { workingType?: "MARK_PRICE" | "CONTRACT_PRICE" } = {},
 ): Promise<BinanceOrderResult | Error> {
   const result = await signedRequest<{
@@ -313,8 +312,7 @@ export async function placeTakeProfitMarketOrder(
     side,
     type: "TAKE_PROFIT_MARKET",
     triggerPrice: stopPrice,
-    quantity,
-    reduceOnly: true,
+    closePosition: true,
     ...(options.workingType ? { workingType: options.workingType } : {}),
   });
   if (result instanceof Error) return result;

@@ -2,6 +2,9 @@ import type { Candle } from "./ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind } from "./setup-types.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
 import { calculateEma, calculateAtr, isFalseBreak, averageAtr } from "./indicators.js";
+import { detectDdb } from "./setups/ddb.js";
+import { detectFb } from "./setups/fb.js";
+import { detectSb } from "./setups/sb.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
@@ -101,7 +104,6 @@ export type SetupBacktestTrade = {
   exitTime: number | null;
   outcome:
     | "tp1"
-    | "tp2"
     | "stop"
     | "trail_be"
     | "trail_tp1"
@@ -171,7 +173,7 @@ export function runSetupBacktest(
   feeSlippage: FeeSlippageConfig = DEFAULT_FEE_SLIPPAGE_CONFIG,
   applySessionFilter = true,
 ): SetupBacktestReport {
-  const ema20 = calculateEma(candles, 20);
+  const ma21 = calculateEma(candles, 21);
   const atr14 = calculateAtr(candles, 14);
 
   const trades: SetupBacktestTrade[] = [];
@@ -181,6 +183,9 @@ export function runSetupBacktest(
   const pendingStats: PendingModeStats = { signalsSeen: 0, filled: 0, cancelledBeforeFill: 0, expired: 0 };
 
   const detectors: Array<(c: Candle[], i: number, ctx: DetectionContext) => DetectedSignal | null> = [
+    detectDdb,
+    detectFb,
+    detectSb,
     detectBb,
     detectRb,
     detectArb,
@@ -191,7 +196,7 @@ export function runSetupBacktest(
 
   for (let index = startIndex; index < candles.length; index++) {
     const ctx: DetectionContext = {
-      ema20,
+      ma21,
       atr14,
       pair,
       timeframe,
@@ -216,6 +221,7 @@ export function runSetupBacktest(
         pendingOrder = null;
       } else {
         const triggered = direction === "LONG" ? high >= entry : low <= entry;
+
         if (triggered) {
           const trade = buildTrade(candles, pendingOrder.signal, exitMode, trailBufferR, swingLookback, feeSlippage, index);
           trades.push(trade);
@@ -374,7 +380,7 @@ function scanOutcome(
   outcome: SetupBacktestTrade["outcome"];
   realizedRiskReward: number;
 } {
-  const { entry, stopLoss, takeProfit1, takeProfit2, direction } = signal;
+  const { entry, stopLoss, takeProfit, direction } = signal;
 
   for (let i = entryIndex; i < candles.length; i++) {
     const { high, low } = candles[i];
@@ -385,13 +391,8 @@ function scanOutcome(
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         return { exitIndex: i, exitPrice, outcome: "stop", realizedRiskReward: rr };
       }
-      if (high >= takeProfit2) {
-        const exitPrice = takeProfit2;
-        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
-        return { exitIndex: i, exitPrice, outcome: "tp2", realizedRiskReward: rr };
-      }
-      if (high >= takeProfit1) {
-        const exitPrice = takeProfit1;
+      if (high >= takeProfit) {
+        const exitPrice = takeProfit;
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
         return { exitIndex: i, exitPrice, outcome: "tp1", realizedRiskReward: rr };
       }
@@ -401,13 +402,8 @@ function scanOutcome(
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
         return { exitIndex: i, exitPrice, outcome: "stop", realizedRiskReward: rr };
       }
-      if (low <= takeProfit2) {
-        const exitPrice = takeProfit2;
-        const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
-        return { exitIndex: i, exitPrice, outcome: "tp2", realizedRiskReward: rr };
-      }
-      if (low <= takeProfit1) {
-        const exitPrice = takeProfit1;
+      if (low <= takeProfit) {
+        const exitPrice = takeProfit;
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "tp", fees);
         return { exitIndex: i, exitPrice, outcome: "tp1", realizedRiskReward: rr };
       }
@@ -423,12 +419,11 @@ function scanOutcome(
 }
 
 /**
- * Trailing variant: TP1 hit -> SL moves to entry (breakeven).
- * TP2 hit -> SL moves to TP1. Trade stays open (no fixed target)
- * until price comes back and hits the trailed SL, or data runs out.
+ * Trailing variant: reaching the configured TP moves SL to entry (breakeven).
+ * The trade stays open until price hits the trailed SL or data runs out.
  *
  * `trailBufferR` (fraction of the initial risk) pulls the trailed SL back
- * behind the breakeven/TP1 level instead of sitting exactly on it, so a
+ * behind breakeven instead of sitting exactly on it, so a
  * shallow pullback doesn't sweep the trade the instant it touches the level.
  */
 function scanOutcomeTrailing(
@@ -443,15 +438,13 @@ function scanOutcomeTrailing(
   outcome: SetupBacktestTrade["outcome"];
   realizedRiskReward: number;
 } {
-  const { entry, stopLoss, takeProfit1, takeProfit2, direction } = signal;
+  const { entry, stopLoss, takeProfit, direction } = signal;
   const risk = Math.abs(entry - stopLoss);
   const buffer = trailBufferR * risk;
   const breakevenStop = direction === "LONG" ? entry - buffer : entry + buffer;
-  const tp1Stop = direction === "LONG" ? takeProfit1 - buffer : takeProfit1 + buffer;
 
   let currentStop = stopLoss;
-  let tp1Hit = false;
-  let tp2Hit = false;
+  let targetHit = false;
 
   for (let i = entryIndex; i < candles.length; i++) {
     const { high, low } = candles[i];
@@ -460,31 +453,23 @@ function scanOutcomeTrailing(
       if (low <= currentStop) {
         const exitPrice = currentStop;
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
-        const outcome = tp2Hit ? "trail_tp1" : tp1Hit ? "trail_be" : "stop";
+        const outcome = targetHit ? "trail_be" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }
-      if (!tp1Hit && high >= takeProfit1) {
-        tp1Hit = true;
+      if (!targetHit && high >= takeProfit) {
+        targetHit = true;
         currentStop = breakevenStop;
-      }
-      if (tp1Hit && !tp2Hit && high >= takeProfit2) {
-        tp2Hit = true;
-        currentStop = tp1Stop;
       }
     } else {
       if (high >= currentStop) {
         const exitPrice = currentStop;
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
-        const outcome = tp2Hit ? "trail_tp1" : tp1Hit ? "trail_be" : "stop";
+        const outcome = targetHit ? "trail_be" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }
-      if (!tp1Hit && low <= takeProfit1) {
-        tp1Hit = true;
+      if (!targetHit && low <= takeProfit) {
+        targetHit = true;
         currentStop = breakevenStop;
-      }
-      if (tp1Hit && !tp2Hit && low <= takeProfit2) {
-        tp2Hit = true;
-        currentStop = tp1Stop;
       }
     }
   }
@@ -498,8 +483,8 @@ function scanOutcomeTrailing(
 }
 
 /**
- * Structure-based trail: before TP1, SL stays at the original level.
- * Once TP1 is reached, SL trails behind the low (LONG) / high (SHORT) of the
+ * Structure-based trail: before TP, SL stays at the original level.
+ * Once TP is reached, SL trails behind the low (LONG) / high (SHORT) of the
  * last `swingLookback` closed candles each bar, only ever tightening —
  * closer to how Volman manages a runner than a flat breakeven jump.
  */
@@ -515,9 +500,9 @@ function scanOutcomeSwingTrail(
   outcome: SetupBacktestTrade["outcome"];
   realizedRiskReward: number;
 } {
-  const { entry, stopLoss, takeProfit1, direction } = signal;
+  const { entry, stopLoss, takeProfit, direction } = signal;
   let currentStop = stopLoss;
-  let tp1Hit = false;
+  let targetHit = false;
 
   for (let i = entryIndex; i < candles.length; i++) {
     const { high, low } = candles[i];
@@ -526,13 +511,13 @@ function scanOutcomeSwingTrail(
       if (low <= currentStop) {
         const exitPrice = currentStop;
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
-        const outcome = tp1Hit ? "trail_swing" : "stop";
+        const outcome = targetHit ? "trail_swing" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }
-      if (!tp1Hit && high >= takeProfit1) {
-        tp1Hit = true;
+      if (!targetHit && high >= takeProfit) {
+        targetHit = true;
       }
-      if (tp1Hit) {
+      if (targetHit) {
         const start = Math.max(entryIndex, i - swingLookback + 1);
         const swingLow = Math.min(...candles.slice(start, i + 1).map((c) => c.low));
         if (swingLow > currentStop) currentStop = swingLow;
@@ -541,13 +526,13 @@ function scanOutcomeSwingTrail(
       if (high >= currentStop) {
         const exitPrice = currentStop;
         const rr = applyFeesAndSlippage(direction, entry, stopLoss, exitPrice, "sl", fees);
-        const outcome = tp1Hit ? "trail_swing" : "stop";
+        const outcome = targetHit ? "trail_swing" : "stop";
         return { exitIndex: i, exitPrice, outcome, realizedRiskReward: rr };
       }
-      if (!tp1Hit && low <= takeProfit1) {
-        tp1Hit = true;
+      if (!targetHit && low <= takeProfit) {
+        targetHit = true;
       }
-      if (tp1Hit) {
+      if (targetHit) {
         const start = Math.max(entryIndex, i - swingLookback + 1);
         const swingHigh = Math.max(...candles.slice(start, i + 1).map((c) => c.high));
         if (swingHigh < currentStop) currentStop = swingHigh;
@@ -572,7 +557,7 @@ function computeReport(trades: SetupBacktestTrade[]): SetupBacktestReport {
   const total = closedTrades.length;
 
   const bySetup: SetupBacktestReport["bySetup"] = {};
-  for (const kind of ["BB", "RB", "ARB", "IRB"] as SetupKind[]) {
+  for (const kind of ["DDB", "FB", "SB", "BB", "RB", "ARB", "IRB"] as SetupKind[]) {
     const setupTrades = closedTrades.filter((t) => t.setup === kind);
     if (setupTrades.length === 0) continue;
     const wins = setupTrades.filter((t) => t.realizedRiskReward > 0);

@@ -1,7 +1,33 @@
-import { describe, it, expect } from "vitest";
-import { baseConfidence, computeSlope, computeBodyRatio, applyStandardConfidenceAdjustments } from "../../../src/charts/setups/shared.js";
+import { afterEach, describe, it, expect } from "vitest";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments } from "../../../src/charts/setups/shared.js";
+
+const originalTpRMultiple = process.env.TP_R_MULTIPLE;
+
+afterEach(() => {
+  if (originalTpRMultiple === undefined) {
+    delete process.env.TP_R_MULTIPLE;
+  } else {
+    process.env.TP_R_MULTIPLE = originalTpRMultiple;
+  }
+});
 
 describe("shared setup helpers", () => {
+  describe("computeTakeProfit", () => {
+    it("uses 2R by default for long and short signals", () => {
+      delete process.env.TP_R_MULTIPLE;
+
+      expect(computeTakeProfit("LONG", 100, 95)).toBe(110);
+      expect(computeTakeProfit("SHORT", 100, 105)).toBe(90);
+    });
+
+    it("uses TP_R_MULTIPLE when configured", () => {
+      process.env.TP_R_MULTIPLE = "3";
+
+      expect(computeTakeProfit("LONG", 100, 95)).toBe(115);
+      expect(computeTakeProfit("SHORT", 100, 105)).toBe(85);
+    });
+  });
+
   describe("baseConfidence", () => {
     it("should export base confidence value", () => {
       expect(baseConfidence).toBe(50);

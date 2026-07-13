@@ -20,13 +20,6 @@ function buildHoldDecision(comment: string): PositionDecisionOutcome {
     confidence: 50,
     comment,
     managementAction: "NONE",
-    partialClosePercent: 0,
-    newStopLoss: null,
-    tp1Reached: false,
-    tp2Reached: false,
-    riskReward: null,
-    tp1RiskReward: null,
-    tp2RiskReward: null,
   };
 }
 
@@ -36,13 +29,6 @@ function buildStopDecision(comment: string): PositionDecisionOutcome {
     confidence: 99,
     comment,
     managementAction: "NONE",
-    partialClosePercent: 0,
-    newStopLoss: null,
-    tp1Reached: false,
-    tp2Reached: false,
-    riskReward: null,
-    tp1RiskReward: null,
-    tp2RiskReward: null,
   };
 }
 
@@ -51,64 +37,13 @@ function buildCloseDecision(comment: string): PositionDecisionOutcome {
     decision: "CLOSE",
     confidence: 99,
     comment,
-    managementAction: "TP2_CLOSE",
-    partialClosePercent: 0,
-    newStopLoss: null,
-    tp1Reached: true,
-    tp2Reached: true,
-    riskReward: null,
-    tp1RiskReward: null,
-    tp2RiskReward: null,
+    managementAction: "TAKE_PROFIT_CLOSE",
   };
 }
 
-function buildPartialTp1Decision(comment: string, entry: string): PositionDecisionOutcome {
-  return {
-    decision: "HOLD",
-    confidence: 96,
-    comment,
-    managementAction: "PARTIAL_TP1",
-    partialClosePercent: 50,
-    newStopLoss: entry,
-    tp1Reached: true,
-    tp2Reached: false,
-    riskReward: null,
-    tp1RiskReward: null,
-    tp2RiskReward: null,
-  };
-}
-
-function buildTrailDecision(comment: string, entry: string): PositionDecisionOutcome {
-  return {
-    decision: "HOLD",
-    confidence: 91,
-    comment,
-    managementAction: "MOVE_SL_TO_BE",
-    partialClosePercent: 0,
-    newStopLoss: entry,
-    tp1Reached: false,
-    tp2Reached: false,
-    riskReward: null,
-    tp1RiskReward: null,
-    tp2RiskReward: null,
-  };
-}
-
-function isMeaningfullyDifferent(a: number | null, b: number | null): boolean {
-  if (a === null || b === null) return a !== b;
-  return Math.abs(a - b) > 1e-10;
-}
-
-function shouldMoveStopToBreakeven(direction: "LONG" | "SHORT", trailingStopLoss: number | null, entry: number): boolean {
-  if (trailingStopLoss === null) return true;
-  if (direction === "LONG") {
-    return trailingStopLoss < entry && isMeaningfullyDifferent(trailingStopLoss, entry);
-  }
-  return trailingStopLoss > entry && isMeaningfullyDifferent(trailingStopLoss, entry);
-}
 
 export function resolveOpenPositionDecision(
-  position: Pick<OpenPosition, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "tradeStage" | "tp1ClosedPercent" | "trailingStopLoss">,
+  position: Pick<OpenPosition, "direction" | "entry" | "stopLoss" | "takeProfit1">,
   stats: CandleRangeStats | null,
   reason?: "ohlc_fetch_fail" | "missing_chart_config",
   emaContext?: { emaValue: number | null; period: number; lastClose: number | null } | null,
@@ -122,45 +57,26 @@ export function resolveOpenPositionDecision(
 
   const stopLoss = parsePrice(position.stopLoss);
   const takeProfit1 = parsePrice(position.takeProfit1);
-  const takeProfit2 = position.takeProfit2 ? parsePrice(position.takeProfit2) : null;
   const entry = parsePrice(position.entry);
-  if (stopLoss === null || takeProfit1 === null || entry === null || (position.takeProfit2 !== null && takeProfit2 === null)) {
+  if (stopLoss === null || takeProfit1 === null || entry === null) {
     return buildHoldDecision("Dữ liệu SL/TP không hợp lệ, giữ vị thế.");
   }
-
-  const tp1AlreadyClosed = (position.tp1ClosedPercent ?? 0) > 0 || position.tradeStage === "tp1_partial" || position.tradeStage === "trailing";
 
   if (position.direction === "LONG") {
     if (stats.low <= stopLoss) {
       return buildStopDecision(`Giá thấp nhất ${formatPrice(stats.low)} đã chạm stop loss ${formatPrice(stopLoss)}.`);
     }
 
-    if (takeProfit2 !== null && stats.high >= takeProfit2) {
-      return buildCloseDecision(`Giá cao nhất ${formatPrice(stats.high)} đã chạm TP2 ${formatPrice(takeProfit2)}.`);
-    }
-
-    if (!tp1AlreadyClosed && stats.high >= takeProfit1) {
-      return buildPartialTp1Decision(`Giá cao nhất ${formatPrice(stats.high)} đã chạm TP1 ${formatPrice(takeProfit1)}.`, position.entry);
-    }
-
-    if (tp1AlreadyClosed && shouldMoveStopToBreakeven(position.direction, parsePrice(position.trailingStopLoss), entry)) {
-      return buildTrailDecision("Đã partial TP1, dời SL về entry theo dữ liệu OHLC.", position.entry);
+    if (stats.high >= takeProfit1) {
+      return buildCloseDecision(`Giá cao nhất ${formatPrice(stats.high)} đã chạm TP ${formatPrice(takeProfit1)}.`);
     }
   } else {
     if (stats.high >= stopLoss) {
       return buildStopDecision(`Giá cao nhất ${formatPrice(stats.high)} đã chạm stop loss ${formatPrice(stopLoss)}.`);
     }
 
-    if (takeProfit2 !== null && stats.low <= takeProfit2) {
-      return buildCloseDecision(`Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP2 ${formatPrice(takeProfit2)}.`);
-    }
-
-    if (!tp1AlreadyClosed && stats.low <= takeProfit1) {
-      return buildPartialTp1Decision(`Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP1 ${formatPrice(takeProfit1)}.`, position.entry);
-    }
-
-    if (tp1AlreadyClosed && shouldMoveStopToBreakeven(position.direction, parsePrice(position.trailingStopLoss), entry)) {
-      return buildTrailDecision("Đã partial TP1, dời SL về entry theo dữ liệu OHLC.", position.entry);
+    if (stats.low <= takeProfit1) {
+      return buildCloseDecision(`Giá thấp nhất ${formatPrice(stats.low)} đã chạm TP ${formatPrice(takeProfit1)}.`);
     }
   }
 

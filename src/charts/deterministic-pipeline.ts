@@ -2,6 +2,9 @@ import type { AnalysisResult, ChartTimeframe } from "./chart-types-volman.js";
 import type { Candle } from "./ohlc-provider.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { calculateEma, calculateAtr, classifyTrend, averageAtr } from "./indicators.js";
+import { detectDdb } from "./setups/ddb.js";
+import { detectFb } from "./setups/fb.js";
+import { detectSb } from "./setups/sb.js";
 import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
@@ -34,10 +37,10 @@ export function passesDeterministicWindowFilter(
  *
  * For each pair:
  * 1. Fetch OHLC history for the runtime timeframe (200 bars)
- * 2. Session/volatility filter (London/NY overlap + ATR floor)
- * 3. Calculate indicators (EMA20, ATR14)
- * 4. Run core Volman setup detectors (BB, RB, ARB, IRB) on the runtime primary timeframe
- * 5. Drop signals invalidated by a false break (no SB replacement — retired for lack of edge)
+ * 2. Session/volatility filter (ATR floor only; crypto trades 24/7)
+ * 3. Calculate indicators (EMA21, ATR14)
+ * 4. Run all 7 Volman setup detectors (DDB, FB, SB, BB, RB, ARB, IRB) on the runtime primary timeframe
+ * 5. Drop signals invalidated by a false break
  * 6. Resolve conflicts (max 1 signal per pair)
  * 7. Build TradeSetup[] and PairSummary[] from signals
  * 8. Filter out null (price-sanity rejected) setups
@@ -74,7 +77,7 @@ export async function analyzeAllChartsDeterministic(
         logger.warn(`  ! Skip ${pair}: OHLC returned no closed candles`);
         return { kind: "skip" as const, pair, error: "Khong co closed candle hop le" };
       }
-      const ema20 = calculateEma(primaryCandles, 20);
+      const ma21 = calculateEma(primaryCandles, 21);
       const atr14 = calculateAtr(primaryCandles, 14);
       const lastIndex = primaryCandles.length - 1;
 
@@ -92,14 +95,14 @@ export async function analyzeAllChartsDeterministic(
 
       // ---- Detect context ----
       const ctx = {
-        ema20, atr14, pair,
+        ma21, atr14, pair,
         timeframe: analysisTimeframe,
       };
 
-      // ---- Run core detectors on last 5 candles (DD, FB, SB retired — no edge / too rare) ----
+      // ---- Run all 7 Volman setup detectors on last 5 candles ----
       const startDetectIndex = Math.max(30, lastIndex - 5);
       const allSignals: DetectedSignal[] = [];
-      const detectors = [detectBb, detectRb, detectArb, detectIrb];
+      const detectors = [detectDdb, detectFb, detectSb, detectBb, detectRb, detectArb, detectIrb];
 
       for (let i = startDetectIndex; i <= lastIndex; i++) {
         for (const detector of detectors) {
@@ -117,9 +120,9 @@ export async function analyzeAllChartsDeterministic(
           kind: "no_setups" as const,
           pair,
           summaries: [buildPairSummaryFromContext(
-            pair, classifyTrend(primaryCandles, ema20, atr14, lastIndex),
-            ema20[lastIndex] !== null && atr14[lastIndex] !== null && atr14[lastIndex]! > 0
-              ? Math.abs(primaryCandles[lastIndex].close - ema20[lastIndex]!) / atr14[lastIndex]!
+            pair, classifyTrend(primaryCandles, ma21, atr14, lastIndex),
+            ma21[lastIndex] !== null && atr14[lastIndex] !== null && atr14[lastIndex]! > 0
+              ? Math.abs(primaryCandles[lastIndex].close - ma21[lastIndex]!) / atr14[lastIndex]!
               : 99,
             false,
           )],
@@ -134,12 +137,12 @@ export async function analyzeAllChartsDeterministic(
       // ---- Build outputs ----
       const setups: AnalysisResult["setups"] = [];
       for (const signal of resolved) {
-        const setup = buildTradeSetupFromSignal(signal, { lastPrice, candles: primaryCandles, ema20 });
+        const setup = buildTradeSetupFromSignal(signal, { lastPrice, candles: primaryCandles, ma21 });
         if (setup !== null) setups.push(setup);
       }
 
-      const trend = classifyTrend(primaryCandles, ema20, atr14, lastIndex);
-      const ema = ema20[lastIndex];
+      const trend = classifyTrend(primaryCandles, ma21, atr14, lastIndex);
+      const ema = ma21[lastIndex];
       const atr = atr14[lastIndex];
       const emaDistance = (ema !== null && atr !== null && atr > 0)
         ? Math.abs(primaryCandles[lastIndex].close - ema) / atr

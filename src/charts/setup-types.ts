@@ -1,7 +1,7 @@
 import type { ChartTimeframe } from "./chart-types-common.js";
 import type { CompressionWindow } from "./indicators.js";
 
-export type SetupKind = "DD" | "FB" | "BB" | "RB" | "ARB" | "IRB" | "SB";
+export type SetupKind = "DDB" | "FB" | "BB" | "RB" | "ARB" | "IRB" | "SB";
 
 export type ChartMarker = {
   index: number;   // vị trí trong mảng candles
@@ -23,8 +23,7 @@ export type DetectedSignal = {
   direction: "LONG" | "SHORT";
   entry: number;
   stopLoss: number;
-  takeProfit1: number;
-  takeProfit2: number;
+  takeProfit: number;
   confidence: number; // 0-100
   triggerIndex: number; // index trong mảng candles nơi tín hiệu kích hoạt
   ruleTrace: string[];
@@ -33,7 +32,7 @@ export type DetectedSignal = {
 };
 
 export type DetectionContext = {
-  ema20: (number | null)[];
+  ma21: (number | null)[];
   atr14: (number | null)[];
   pair: string;
   timeframe: ChartTimeframe;

@@ -3,17 +3,17 @@ import type { TradeSetup, PairSummary, ChartTimeframe, ChartOrderType } from "./
 import type { Candle } from "./ohlc-provider.js";
 import type { TrendState } from "./indicators.js";
 import { formatPrice, applyPriceSanityChecks } from "./analyzer-volman.js";
-import { calculateRiskRewardPlan } from "./position-engine-volman.js";
+import { getConfiguredTpRMultiple } from "./volman-config-env.js";
 
 // ---------------------------------------------------------------------------
 // Rule-to-Vietnamese mapping for reasons
 // ---------------------------------------------------------------------------
 
 const REASON_TEMPLATES: Array<{ pattern: RegExp; replacement: string }> = [
-  { pattern: /Trend=(UPTREND|DOWNTREND),?.*/, replacement: "EMA20 đang dốc $1 rõ ràng" },
-  { pattern: /Trend=FLAT.*/, replacement: "EMA20 đang đi ngang" },
-  { pattern: /slope > 0\.3/, replacement: "Độ dốc EMA20 rất mạnh" },
-  { pattern: /Gia pullback ve EMA20.*/, replacement: "Giá pullback chạm EMA20" },
+  { pattern: /Trend=(UPTREND|DOWNTREND),?.*/, replacement: "EMA21 đang dốc $1 rõ ràng" },
+  { pattern: /Trend=FLAT.*/, replacement: "EMA21 đang đi ngang, phù hợp bối cảnh Range" },
+  { pattern: /slope > 0\.3/, replacement: "Độ dốc EMA21 rất mạnh" },
+  { pattern: /Gia pullback ve EMA(?:20|21).*/, replacement: "Giá pullback chạm EMA21" },
   { pattern: /(\d+) doji lien tiep.*/, replacement: "$1 doji liên tiếp" },
   { pattern: /nen (.*) pha vo.*entry (LONG|SHORT).*/, replacement: "Nến $1 xác nhận breakout" },
   { pattern: /entry (LONG|SHORT) tai (\S+)/, replacement: "Entry $1 tại $2" },
@@ -87,12 +87,10 @@ function buildRisks(signal: DetectedSignal): string[] {
  */
 export function buildTradeSetupFromSignal(
   signal: DetectedSignal,
-  ohlcContext: { lastPrice: number | null; candles?: Candle[]; ema20?: (number | null)[] },
+  ohlcContext: { lastPrice: number | null; candles?: Candle[]; ma21?: (number | null)[] },
 ): TradeSetup | null {
-  const { setup, pair, direction, entry, stopLoss, takeProfit1, takeProfit2, confidence, triggerIndex, ruleTrace, timeframe, geometry } = signal;
+  const { setup, pair, direction, entry, stopLoss, takeProfit, confidence, triggerIndex, ruleTrace, timeframe, geometry } = signal;
 
-  // Determine order type
-  const isLastCandle = triggerIndex === triggerIndex; // signal is at current index - no way to know "last" without passing array length
   const orderType: ChartOrderType = direction === "LONG" ? "BUY_STOP" : "SELL_STOP";
 
   // Map ruleTrace to Vietnamese reasons
@@ -111,29 +109,17 @@ export function buildTradeSetupFromSignal(
   // Format prices
   const entryStr = formatPrice(entry);
   const stopStr = formatPrice(stopLoss);
-  const tp1Str = formatPrice(takeProfit1);
-  const tp2Str = formatPrice(takeProfit2);
+  const takeProfitStr = formatPrice(takeProfit);
 
-  // Calculate risk-reward via position-engine's function
-  const mockSetup: Pick<TradeSetup, "direction" | "entry" | "stopLoss" | "takeProfit1" | "takeProfit2" | "setup"> = {
-    direction,
-    entry: entryStr,
-    stopLoss: stopStr,
-    takeProfit1: tp1Str,
-    takeProfit2: tp2Str,
-    setup: setupDisplayName(setup),
-  };
-  const rrp = calculateRiskRewardPlan(mockSetup);
-
-  // Build chartContext if candles and ema20 are available
+  // Build chartContext if candles and ma21 are available
   const CHART_CONTEXT_WINDOW = 60;
   let chartContext: TradeSetup["chartContext"];
-  if (ohlcContext.candles && ohlcContext.ema20) {
+  if (ohlcContext.candles && ohlcContext.ma21) {
     const sliceStartIndex = Math.max(0, triggerIndex - CHART_CONTEXT_WINDOW);
     const sliceEndIndex = Math.min(ohlcContext.candles.length, triggerIndex + 2);
     chartContext = {
       candles: ohlcContext.candles.slice(sliceStartIndex, sliceEndIndex),
-      ema20: ohlcContext.ema20.slice(sliceStartIndex, sliceEndIndex),
+      ma21: ohlcContext.ma21.slice(sliceStartIndex, sliceEndIndex),
       triggerIndex,
       sliceStartIndex,
       geometry,
@@ -150,9 +136,9 @@ export function buildTradeSetupFromSignal(
     confidence,
     entry: entryStr,
     stopLoss: stopStr,
-    takeProfit1: tp1Str,
-    takeProfit2: tp2Str,
-    riskReward: rrp ? `${rrp.tp1RiskReward.toFixed(1)}R` : "N/A",
+    takeProfit1: takeProfitStr,
+    takeProfit2: null,
+    riskReward: `1:${getConfiguredTpRMultiple()}`,
     summary,
     orderType,
     entryCondition,

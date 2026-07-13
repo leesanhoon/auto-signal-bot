@@ -25,13 +25,12 @@ import {
 import {
   computeOrderQuantity,
   roundToTickSize,
-  splitTpQuantities,
 } from "./binance-position-sizing.js";
 import { toBinanceSymbol, fetchOhlcHistory } from "./ohlc-provider.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
-import { isEmaExitEnabled, getEmaExitPeriod } from "./smc-config-env.js";
+import { isEmaExitEnabled, getEmaExitPeriod } from "./volman-config-env.js";
 import { calculateLatestEma, resolveEmaExitDecision } from "./position-ema-exit.js";
 
 // -4509 "TIF GTE can only be used with open positions" xay ra khi dat SL (closePosition:true,
@@ -78,8 +77,6 @@ export type RiskRewardPlan = {
   entry: number;
   stopLoss: number;
   takeProfit1: number;
-  takeProfit2: number | null;
-  partialClosePercent: number;
 };
 
 export type BinanceEntryOrderDetails = {
@@ -100,12 +97,10 @@ export type PendingEntryOrderPosition = {
   direction: "LONG" | "SHORT";
   stopLoss: string;
   takeProfit1: string;
-  takeProfit2: string | null;
   binanceQuantity: number;
   binanceLeverage: number;
-  partialClosePercent: number | null;
   // Chi co gia tri thuc su khi getPendingEntryOrderPositions duoc build voi
-  // includeTimeframe=true (hien chi Volman — xem positions-repository-binance-entry-order-shared.ts)
+  // includeTimeframe=true (xem positions-repository-binance-entry-order-shared.ts)
   primaryTimeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
 };
 
@@ -116,7 +111,6 @@ export type BinanceExecutionDetails = {
   binanceEntryOrderId: number;
   binanceSlOrderId: number | null;
   binanceTp1OrderId: number | null;
-  binanceTp2OrderId: number | null;
   binanceExecutionStatus: "pending" | "placed" | "failed" | "close_failed";
 };
 
@@ -125,18 +119,10 @@ export type OpenPosition = {
   pair: string;
   direction: "LONG" | "SHORT";
   entry: string;
-  tp1ClosePercent?: number | null;
-  tp1ClosedPercent?: number | null;
   binanceSymbol: string | null;
   binanceSlOrderId: number | null;
   binanceTp1OrderId: number | null;
-  binanceTp2OrderId: number | null;
   binanceExecutionStatus?: "pending" | "placed" | "failed" | "close_failed" | null;
-  // Gia SL hien tai (dung de so sanh khi trail — chi siet chat hon, khong noi long).
-  // Ca Volman va SMC deu co cot stop_loss nen luon co gia tri.
-  stopLoss?: string;
-  // Chi Volman co cot nay (xem positions-repository-volman.ts) — SMC se luon undefined,
-  // khien nhanh swing-trailing tu dong bo qua cho SMC (dung y, xem Task 07).
   primaryTimeframe?: "M15" | "M30" | "H1" | "H4" | "D1" | null;
 };
 
@@ -144,25 +130,17 @@ export type PositionDecisionOutcome = {
   decision: "HOLD" | "STOP" | "CLOSE";
   confidence: number;
   comment: string;
-  managementAction: "NONE" | "PARTIAL_TP1" | "TP2_CLOSE" | "MOVE_SL_TO_BE" | "TRAIL_SL";
-  partialClosePercent: number;
-  newStopLoss: string | null;
-  tp1Reached: boolean;
-  tp2Reached: boolean;
-  riskReward: number | null;
-  tp1RiskReward: number | null;
-  tp2RiskReward: number | null;
+  managementAction: "NONE" | "TAKE_PROFIT_CLOSE";
 };
 
 export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome> = {
-  systemLabel: string; // "SMC" | "Volman"
-  loggerName: string; // "charts:binance-execution-smc" | "charts:binance-execution"
+  systemLabel: string;
+  loggerName: string;
   calculateRiskRewardPlan: (setup: TSetup) => RiskRewardPlan | null;
   saveBinanceExecutionDetails: (
     positionId: number,
     details: BinanceExecutionDetails,
   ) => Promise<void>;
-  updateBinanceSlOrder: (positionId: number, orderId: number, stopLoss: string) => Promise<void>;
   getConfiguredRiskUsdt?: () => number | undefined;
   // Entry order type support (new in subtask 03, optional for backward compat)
   entryExecutionMode?: "MARKET_ONLY" | "HONOR_ORDER_TYPE";
@@ -194,51 +172,20 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   // khong pha vo test hien co chua wire field nay.
   saveBinanceExecutionFailure?: (positionId: number, reason: string) => Promise<void>;
   // Telegram message prefixes to preserve exact strings across systems
-  guardFailPrefix: string; // "*Binance Futures (SMC|Volman)*"
-  failSafeMessagePrefix: string; // "*Binance Futures (SMC)*" or "*Binance Futures*"
-  failSafeEmergencyMessagePrefix: string; // "*Binance Futures (SMC) — KHẨN CẤP*" or "*Binance Futures — KHẨN CẤP*"
-  dbErrorPrefix: string; // "*Binance Futures (SMC)*" or "*Binance Futures*"
-  successPrefix: string; // "*Binance Futures (SMC)*" or "*Binance Futures*"
-  entryErrorPrefix: string; // "*Binance Futures (SMC)*" or "*Binance Futures*"
-  closeFailedUrgentPrefix: string; // "*Binance Futures (SMC) — KHẨN CẤP nhắc lại*" or "*Binance Futures (Volman) — KHẨN CẤP nhắc lại*"
-  tp1MoveSLFailPrefix: string; // "*Binance Futures (SMC) — KHẨN CẤP*" or "*Binance Futures (Volman) — KHẨN CẤP*"
-  entryOrderExpiredPrefix?: string; // "*Binance Futures (SMC|Volman)*" prefix cho entry order expiry alert
-  silentFailureWarnPrefix: string; // "*Binance Futures (SMC|Volman)*" — cho cac loi cleanup/retry muc do thap
+  guardFailPrefix: string;
+  failSafeMessagePrefix: string;
+  failSafeEmergencyMessagePrefix: string;
+  dbErrorPrefix: string;
+  successPrefix: string;
+  entryErrorPrefix: string;
+  closeFailedUrgentPrefix: string;
+  entryOrderExpiredPrefix?: string;
+  silentFailureWarnPrefix: string;
   // Timeframe dung de tinh EMA cho EMA-exit check. Optional vi khong phai
-  // he thong nao cung co du lieu timeframe cua position (SMC chua co cot
-  // primaryTimeframe) -- neu khong cung cap, EMA-exit se bi bo qua cho he do.
+  // he thong nao cung co du lieu timeframe cua position -- neu khong cung cap,
+  // EMA-exit se bi bo qua cho he do.
   getEmaExitTimeframe?: (position: TOpenPosition) => ChartTimeframe;
 };
-
-// ---------------------------------------------------------------------------
-// Swing trailing SL sau TP1 (Task 07) — dung DUNG cong thuc voi
-// scanOutcomeSwingTrail trong setup-backtest.ts: cung timeframe voi vi the,
-// lookback N nen gan nhat DA DONG, chi siet chat hon, khong bao gio noi long.
-// ---------------------------------------------------------------------------
-
-export function getConfiguredSwingTrailLookback(): number {
-  const raw = process.env.POSITION_SWING_TRAIL_LOOKBACK?.trim();
-  if (!raw) return 3;
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 3;
-}
-
-/**
- * Tinh muc swing low/high tren N nen gan nhat DA DONG (cung cong thuc voi
- * scanOutcomeSwingTrail trong setup-backtest.ts — xem test so sanh truc tiep
- * trong tests/charts/binance-execution-shared.test.ts).
- */
-export function calculateSwingTrailLevel(
-  candles: Array<{ high: number; low: number }>,
-  direction: "LONG" | "SHORT",
-): number | null {
-  if (!candles || candles.length === 0) return null;
-
-  if (direction === "LONG") {
-    return Math.min(...candles.map((c) => c.low));
-  }
-  return Math.max(...candles.map((c) => c.high));
-}
 
 async function recordExecutionFailure(
   config: BinanceExecutionSystemConfig<any, any, any>,
@@ -365,11 +312,7 @@ export function createOpenBinanceFuturesPosition<
       // Moi gia stopPrice gui len Binance PHAI lam tron theo tickSize — gia tho tu
       // engine se bi Binance tu choi (loi price precision -1111/-4014).
       const slPrice = roundToTickSize(plan.stopLoss, filters.tickSize);
-      const tp1Price = roundToTickSize(plan.takeProfit1, filters.tickSize);
-      const tp2Price =
-        plan.takeProfit2 !== null
-          ? roundToTickSize(plan.takeProfit2, filters.tickSize)
-          : null;
+      const tpPrice = roundToTickSize(plan.takeProfit1, filters.tickSize);
 
       const balance = await getAvailableBalanceUsdt();
       if (balance instanceof Error) throw balance;
@@ -384,13 +327,6 @@ export function createOpenBinanceFuturesPosition<
         filters,
       });
       if (sizing instanceof Error) throw sizing;
-
-      // Chia qty TP1/TP2 khop stepSize (toFixed(8) tho se dinh loi LOT_SIZE)
-      const { tp1Quantity, tp2Quantity } = splitTpQuantities(
-        sizing.quantity,
-        plan.partialClosePercent,
-        filters.stepSize,
-      );
 
       const marginResult = await setMarginType(binanceSymbol, marginType);
       if (marginResult instanceof Error) throw marginResult;
@@ -476,10 +412,7 @@ export function createOpenBinanceFuturesPosition<
           binanceSymbol,
           closeSide,
           slPrice,
-          tp1Price,
-          tp2Price,
-          tp1Quantity,
-          tp2Quantity,
+          tpPrice,
           entryOrder.orderId,
           positionId,
           sizing,
@@ -488,7 +421,7 @@ export function createOpenBinanceFuturesPosition<
         );
 
         await sendMessage(
-          `✅ ${config.successPrefix} — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}${fellBackToMarket ? " (fallback MARKET — lệnh chờ khớp không đặt được)" : ""}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
+          `✅ ${config.successPrefix} — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}${fellBackToMarket ? " (fallback MARKET — lệnh chờ khớp không đặt được)" : ""}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP: ${tpPrice}`,
         );
       } else if (resolvedEntryType === "LIMIT") {
         const entryPrice = roundToTickSize(plan.entry, filters.tickSize);
@@ -522,7 +455,7 @@ export function createOpenBinanceFuturesPosition<
         }
 
         await sendMessage(
-          `⏳ ${config.successPrefix} — Đã đặt lệnh LIMIT ${setup.direction} ${binanceSymbol}\nGiá: ${entryPrice} | Qty: ${sizing.quantity} | Leverage: ${leverage}x\nSL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}\nChờ khớp...`,
+          `⏳ ${config.successPrefix} — Đã đặt lệnh LIMIT ${setup.direction} ${binanceSymbol}\nGiá: ${entryPrice} | Qty: ${sizing.quantity} | Leverage: ${leverage}x\nSL: ${slPrice} | TP: ${tpPrice}\nChờ khớp...`,
         );
       } else if (resolvedEntryType === "STOP_MARKET") {
         const stopPrice = roundToTickSize(plan.entry, filters.tickSize);
@@ -554,7 +487,7 @@ export function createOpenBinanceFuturesPosition<
         }
 
         await sendMessage(
-          `⏳ ${config.successPrefix} — Đã đặt lệnh STOP_MARKET ${setup.direction} ${binanceSymbol}\nGiá trigger: ${stopPrice} | Qty: ${sizing.quantity} | Leverage: ${leverage}x\nSL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}\nChờ khớp...`,
+          `⏳ ${config.successPrefix} — Đã đặt lệnh STOP_MARKET ${setup.direction} ${binanceSymbol}\nGiá trigger: ${stopPrice} | Qty: ${sizing.quantity} | Leverage: ${leverage}x\nSL: ${slPrice} | TP: ${tpPrice}\nChờ khớp...`,
         );
       }
     } catch (error) {
@@ -583,10 +516,7 @@ async function placeProtectionOrdersAndFinalize(
   binanceSymbol: string,
   closeSide: "BUY" | "SELL",
   slPrice: number,
-  tp1Price: number,
-  tp2Price: number | null,
-  tp1Quantity: number,
-  tp2Quantity: number,
+  tpPrice: number,
   entryOrderId: number,
   positionId: number,
   sizing: { quantity: number },
@@ -595,8 +525,7 @@ async function placeProtectionOrdersAndFinalize(
 ): Promise<void> {
   const placedProtectionOrders: number[] = [];
   let slOrderId: number | null = null;
-  let tp1OrderId: number | null = null;
-  let tp2OrderId: number | null = null;
+  let tpOrderId: number | null = null;
   const workingType = getConfiguredBinanceWorkingType();
   const workingTypeOption = workingType ? { workingType } : {};
 
@@ -606,29 +535,15 @@ async function placeProtectionOrdersAndFinalize(
     slOrderId = slOrder.orderId;
     placedProtectionOrders.push(slOrder.orderId);
 
-    const tp1Order = await placeTakeProfitMarketOrder(
+    const tpOrder = await placeTakeProfitMarketOrder(
       binanceSymbol,
       closeSide,
-      tp1Price,
-      tp1Quantity,
+      tpPrice,
       workingTypeOption,
     );
-    if (tp1Order instanceof Error) throw tp1Order;
-    tp1OrderId = tp1Order.orderId;
-    placedProtectionOrders.push(tp1Order.orderId);
-
-    if (tp2Price !== null && tp2Quantity > 0) {
-      const tp2Order = await placeTakeProfitMarketOrder(
-        binanceSymbol,
-        closeSide,
-        tp2Price,
-        tp2Quantity,
-        workingTypeOption,
-      );
-      if (tp2Order instanceof Error) throw tp2Order;
-      tp2OrderId = tp2Order.orderId;
-      placedProtectionOrders.push(tp2Order.orderId);
-    }
+    if (tpOrder instanceof Error) throw tpOrder;
+    tpOrderId = tpOrder.orderId;
+    placedProtectionOrders.push(tpOrder.orderId);
   } catch (protectionError) {
     logger.error("Dat SL/TP that bai sau entry, dong vi the fail-safe", {
       binanceSymbol,
@@ -667,7 +582,6 @@ async function placeProtectionOrdersAndFinalize(
         binanceEntryOrderId: entryOrderId,
         binanceSlOrderId: null,
         binanceTp1OrderId: null,
-        binanceTp2OrderId: null,
         binanceExecutionStatus: executionStatusAfterFailSafe,
       });
     } catch (dbError) {
@@ -701,8 +615,7 @@ async function placeProtectionOrdersAndFinalize(
       binanceQuantity: sizing.quantity,
       binanceEntryOrderId: entryOrderId,
       binanceSlOrderId: slOrderId,
-      binanceTp1OrderId: tp1OrderId,
-      binanceTp2OrderId: tp2OrderId,
+      binanceTp1OrderId: tpOrderId,
       binanceExecutionStatus: "placed",
     });
   } catch (dbError) {
@@ -725,82 +638,64 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
   ): Promise<PositionDecisionOutcome> {
     const logger = createLogger(config.loggerName);
     const symbol = position.binanceSymbol as string;
-    const alreadyPartial = (position.tp1ClosedPercent ?? 0) > 0;
+    const hold = (comment: string, confidence = 100): PositionDecisionOutcome => ({
+      decision: "HOLD",
+      confidence,
+      comment,
+      managementAction: "NONE",
+    });
+    const close = (
+      comment: string,
+      managementAction: PositionDecisionOutcome["managementAction"] = "NONE",
+    ): PositionDecisionOutcome => ({
+      decision: "CLOSE",
+      confidence: 100,
+      comment,
+      managementAction,
+    });
+    const cancelTrackedOrder = async (
+      orderId: number | null,
+      label: "SL" | "TP",
+    ): Promise<void> => {
+      if (!orderId) return;
+      const result = await cancelOrder(symbol, orderId);
+      if (result instanceof Error) {
+        logger.warn(`Khong huy duoc ${label} order con lai`, {
+          pair: position.pair,
+          id: position.id,
+          orderId,
+          error: result,
+        });
+        await sendCleanupWarning(
+          config,
+          position.pair,
+          `Khong huy duoc ${label} order ${orderId}; kiem tra orphan order tren san.`,
+        );
+      }
+    };
 
-    // Execution "close_failed" = fail-safe da dong khan cap that bai luon — sang co the
-    // VAN CON vi the mo KHONG CO SL. Phai verify qua getPositionAmount truoc khi quyet
-    // dinh, KHONG duoc coi nhu da dong (khac voi "failed").
     if (position.binanceExecutionStatus === "close_failed") {
       const positionAmt = await getPositionAmount(symbol);
       if (positionAmt instanceof Error) {
-        return {
-          decision: "HOLD",
-          confidence: 30,
-          comment:
-            "Execution Binance thất bại và lệnh đóng khẩn cấp cũng thất bại trước đó — không xác minh được trạng thái vị thế trên sàn lúc này, sẽ thử lại lần check sau",
-          managementAction: "NONE",
-          partialClosePercent: 0,
-          newStopLoss: null,
-          tp1Reached: false,
-          tp2Reached: false,
-          riskReward: null,
-          tp1RiskReward: null,
-          tp2RiskReward: null,
-        };
+        return hold(
+          "Execution Binance close_failed va khong xac minh duoc trang thai vi the tren san",
+          30,
+        );
       }
       if (positionAmt === 0) {
-        return {
-          decision: "CLOSE",
-          confidence: 100,
-          comment:
-            "Execution Binance thất bại và lệnh đóng khẩn cấp cũng thất bại trước đó, nhưng nay xác nhận vị thế đã đóng trên sàn — đóng bản ghi DB tương ứng",
-          managementAction: "NONE",
-          partialClosePercent: 0,
-          newStopLoss: null,
-          tp1Reached: false,
-          tp2Reached: false,
-          riskReward: null,
-          tp1RiskReward: null,
-          tp2RiskReward: null,
-        };
+        return close("Vi the fail-safe da duoc dong tren Binance");
       }
       await sendMessage(
-        `🚨🚨 ${config.closeFailedUrgentPrefix} — ${symbol}: vị thế VẪN ĐANG MỞ trên sàn KHÔNG CÓ SL (đóng khẩn cấp trước đó thất bại). Mở Binance app và ĐÓNG TAY hoặc đặt SL NGAY.`,
+        `🚨🚨 ${config.closeFailedUrgentPrefix} — ${symbol}: vi the van dang mo tren san KHONG CO SL. Mo Binance app va dong tay hoac dat SL ngay.`,
       );
-      return {
-        decision: "HOLD",
-        confidence: 20,
-        comment:
-          "Execution Binance thất bại và lệnh đóng khẩn cấp cũng thất bại — vị thế vẫn đang mở trên sàn KHÔNG CÓ SL, cần can thiệp tay khẩn cấp",
-        managementAction: "NONE",
-        partialClosePercent: 0,
-        newStopLoss: null,
-        tp1Reached: false,
-        tp2Reached: false,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
+      return hold(
+        "Execution Binance close_failed; vi the van dang mo tren san khong co SL",
+        20,
+      );
     }
 
-    // Execution "failed" = fail-safe da dong khan cap vi the tren san
-    // (khong con lenh nao, moi order id deu null). Neu de HOLD, position DB se treo
-    // mai mai (khong roi ve luong candle vi binanceSymbol da set). Dong DB luon.
     if (position.binanceExecutionStatus === "failed") {
-      return {
-        decision: "CLOSE",
-        confidence: 100,
-        comment:
-          "Execution Binance thất bại — vị thế đã được fail-safe đóng khẩn cấp trên sàn, đóng bản ghi DB tương ứng",
-        managementAction: "NONE",
-        partialClosePercent: 0,
-        newStopLoss: null,
-        tp1Reached: false,
-        tp2Reached: false,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
+      return close("Execution Binance that bai; vi the da duoc fail-safe dong tren san");
     }
 
     if (isEmaExitEnabled() && config.getEmaExitTimeframe) {
@@ -810,58 +705,49 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
       if (!(candlesResult instanceof Error) && candlesResult.length > 0) {
         const emaValue = calculateLatestEma(candlesResult, period);
         const lastClose = candlesResult[candlesResult.length - 1].close;
-        const emaDecision = resolveEmaExitDecision(position.direction, lastClose, emaValue, period);
+        const emaDecision = resolveEmaExitDecision(
+          position.direction,
+          lastClose,
+          emaValue,
+          period,
+        );
         if (emaDecision) {
-          const closeSide: "BUY" | "SELL" = position.direction === "LONG" ? "SELL" : "BUY";
           const positionAmt = await getPositionAmount(symbol);
-          const qtyToClose = !(positionAmt instanceof Error) && positionAmt !== 0 ? Math.abs(positionAmt) : null;
-
-          if (qtyToClose === null) {
-            logger.warn("Khong xac dinh duoc khoi luong vi the de dong theo EMA exit, bo qua lan check nay (chua huy SL/TP)", {
-              pair: position.pair, id: position.id,
+          if (positionAmt instanceof Error || positionAmt === 0) {
+            logger.warn("Khong xac dinh duoc khoi luong de dong vi the theo EMA exit", {
+              pair: position.pair,
+              id: position.id,
+              positionAmt,
             });
           } else {
-            if (position.binanceSlOrderId) {
-              const cancelSl = await cancelOrder(symbol, position.binanceSlOrderId);
-              if (cancelSl instanceof Error) {
-                logger.error("Khong huy duoc SL order truoc khi dong vi the theo EMA exit", {
-                  pair: position.pair, id: position.id, error: cancelSl,
-                });
-              }
-            }
-            if (position.binanceTp1OrderId) {
-              const cancelTp1 = await cancelOrder(symbol, position.binanceTp1OrderId);
-              if (cancelTp1 instanceof Error) {
-                logger.error("Khong huy duoc TP1 order truoc khi dong vi the theo EMA exit", {
-                  pair: position.pair, id: position.id, error: cancelTp1,
-                });
-              }
-            }
-            if (position.binanceTp2OrderId) {
-              const cancelTp2 = await cancelOrder(symbol, position.binanceTp2OrderId);
-              if (cancelTp2 instanceof Error) {
-                logger.error("Khong huy duoc TP2 order truoc khi dong vi the theo EMA exit", {
-                  pair: position.pair, id: position.id, error: cancelTp2,
-                });
-              }
-            }
+            await cancelTrackedOrder(position.binanceSlOrderId, "SL");
+            await cancelTrackedOrder(position.binanceTp1OrderId, "TP");
+            const closeSide: "BUY" | "SELL" =
+              position.direction === "LONG" ? "SELL" : "BUY";
+            const closeResult = await placeMarketOrder(
+              symbol,
+              closeSide,
+              Math.abs(positionAmt),
+              { reduceOnly: true },
+            );
+            if (!(closeResult instanceof Error)) return emaDecision;
 
-            const closeResult = await placeMarketOrder(symbol, closeSide, qtyToClose, { reduceOnly: true });
-            if (closeResult instanceof Error) {
-              logger.error("Dong vi the theo EMA exit THAT BAI SAU KHI DA HUY SL/TP", {
-                pair: position.pair, id: position.id, error: closeResult,
-              });
-              await sendMessage(
-                `🚨🚨 ${config.failSafeEmergencyMessagePrefix} — ${symbol}: EMA exit trigger, đã hủy SL/TP nhưng lệnh đóng MARKET THẤT BẠI.\n⚠️ VỊ THẾ ĐANG MỞ KHÔNG CÓ SL/TP — mở Binance app và ĐÓNG TAY hoặc đặt lại SL NGAY.\nLỗi: ${closeResult.message}`,
-              );
-            } else {
-              return emaDecision;
-            }
+            logger.error("Dong vi the theo EMA exit that bai sau khi da huy SL/TP", {
+              pair: position.pair,
+              id: position.id,
+              error: closeResult,
+            });
+            await sendMessage(
+              `🚨🚨 ${config.failSafeEmergencyMessagePrefix} — ${symbol}: EMA exit da huy SL/TP nhung dong MARKET that bai. Vi the dang mo khong co bao ve; can thiep tay ngay. Loi: ${closeResult.message}`,
+            );
+            return hold("EMA exit that bai sau khi huy SL/TP; can can thiep tay", 20);
           }
         }
       } else if (candlesResult instanceof Error) {
         logger.warn("Khong fetch duoc candles cho EMA exit check", {
-          pair: position.pair, id: position.id, error: candlesResult,
+          pair: position.pair,
+          id: position.id,
+          error: candlesResult,
         });
       }
     }
@@ -869,358 +755,38 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
     if (position.binanceSlOrderId) {
       const slStatus = await getOrderStatus(symbol, position.binanceSlOrderId);
       if (!(slStatus instanceof Error) && slStatus.status === "FILLED") {
-        if (position.binanceTp1OrderId) {
-          const cancelTp1 = await cancelOrder(symbol, position.binanceTp1OrderId);
-          if (cancelTp1 instanceof Error) {
-            logger.error("Khong huy duoc TP1 order con lai sau khi SL filled — co the con orphan order tren san", {
-              pair: position.pair,
-              id: position.id,
-              orderId: position.binanceTp1OrderId,
-              error: cancelTp1,
-            });
-            await sendCleanupWarning(
-              config,
-              position.pair,
-              `Không hủy được TP1 order còn lại sau khi SL filled (orderId ${position.binanceTp1OrderId}) — có thể còn orphan order trên sàn, kiểm tra tay.`,
-            );
-          }
-        }
-        if (position.binanceTp2OrderId) {
-          const cancelTp2 = await cancelOrder(symbol, position.binanceTp2OrderId);
-          if (cancelTp2 instanceof Error) {
-            logger.error("Khong huy duoc TP2 order con lai sau khi SL filled — co the con orphan order tren san", {
-              pair: position.pair,
-              id: position.id,
-              orderId: position.binanceTp2OrderId,
-              error: cancelTp2,
-            });
-            await sendCleanupWarning(
-              config,
-              position.pair,
-              `Không hủy được TP2 order còn lại sau khi SL filled (orderId ${position.binanceTp2OrderId}) — có thể còn orphan order trên sàn, kiểm tra tay.`,
-            );
-          }
-        }
+        await cancelTrackedOrder(position.binanceTp1OrderId, "TP");
         return {
           decision: "STOP",
           confidence: 100,
-          comment: "SL đã khớp trên Binance Futures",
+          comment: "SL da khop tren Binance Futures",
           managementAction: "NONE",
-          partialClosePercent: 0,
-          newStopLoss: null,
-          tp1Reached: alreadyPartial,
-          tp2Reached: false,
-          riskReward: null,
-          tp1RiskReward: null,
-          tp2RiskReward: null,
         };
       }
     }
 
-    if (position.binanceTp2OrderId) {
-      const tp2Status = await getOrderStatus(symbol, position.binanceTp2OrderId);
-      if (!(tp2Status instanceof Error) && tp2Status.status === "FILLED") {
-        if (position.binanceSlOrderId) {
-          const cancelSl = await cancelOrder(symbol, position.binanceSlOrderId);
-          if (cancelSl instanceof Error) {
-            logger.error("Khong huy duoc SL order con lai sau khi TP2 filled — co the con orphan order tren san", {
-              pair: position.pair,
-              id: position.id,
-              orderId: position.binanceSlOrderId,
-              error: cancelSl,
-            });
-            await sendCleanupWarning(
-              config,
-              position.pair,
-              `Không hủy được SL order còn lại sau khi TP2 filled (orderId ${position.binanceSlOrderId}) — có thể còn orphan order trên sàn, kiểm tra tay.`,
-            );
-          }
-        }
-        return {
-          decision: "CLOSE",
-          confidence: 100,
-          comment: "TP2 đã khớp trên Binance Futures",
-          managementAction: "TP2_CLOSE",
-          partialClosePercent: 0,
-          newStopLoss: null,
-          tp1Reached: true,
-          tp2Reached: true,
-          riskReward: null,
-          tp1RiskReward: null,
-          tp2RiskReward: null,
-        };
+    if (position.binanceTp1OrderId) {
+      const tpStatus = await getOrderStatus(symbol, position.binanceTp1OrderId);
+      if (!(tpStatus instanceof Error) && tpStatus.status === "FILLED") {
+        await cancelTrackedOrder(position.binanceSlOrderId, "SL");
+        return close("TP da khop tren Binance Futures", "TAKE_PROFIT_CLOSE");
       }
     }
 
-    if (!alreadyPartial && position.binanceTp1OrderId) {
-      const tp1Status = await getOrderStatus(symbol, position.binanceTp1OrderId);
-      if (!(tp1Status instanceof Error) && tp1Status.status === "FILLED") {
-        const closeSide: "BUY" | "SELL" =
-          position.direction === "LONG" ? "SELL" : "BUY";
-
-        // THU TU: HUY SL CU TRUOC, dat SL moi SAU. Verify thuc te tren testnet
-        // 2026-07-11: Binance TU CHOI dat 2 lenh STOP_MARKET closePosition=true cung
-        // chieu dong thoi ton tai (loi -4130 "An open stop or take profit order with
-        // GTE and closePosition in the direction is existing") — gia dinh cu ("Binance
-        // cho phep 2 lenh cung ton tai") SAI, khien dời SL về BE luôn thất bại vĩnh viễn.
-        // Chap nhan mot khoang trong that (round-trip API, thuong <1s) khong co SL nao
-        // tren san giua luc huy SL cu va dat SL moi — retry ngay lap tuc (khong doi
-        // cycle check sau) + alert Telegram khan cap neu dat lai van fail sau retry.
-        const filters = await getExchangeInfoFilters(symbol);
-        const entryPrice = Number(position.entry);
-        const bePrice =
-          filters instanceof Error
-            ? entryPrice
-            : roundToTickSize(entryPrice, filters.tickSize);
-
-        if (position.binanceSlOrderId) {
-          const cancelResult = await cancelOrder(symbol, position.binanceSlOrderId);
-          if (cancelResult instanceof Error) {
-            // Khong huy duoc SL cu -> SL cu (gia goc) VAN CON hieu luc tren san, vi the
-            // van co bao ve. KHONG dat SL moi (tranh tao 2 SL cung ton tai lai bi -4130).
-            // Thu lai dời BE ở lần check sau.
-            logger.error(
-              "Khong huy duoc SL cu de doi BE — giu nguyen SL goc, thu lai lan sau",
-              { pair: position.pair, id: position.id, error: cancelResult },
-            );
-            await sendCleanupWarning(
-              config,
-              position.pair,
-              `Không hủy được SL cũ để dời breakeven — SL gốc vẫn còn hiệu lực, bot sẽ tự thử lại lần check sau.`,
-            );
-            // QUAN TRONG: managementAction "NONE" + tp1Reached false + partialClosePercent 0
-            // (KHONG phai "PARTIAL_TP1"/true/50 nhu truoc) de deriveManagementPatch KHONG ghi
-            // tp1ClosedPercent/stopLoss sai vao DB — giu tp1ClosedPercent=0 trong DB de guard
-            // "!alreadyPartial" o dau ham nay mo lai, cho phep retry tu nhien o cycle sau
-            // (xem tasks/fix-binance-execution-review/context.md muc "Finding 1 + Finding 4").
-            return {
-              decision: "HOLD",
-              confidence: 90,
-              comment:
-                "TP1 đã khớp trên Binance Futures, dời SL về breakeven THẤT BẠI (không hủy được SL cũ) — SL vẫn ở giá gốc, sẽ thử lại lần check sau",
-              managementAction: "NONE",
-              partialClosePercent: 0,
-              newStopLoss: null,
-              tp1Reached: false,
-              tp2Reached: false,
-              riskReward: null,
-              tp1RiskReward: null,
-              tp2RiskReward: null,
-            };
-          }
-        }
-
-        // Tu day: SL cu DA bi huy — vi the dang KHONG CO SL nao tren san. Retry dat
-        // SL moi toi da 3 lan trong cung 1 lan goi (khong de treo den cycle sau).
-        let newSl = await placeStopMarketOrder(symbol, closeSide, bePrice);
-        for (let attempt = 2; newSl instanceof Error && attempt <= 3; attempt++) {
-          newSl = await placeStopMarketOrder(symbol, closeSide, bePrice);
-        }
-
-        if (newSl instanceof Error) {
-          logger.error(
-            "KHAN CAP: da huy SL cu nhung khong dat lai duoc SL moi sau 3 lan thu — vi the dang KHONG CO SL",
-            { pair: position.pair, id: position.id, error: newSl },
-          );
-          await sendMessage(
-            `🚨🚨 ${config.tp1MoveSLFailPrefix} — ${symbol}: đã hủy SL cũ để dời breakeven nhưng KHÔNG đặt lại được SL mới sau 3 lần thử.\n⚠️ VỊ THẾ ĐANG KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY LẬP TỨC.\nLỗi: ${newSl.message}`,
-          );
-          // QUAN TRONG: xem giai thich o nhanh fail phia tren (3a) — cung ap dung o day.
-          return {
-            decision: "HOLD",
-            confidence: 90,
-            comment:
-              "TP1 đã khớp trên Binance Futures, dời SL về breakeven THẤT BẠI SAU KHI ĐÃ HỦY SL CŨ — vị thế đang KHÔNG CÓ SL, cần đặt tay khẩn cấp",
-            managementAction: "NONE",
-            partialClosePercent: 0,
-            newStopLoss: null,
-            tp1Reached: false,
-            tp2Reached: false,
-            riskReward: null,
-            tp1RiskReward: null,
-            tp2RiskReward: null,
-          };
-        }
-
-        await config.updateBinanceSlOrder(position.id, newSl.orderId, String(bePrice));
-        return {
-          decision: "HOLD",
-          confidence: 90,
-          comment: "TP1 đã khớp trên Binance Futures, dời SL về breakeven",
-          managementAction: "PARTIAL_TP1",
-          partialClosePercent: position.tp1ClosePercent ?? 50,
-          newStopLoss: String(bePrice),
-          tp1Reached: true,
-          tp2Reached: false,
-          riskReward: null,
-          tp1RiskReward: null,
-          tp2RiskReward: null,
-        };
-      }
-    }
-
-    // Swing trailing SL sau khi TP1 da khop tu truoc (alreadyPartial) — moi cycle deu
-    // tinh lai swing low/high tren CUNG timeframe cua vi the (khong phai khung cao hon),
-    // dung cong thuc voi scanOutcomeSwingTrail trong setup-backtest.ts. Chi siet SL chat
-    // hon, khong bao gio noi long. Chi ap dung khi biet duoc primaryTimeframe cua vi the
-    // (hien tai la Volman — SMC chua co cot nay nen se bo qua nhanh nay, giu nguyen
-    // breakeven co dinh nhu truoc).
-    if (alreadyPartial && position.primaryTimeframe && position.binanceSlOrderId && position.stopLoss) {
-      const currentStop = Number(position.stopLoss);
-      if (Number.isFinite(currentStop)) {
-        const lookback = getConfiguredSwingTrailLookback();
-        const ohlcResult = await fetchOhlcHistory(symbol, position.primaryTimeframe, lookback);
-
-        if (!(ohlcResult instanceof Error) && ohlcResult.length > 0) {
-          const recentCandles = ohlcResult.slice(-lookback);
-          const swingLevel = calculateSwingTrailLevel(recentCandles, position.direction);
-
-          const isTighter =
-            swingLevel !== null &&
-            (position.direction === "LONG" ? swingLevel > currentStop : swingLevel < currentStop);
-
-          if (isTighter) {
-            const filters = await getExchangeInfoFilters(symbol);
-            const newStopPrice =
-              filters instanceof Error
-                ? (swingLevel as number)
-                : roundToTickSize(swingLevel as number, filters.tickSize);
-            const closeSide: "BUY" | "SELL" = position.direction === "LONG" ? "SELL" : "BUY";
-
-            const cancelResult = await cancelOrder(symbol, position.binanceSlOrderId);
-            if (cancelResult instanceof Error) {
-              logger.warn(
-                "Khong huy duoc SL cu de trail theo swing — giu nguyen SL, thu lai lan sau",
-                { pair: position.pair, id: position.id, error: cancelResult },
-              );
-              await sendCleanupWarning(
-                config,
-                position.pair,
-                `Không hủy được SL cũ để trail theo swing — SL hiện tại vẫn còn hiệu lực, bot sẽ tự thử lại lần check sau.`,
-              );
-            } else {
-              let newSl = await placeStopMarketOrder(symbol, closeSide, newStopPrice);
-              for (let attempt = 2; newSl instanceof Error && attempt <= 3; attempt++) {
-                newSl = await placeStopMarketOrder(symbol, closeSide, newStopPrice);
-              }
-
-              if (newSl instanceof Error) {
-                logger.error(
-                  "KHAN CAP: da huy SL cu de trail swing nhung khong dat lai duoc SL moi sau 3 lan thu — vi the dang KHONG CO SL",
-                  { pair: position.pair, id: position.id, error: newSl },
-                );
-                await sendMessage(
-                  `🚨🚨 ${config.tp1MoveSLFailPrefix} — ${symbol}: đã hủy SL để trail theo swing nhưng KHÔNG đặt lại được SL mới sau 3 lần thử.\n⚠️ VỊ THẾ ĐANG KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY LẬP TỨC.\nLỗi: ${newSl.message}`,
-                );
-                return {
-                  decision: "HOLD",
-                  confidence: 90,
-                  comment:
-                    "Trail SL theo swing THẤT BẠI SAU KHI ĐÃ HỦY SL CŨ — vị thế đang KHÔNG CÓ SL, cần đặt tay khẩn cấp",
-                  managementAction: "NONE",
-                  partialClosePercent: 0,
-                  newStopLoss: null,
-                  tp1Reached: true,
-                  tp2Reached: false,
-                  riskReward: null,
-                  tp1RiskReward: null,
-                  tp2RiskReward: null,
-                };
-              }
-
-              await config.updateBinanceSlOrder(position.id, newSl.orderId, String(newStopPrice));
-              return {
-                decision: "HOLD",
-                confidence: 90,
-                comment: `Đã siết SL theo swing ${lookback} nến gần nhất: ${newStopPrice}`,
-                managementAction: "TRAIL_SL",
-                partialClosePercent: 0,
-                newStopLoss: String(newStopPrice),
-                tp1Reached: true,
-                tp2Reached: false,
-                riskReward: null,
-                tp1RiskReward: null,
-                tp2RiskReward: null,
-              };
-            }
-          }
-        }
-      }
-    }
-
-    // Khong order tracked nao (SL/TP1/TP2) FILLED — truoc khi ket luan HOLD, xac minh
-    // truc tiep voi Binance xem vi the co con that su khong (user co the da tu tay dong
-    // tren app, khong qua cac order nay). "Hoi Binance truoc" la nguon du lieu chinh xac
-    // nhat, KHONG duoc tin DB/trang thai order mu quang.
-    // HANG: chi ket luan CLOSE neu TUNG CO IT NHAT 1 trong 3 order id (SL/TP1/TP2) — neu ca 3
-    // deu null, ngha la entry chua khop (entry LIMIT/STOP dang cho khop), KHONG phai "da dong".
-    const hasAnySlTpOrder = position.binanceSlOrderId || position.binanceTp1OrderId || position.binanceTp2OrderId;
+    const hasProtectionOrder =
+      Boolean(position.binanceSlOrderId) || Boolean(position.binanceTp1OrderId);
     const positionAmt = await getPositionAmount(symbol);
-    if (!(positionAmt instanceof Error) && positionAmt === 0 && hasAnySlTpOrder) {
-      // Don rac cac order con lai neu co (best-effort, khong throw neu fail — co the san
-      // da tu huy roi vi khong con vi the de reduce).
-      if (position.binanceSlOrderId) {
-        const cancelSl = await cancelOrder(symbol, position.binanceSlOrderId);
-        if (cancelSl instanceof Error) {
-          logger.warn("Khong huy duoc SL order con lai khi phat hien dong thu cong (co the da tu huy tren san)", {
-            pair: position.pair,
-            id: position.id,
-            orderId: position.binanceSlOrderId,
-            error: cancelSl,
-          });
-        }
-      }
-      if (position.binanceTp1OrderId) {
-        const cancelTp1 = await cancelOrder(symbol, position.binanceTp1OrderId);
-        if (cancelTp1 instanceof Error) {
-          logger.warn("Khong huy duoc TP1 order con lai khi phat hien dong thu cong (co the da tu huy tren san)", {
-            pair: position.pair,
-            id: position.id,
-            orderId: position.binanceTp1OrderId,
-            error: cancelTp1,
-          });
-        }
-      }
-      if (position.binanceTp2OrderId) {
-        const cancelTp2 = await cancelOrder(symbol, position.binanceTp2OrderId);
-        if (cancelTp2 instanceof Error) {
-          logger.warn("Khong huy duoc TP2 order con lai khi phat hien dong thu cong (co the da tu huy tren san)", {
-            pair: position.pair,
-            id: position.id,
-            orderId: position.binanceTp2OrderId,
-            error: cancelTp2,
-          });
-        }
-      }
-      return {
-        decision: "CLOSE",
-        confidence: 100,
-        comment:
-          "Không xác nhận được SL/TP nào khớp, nhưng vị thế đã trống trên sàn (getPositionAmount=0) — có thể đã đóng thủ công trên Binance, tự động đóng bản ghi DB tương ứng",
-        managementAction: "NONE",
-        partialClosePercent: 0,
-        newStopLoss: null,
-        tp1Reached: alreadyPartial,
-        tp2Reached: false,
-        riskReward: null,
-        tp1RiskReward: null,
-        tp2RiskReward: null,
-      };
+    if (
+      !(positionAmt instanceof Error) &&
+      positionAmt === 0 &&
+      hasProtectionOrder
+    ) {
+      await cancelTrackedOrder(position.binanceSlOrderId, "SL");
+      await cancelTrackedOrder(position.binanceTp1OrderId, "TP");
+      return close("Vi the da duoc dong thu cong tren Binance");
     }
 
-    return {
-      decision: "HOLD",
-      confidence: 100,
-      comment: "Vị thế đang mở trên Binance Futures, chưa có lệnh SL/TP nào khớp",
-      managementAction: "NONE",
-      partialClosePercent: 0,
-      newStopLoss: null,
-      tp1Reached: alreadyPartial,
-      tp2Reached: false,
-      riskReward: null,
-      tp1RiskReward: null,
-      tp2RiskReward: null,
-    };
+    return hold("Vi the dang mo tren Binance Futures, chua co lenh SL/TP nao khop");
   };
 }
 
@@ -1342,11 +908,7 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
         }
 
         const slPrice = roundToTickSize(Number(position.stopLoss), filters.tickSize);
-        const tp1Price = roundToTickSize(Number(position.takeProfit1), filters.tickSize);
-        const tp2Price =
-          position.takeProfit2 !== null
-            ? roundToTickSize(Number(position.takeProfit2), filters.tickSize)
-            : null;
+        const tpPrice = roundToTickSize(Number(position.takeProfit1), filters.tickSize);
 
         // Quantity THAT SU tren san — quan trong nhat cho STOP_MARKET (algo order khong
         // bao gio tra ve executedQty nen "FILLED" co the la fill mot phan).
@@ -1355,13 +917,6 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
           position.binanceQuantity,
           logger,
         );
-        const partialClosePercent = position.partialClosePercent ?? 50;
-        const { tp1Quantity, tp2Quantity } = splitTpQuantities(
-          actualQuantity,
-          partialClosePercent,
-          filters.stepSize,
-        );
-
         const sizing = { quantity: actualQuantity };
 
         try {
@@ -1370,10 +925,7 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
             symbol,
             closeSide,
             slPrice,
-            tp1Price,
-            tp2Price,
-            tp1Quantity,
-            tp2Quantity,
+            tpPrice,
             position.binanceEntryOrderId,
             position.id,
             sizing,
@@ -1382,7 +934,7 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
           );
 
           await sendMessage(
-            `✅ ${config.successPrefix} — Lệnh entry ${symbol} đã khớp, đã đặt SL/TP\nQty: ${actualQuantity} | Leverage: ${position.binanceLeverage}x\nSL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
+            `✅ ${config.successPrefix} — Lệnh entry ${symbol} đã khớp, đã đặt SL/TP\nQty: ${actualQuantity} | Leverage: ${position.binanceLeverage}x\nSL: ${slPrice} | TP: ${tpPrice}`,
           );
 
           if (config.updateBinanceEntryOrderStatus) {
@@ -1458,18 +1010,7 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
           const filters = await getExchangeInfoFilters(symbol);
           if (!(filters instanceof Error)) {
             const slPrice = roundToTickSize(Number(position.stopLoss), filters.tickSize);
-            const tp1Price = roundToTickSize(Number(position.takeProfit1), filters.tickSize);
-            const tp2Price =
-              position.takeProfit2 !== null
-                ? roundToTickSize(Number(position.takeProfit2), filters.tickSize)
-                : null;
-
-            const partialClosePercent = position.partialClosePercent ?? 50;
-            const { tp1Quantity, tp2Quantity } = splitTpQuantities(
-              executedQty,
-              partialClosePercent,
-              filters.stepSize,
-            );
+            const tpPrice = roundToTickSize(Number(position.takeProfit1), filters.tickSize);
 
             const sizing = { quantity: executedQty };
             try {
@@ -1478,10 +1019,7 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
                 symbol,
                 closeSide,
                 slPrice,
-                tp1Price,
-                tp2Price,
-                tp1Quantity,
-                tp2Quantity,
+                tpPrice,
                 position.binanceEntryOrderId,
                 position.id,
                 sizing,
@@ -1490,7 +1028,7 @@ export function createPollPendingEntryOrder<TOpenPosition extends OpenPosition>(
               );
 
               await sendMessage(
-                `✅ ${config.successPrefix} — Lệnh entry ${symbol} khớp một phần khi hết hạn (qty ${executedQty}), đã đặt SL/TP cho phần đã khớp\nSL: ${slPrice} | TP1: ${tp1Price} | TP2: ${tp2Price ?? "-"}`,
+                `✅ ${config.successPrefix} — Lệnh entry ${symbol} khớp một phần khi hết hạn (qty ${executedQty}), đã đặt SL/TP cho phần đã khớp\nSL: ${slPrice} | TP: ${tpPrice}`,
               );
 
               if (config.updateBinanceEntryOrderStatus) {

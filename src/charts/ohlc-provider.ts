@@ -664,6 +664,34 @@ async function fetchLastPriceFromTwelveData(
 }
 
 // ---------------------------------------------------------------------------
+// Forex/gold weekend closure filter
+// ---------------------------------------------------------------------------
+
+/**
+ * Loại bỏ nến rơi vào giờ thị trường đóng cửa cho các symbol OANDA (forex/vàng),
+ * CHỈ áp dụng cho khung intraday (M15/H1/H4) — nến chết chỉ xuất hiện ở dữ liệu
+ * theo giờ. Nến D1 gộp cả ngày/tuần, áp dụng lọc theo giờ ở đây không có ý nghĩa
+ * (và có thể xóa nhầm nến D1 hợp lệ đóng dấu vào Chủ nhật). Không ảnh hưởng symbol
+ * Binance (crypto 24/7).
+ *
+ * Lý do cần lọc: khi thị trường đóng cửa, nguồn dữ liệu (Twelve Data/OANDA) vẫn có
+ * thể trả về nến H1/H4 "chết" (giá gần như đứng yên, ATR gần 0). Các detector dựa
+ * trên nén (BB/RB/ARB/IRB) có thể nhận nhầm đoạn nến chết này là block nén chặt, tạo
+ * ra risk gần 0 và R-multiple bị khuếch đại phi thực tế khi thị trường mở cửa trở
+ * lại (đã xác nhận cụ thể với XAU/USD trên khung H1 — xem review backtest).
+ * Dùng lại `isForexWeekendClosed` (đã có sẵn cho cache expiry) để nhất quán biên
+ * đóng/mở cửa (thứ Sáu 21:00 UTC → Chủ nhật 21:00 UTC).
+ */
+export function filterClosedForexCandles(
+  candles: Candle[],
+  symbol: string,
+  timeframe: ChartTimeframe,
+): Candle[] {
+  if (isBinanceSymbol(symbol) || timeframe === "D1") return candles;
+  return candles.filter((c) => !isForexWeekendClosed(c.time));
+}
+
+// ---------------------------------------------------------------------------
 // Fetch OHLC history
 // ---------------------------------------------------------------------------
 
@@ -688,14 +716,14 @@ export async function fetchOhlcHistory(
   const key = cacheKey(symbol, timeframe);
   const cached = !bypassCache && isCacheEnabled(timeframe) ? cache.get(key) : undefined;
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.candles.slice();
+    return filterClosedForexCandles(cached.candles.slice(), symbol, timeframe);
   }
 
   if (!bypassCache && isCacheEnabled(timeframe)) {
     const persisted = await loadOhlcCandleCache(key);
     if (persisted) {
       cache.set(key, { candles: persisted.candles.slice(), expiresAt: persisted.expiresAtMs });
-      return persisted.candles.slice();
+      return filterClosedForexCandles(persisted.candles.slice(), symbol, timeframe);
     }
   }
 
@@ -703,10 +731,13 @@ export async function fetchOhlcHistory(
     logger.warn(`Bỏ qua pin window cho ${symbol}: chưa hỗ trợ TwelveData`);
   }
 
-  const result = useBinance
+  const rawResult = useBinance
     ? await fetchFromBinance(symbol, timeframe, bars, endTimeMs)
     : await fetchFromTwelveData(symbol, timeframe, bars, twelveDataApiKey!);
-  if (result instanceof Error) return result;
+  if (rawResult instanceof Error) return rawResult;
+  // Lọc nến "chết" trong giờ đóng cửa cuối tuần TRƯỚC khi cache — cache (memory + DB)
+  // chỉ chứa nến giao dịch thật, mọi consumer (live pipeline, backtest) tự động sạch.
+  const result = filterClosedForexCandles(rawResult, symbol, timeframe);
   if (!bypassCache && isCacheEnabled(timeframe)) {
     const latestCandleTime =
       result.length > 0 ? result[result.length - 1].time : null;

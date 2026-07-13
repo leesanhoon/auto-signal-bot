@@ -11,8 +11,7 @@ export type SetupChartInput = {
   direction: "LONG" | "SHORT";
   entry: number;
   stopLoss: number;
-  takeProfit1: number;
-  takeProfit2: number;
+  takeProfit: number;
   chartContext: ChartContext;
 };
 
@@ -32,7 +31,7 @@ interface CoordMap {
 function buildCoordMap(
   candles: Candle[],
   stopLoss: number,
-  takeProfit2: number,
+  takeProfit: number,
 ): CoordMap {
   const marginLeft = 40;
   const marginRight = 40;
@@ -42,8 +41,8 @@ function buildCoordMap(
   const chartHeight = 500 - marginTop - marginBottom;
 
   // Find min/max price including SL and TP
-  let minPrice = Math.min(...candles.map((c) => c.low), stopLoss, takeProfit2);
-  let maxPrice = Math.max(...candles.map((c) => c.high), stopLoss, takeProfit2);
+  let minPrice = Math.min(...candles.map((c) => c.low), stopLoss, takeProfit);
+  let maxPrice = Math.max(...candles.map((c) => c.high), stopLoss, takeProfit);
 
   // Add 5% padding
   const padding = (maxPrice - minPrice) * 0.05;
@@ -78,10 +77,10 @@ function mapYCoord(price: number, coord: CoordMap): number {
 }
 
 export function buildSetupChartSvg(input: SetupChartInput): string {
-  const { pair, setup, direction, entry, stopLoss, takeProfit1, takeProfit2, chartContext } = input;
-  const { candles, ema20, sliceStartIndex, geometry } = chartContext;
+  const { pair, setup, direction, entry, stopLoss, takeProfit, chartContext } = input;
+  const { candles, ma21, sliceStartIndex, geometry } = chartContext;
 
-  const coord = buildCoordMap(candles, stopLoss, takeProfit2);
+  const coord = buildCoordMap(candles, stopLoss, takeProfit);
 
   let svg = `<svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" style="background:white;font-family:Arial,sans-serif">`;
 
@@ -133,14 +132,14 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
     svg += `<rect x="${xCenter - bodyWidth / 2}" y="${bodyTop}" width="${bodyWidth}" height="${bodyHeight || 1}" fill="${bodyColor}" stroke="${candleColor}" stroke-width="0.5"/>`;
   }
 
-  // Draw EMA20
-  if (ema20 && ema20.length > 0) {
+  // Draw EMA21
+  if (ma21 && ma21.length > 0) {
     let emaPath = "M";
     let firstPoint = true;
-    for (let i = 0; i < ema20.length; i++) {
-      if (ema20[i] !== null) {
+    for (let i = 0; i < ma21.length; i++) {
+      if (ma21[i] !== null) {
         const x = mapXCoord(i, coord);
-        const y = mapYCoord(ema20[i]!, coord);
+        const y = mapYCoord(ma21[i]!, coord);
         if (firstPoint) {
           emaPath += ` ${x},${y}`;
           firstPoint = false;
@@ -170,8 +169,7 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
   const lines = [
     { price: entry, label: `Entry ${entry.toFixed(5)}`, color: "#FFFF00", dash: "5,5" },
     { price: stopLoss, label: `SL ${stopLoss.toFixed(5)}`, color: "#FF0000", dash: "5,5" },
-    { price: takeProfit1, label: `TP1 ${takeProfit1.toFixed(5)}`, color: "#00AA00", dash: "5,5" },
-    { price: takeProfit2, label: `TP2 ${takeProfit2.toFixed(5)}`, color: "#00AA00", dash: "5,5" },
+    { price: takeProfit, label: `TP ${takeProfit.toFixed(5)}`, color: "#00AA00", dash: "5,5" },
   ];
 
   for (const line of lines) {

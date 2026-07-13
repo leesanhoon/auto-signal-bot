@@ -1,6 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import {
-  isBinanceHonorOrderTypeEnabledSmc,
   isBinanceHonorOrderTypeEnabledVolman,
   getConfiguredBinanceEntryOrderExpiryMinutes,
   getConfiguredBinanceWorkingType,
@@ -15,48 +14,6 @@ describe("binance-futures-config-env — entry order type flags", () => {
 
   afterEach(() => {
     process.env = originalEnv;
-  });
-
-  describe("isBinanceHonorOrderTypeEnabledSmc()", () => {
-    test("returns false when BINANCE_HONOR_ORDER_TYPE_SMC is not set", () => {
-      delete process.env.BINANCE_HONOR_ORDER_TYPE_SMC;
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(false);
-    });
-
-    test("returns false when BINANCE_HONOR_ORDER_TYPE_SMC is empty", () => {
-      process.env.BINANCE_HONOR_ORDER_TYPE_SMC = "";
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(false);
-    });
-
-    test("returns false when BINANCE_HONOR_ORDER_TYPE_SMC is 'false'", () => {
-      process.env.BINANCE_HONOR_ORDER_TYPE_SMC = "false";
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(false);
-    });
-
-    test("returns true when BINANCE_HONOR_ORDER_TYPE_SMC is 'true'", () => {
-      process.env.BINANCE_HONOR_ORDER_TYPE_SMC = "true";
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(true);
-    });
-
-    test("returns true when BINANCE_HONOR_ORDER_TYPE_SMC is '1'", () => {
-      process.env.BINANCE_HONOR_ORDER_TYPE_SMC = "1";
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(true);
-    });
-
-    test("returns true when BINANCE_HONOR_ORDER_TYPE_SMC is 'yes'", () => {
-      process.env.BINANCE_HONOR_ORDER_TYPE_SMC = "yes";
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(true);
-    });
-
-    test("returns true when BINANCE_HONOR_ORDER_TYPE_SMC is 'on'", () => {
-      process.env.BINANCE_HONOR_ORDER_TYPE_SMC = "on";
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(true);
-    });
-
-    test("ignores case and whitespace", () => {
-      process.env.BINANCE_HONOR_ORDER_TYPE_SMC = "  TRUE  ";
-      expect(isBinanceHonorOrderTypeEnabledSmc()).toBe(true);
-    });
   });
 
   describe("isBinanceHonorOrderTypeEnabledVolman()", () => {

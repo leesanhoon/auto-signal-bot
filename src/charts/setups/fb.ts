@@ -1,12 +1,12 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
 import { classifyTrend } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, applyStandardConfidenceAdjustments } from "./shared.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
 
 /**
  * FB — First Break
- * New trend with EMA20 recently switched from FLAT/opposite.
- * First price touch of EMA20 since trend formed → signal bar closes in trend direction.
+ * New trend with EMA21 recently switched from FLAT/opposite.
+ * First price touch of EMA21 since trend formed → signal bar closes in trend direction.
  */
 export function detectFb(
   candles: Candle[],
@@ -18,48 +18,48 @@ export function detectFb(
 
   if (index < 1) return null;
 
-  const trend = classifyTrend(candles, ctx.ema20, ctx.atr14, index);
+  const trend = classifyTrend(candles, ctx.ma21, ctx.atr14, index);
   if (trend === "FLAT") {
     trace.push(`Trend=FLAT -> khong ap dung FB`);
     return null;
   }
   trace.push(`Trend=${trend}`);
 
-  const ema = ctx.ema20[index];
+  const ema = ctx.ma21[index];
   const atr = ctx.atr14[index];
   if (ema === null || atr === null || atr === 0) return null;
 
   // 1. Trend must have formed recently (within last 10 candles)
-  // Scan back to find when EMA20 slope first became strong in current direction.
+  // Di NGUOC tu index-1 (KHONG phai index — tai index, classifyTrend() da chac chan
+  // slope>0.15 roi, neu bat dau quet tu do se luon "tim thay" trend ngay lap tuc va
+  // dung lai, khien trendStartIndex==index moi lan, tao cua so rong/am cho
+  // isHarmonicPullback ben duoi va lam FB khong bao gio bat tin hieu — da xac nhan
+  // bang thuc nghiem: 0/2 pass truoc khi sua). Thay vao do, DI NGUOC MIEN LA slope
+  // van con manh, dung lai o diem dau tien KHONG con thoa dieu kien nua — do moi la
+  // diem bat dau thuc su cua trend.
   const trendLookback = 10;
-  let trendStartIndex = -1;
-  for (let i = index; i >= Math.max(0, index - trendLookback); i--) {
-    if (i < 5) break;
-    const emaI = ctx.ema20[i];
-    const emaPrevI = ctx.ema20[i - 5];
+  let trendStartIndex = index;
+  for (let i = index - 1; i >= Math.max(5, index - trendLookback); i--) {
+    const emaI = ctx.ma21[i];
+    const emaPrevI = ctx.ma21[i - 5];
     const atrI = ctx.atr14[i];
-    if (emaI === null || emaPrevI === null || atrI === null || atrI === 0) continue;
+    if (emaI === null || emaPrevI === null || atrI === null || atrI === 0) break;
 
     const slopeI = (emaI - emaPrevI) / atrI;
-    if (trend === "UPTREND" && slopeI > 0.15) {
-      trendStartIndex = i;
-      break;
-    }
-    if (trend === "DOWNTREND" && slopeI < -0.15) {
-      trendStartIndex = i;
-      break;
-    }
+    const stillTrending = trend === "UPTREND" ? slopeI > 0.15 : slopeI < -0.15;
+    if (!stillTrending) break;
+    trendStartIndex = i;
   }
 
-  if (trendStartIndex < 0) {
+  if (trendStartIndex >= index) {
     trace.push(`Khong tim thay diem bat dau trend trong ${trendLookback} nen`);
     return null;
   }
 
   // Verify the transition: before trendStartIndex, slope should have been FLAT or opposite
   if (trendStartIndex >= 5) {
-    const emaBefore = ctx.ema20[trendStartIndex - 1];
-    const emaBeforePrev = ctx.ema20[Math.max(0, trendStartIndex - 6)];
+    const emaBefore = ctx.ma21[trendStartIndex - 1];
+    const emaBeforePrev = ctx.ma21[Math.max(0, trendStartIndex - 6)];
     const atrBefore = ctx.atr14[trendStartIndex];
     if (emaBefore !== null && emaBeforePrev !== null && atrBefore !== null && atrBefore !== 0) {
       const prevSlope = (emaBefore - emaBeforePrev) / atrBefore;
@@ -76,14 +76,14 @@ export function detectFb(
   }
   trace.push(`Trend bat dau tu index ${trendStartIndex}`);
 
-  // 2. Count touches of EMA20 since trendStartIndex up to index-1
+  // 2. Count touches of EMA21 since trendStartIndex up to index-1
   let touchCount = 0;
   for (let i = trendStartIndex; i < index; i++) {
-    const e = ctx.ema20[i];
+    const e = ctx.ma21[i];
     const a = ctx.atr14[i];
     if (e === null || a === null || a === 0) continue;
     const dist = Math.abs(candles[i].close - e) / a;
-    // A touch is defined as price being very close to EMA20 (within 0.3 ATR)
+    // A touch is defined as price being very close to EMA21 (within 0.3 ATR)
     if (dist <= 0.3) {
       touchCount++;
     }
@@ -92,10 +92,10 @@ export function detectFb(
   // 3. Current candle (signal bar) must be a touch
   const currentDistance = Math.abs(candles[index].close - ema) / atr;
   if (currentDistance > 0.3) {
-    trace.push(`Gia cach EMA20 ${currentDistance.toFixed(2)} ATR (>0.3) -> khong phai cham EMA`);
+    trace.push(`Gia cach EMA21 ${currentDistance.toFixed(2)} ATR (>0.3) -> khong phai cham EMA`);
     return null;
   }
-  trace.push(`Cham EMA20, distance=${currentDistance.toFixed(2)} ATR`);
+  trace.push(`Cham EMA21, distance=${currentDistance.toFixed(2)} ATR`);
 
   touchCount++; // include current candle
   trace.push(`touchCount=${touchCount} (tu trendStartIndex ${trendStartIndex})`);
@@ -105,23 +105,25 @@ export function detectFb(
     return null;
   }
 
-  // 4. Signal bar must close in trend direction with strong body
+  // Verify pullback is harmonic (single wave, not horizontal)
+  const isHarmonic = isHarmonicPullback(candles, trendStartIndex, index - 1, atr);
+  if (!isHarmonic) {
+    trace.push(`Pullback khong phai song hieu hoa (ngang hoac danh gia 2 lan)`);
+    return null;
+  }
+  trace.push(`Pullback la song hieu hoa`);
+
+  // 4. Nen hien tai la nen CHAM MA (pullback vua cham EMA21) — day chinh la nen
+  // dung de dat stop order theo Buoc 4 tai lieu, KHONG phai nen da xac nhan phuc hoi. Truoc day
+  // code con bat buoc CHINH nen nay phai dong cua thuan trend + than nen manh
+  // (bodyRatio>=0.5) — thuc te 1 nen vua cham day/dinh pullback (con dang di NGUOC
+  // trend) hiem khi dong cua thuan trend NGAY trong cung nen do; da xac nhan bang
+  // thuc nghiem dieu kien nay chan 100% tin hieu (0/10 pass tren du lieu that). Vi
+  // FB dung stop order tai bien nen tin hieu, nen KHONG can bat buoc lai xac
+  // nhan hoi phuc tren chinh nen phat hien nay, chi can dung bodyRatio lam yeu to
+  // confidence (xem applyStandardConfidenceAdjustments ben duoi).
   const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
-
-  const closesInTrend = trend === "UPTREND"
-    ? candles[index].close > candles[index].open
-    : candles[index].close < candles[index].open;
-
-  if (!closesInTrend) {
-    trace.push(`Signal bar dong cua nguoc trend -> khong phai FB`);
-    return null;
-  }
-
-  if (bodyRatio < 0.5) {
-    trace.push(`Signal bar bodyRatio=${bodyRatio.toFixed(2)} < 0.5 -> yeu`);
-    return null;
-  }
-  trace.push(`Signal bar bodyRatio=${bodyRatio.toFixed(2)} >= 0.5, dong cua xuoi trend`);
+  trace.push(`Cham EMA21, dat stop order tai bien nen tin hieu, bodyRatio hien tai=${bodyRatio.toFixed(2)}`);
 
   // Entry/Stop/Target
   const direction = trend === "UPTREND" ? "LONG" : "SHORT";
@@ -133,39 +135,13 @@ export function detectFb(
   const stopLoss = direction === "LONG"
     ? signalLow - stopBuffer
     : signalHigh + stopBuffer;
-  const risk = Math.abs(entry - stopLoss);
-  const takeProfit1 = direction === "LONG"
-    ? entry + 1.5 * risk
-    : entry - 1.5 * risk;
-
-  // TP2: hướng về swing extreme trước khi trend hình thành; fallback 2.5R.
-  const defaultTp2 = direction === "LONG" ? entry + 2.5 * risk : entry - 2.5 * risk;
-  let tp2 = defaultTp2;
-  if (direction === "LONG") {
-    let swingHigh = -Infinity;
-    for (let i = Math.max(0, trendStartIndex - 15); i < trendStartIndex; i++) {
-      if (candles[i].high > swingHigh) swingHigh = candles[i].high;
-    }
-    if (swingHigh > entry) {
-      const candidate = entry + (swingHigh - entry) * 0.5;
-      if (candidate > takeProfit1) tp2 = candidate;
-    }
-  } else {
-    let swingLow = Infinity;
-    for (let i = Math.max(0, trendStartIndex - 15); i < trendStartIndex; i++) {
-      if (candles[i].low < swingLow) swingLow = candles[i].low;
-    }
-    if (swingLow < entry) {
-      const candidate = entry - (entry - swingLow) * 0.5;
-      if (candidate < takeProfit1) tp2 = candidate;
-    }
-  }
+  const takeProfit = computeTakeProfit(direction, entry, stopLoss);
 
   trace.push(`Entry ${direction} tai ${entry.toFixed(5)}, Stop=${stopLoss.toFixed(5)}`);
 
   // Confidence
   let confidence = baseConfidence;
-  const slope = computeSlope(ctx.ema20, ctx.atr14, index);
+  const slope = computeSlope(ctx.ma21, ctx.atr14, index);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
   return {
@@ -175,8 +151,7 @@ export function detectFb(
     direction,
     entry,
     stopLoss,
-    takeProfit1,
-    takeProfit2: tp2,
+    takeProfit,
     confidence,
     triggerIndex: index,
     ruleTrace: trace,

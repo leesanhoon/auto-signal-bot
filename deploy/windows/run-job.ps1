@@ -1,5 +1,5 @@
 ﻿# Wrapper chạy 1 job của bot: nạp .env -> chạy npm script -> ghi log vào logs\.
-# Được Task Scheduler gọi, hoặc chạy tay: .\run-job.ps1 -Job analyze-smc
+# Được Task Scheduler gọi, hoặc chạy tay: .\run-job.ps1 -Job analyze
 param(
     [Parameter(Mandatory = $true)][string]$Job
 )
@@ -11,7 +11,6 @@ Set-Location $repo
 # Bảng job: npm script + env riêng + argument. Tên job khớp với register-tasks.ps1.
 $jobs = @{
     "analyze"                     = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto" } }
-    "analyze-smc"                 = @{ Script = "analyze:smc"; Env = @{ CHART_RUN_CONTEXT = "auto" } }
     "analyze-volman-m15"          = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto"; CHART_PRIMARY_TIMEFRAME = "M15" } }
     "analyze-volman-h1"           = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto"; CHART_PRIMARY_TIMEFRAME = "H1" } }
     "analyze-volman-h4"           = @{ Script = "analyze"; Env = @{ CHART_RUN_CONTEXT = "auto"; CHART_PRIMARY_TIMEFRAME = "H4" } }

@@ -4,12 +4,12 @@ import type { ChartTimeframe } from "./chart-types-common.js";
 // Type definitions (configuration types)
 // ============================================================================
 
-export type ChartEngineMode = "ai" | "deterministic" | "shadow" | "smc";
+export type ChartEngineMode = "ai" | "deterministic" | "shadow";
 export type ChartRunContext = "manual" | "auto";
 export type ChartTimeframeMode = "multi" | "single";
 
 // ============================================================================
-// Shared helpers (duplicated in both volman-config-env.ts and smc-config-env.ts)
+// Shared helpers
 // ============================================================================
 
 function readBooleanEnv(key: string, defaultValue: boolean): boolean {
@@ -21,7 +21,7 @@ function readBooleanEnv(key: string, defaultValue: boolean): boolean {
 }
 
 // ============================================================================
-// Shared configuration (both Volman and SMC use these)
+// Chart runtime configuration
 // ============================================================================
 
 export function getConfiguredChartEngineMode(): ChartEngineMode {
@@ -89,4 +89,28 @@ export function getConfiguredChartSignalConfidenceThreshold(): number {
   if (!raw) return 70;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : 70;
+}
+
+// TP mặc định theo bội số R (docs: TP = 2R), override qua env TP_R_MULTIPLE.
+export function getConfiguredTpRMultiple(): number {
+  const raw = process.env.TP_R_MULTIPLE?.trim();
+  if (!raw) return 2;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2;
+}
+
+// ============================================================================
+// EMA Exit configuration (đóng lệnh khi nến đóng cửa cắt EMA ngược hướng)
+// ============================================================================
+
+export function isEmaExitEnabled(): boolean {
+  const raw = process.env.EMA_EXIT_ENABLED?.trim().toLowerCase();
+  return raw === "true" || raw === "1";
+}
+
+export function getEmaExitPeriod(): number {
+  const raw = process.env.EMA_EXIT_PERIOD?.trim();
+  if (!raw) return 21;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 2 ? parsed : 21;
 }

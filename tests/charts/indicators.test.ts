@@ -57,7 +57,7 @@ const steadyFall = makeCandles(
 
 describe("calculateEma", () => {
   test("returns null array for empty candles", () => {
-    expect(calculateEma([], 20)).toEqual([]);
+    expect(calculateEma([], 21)).toEqual([]);
   });
 
   test("returns null for first (period-1) indices, then SMA seed", () => {
@@ -157,25 +157,25 @@ describe("calculateAtr", () => {
 describe("classifyTrend", () => {
   test("UPTREND for steadily rising prices", () => {
     const candles = steadyRise;
-    const ema20 = calculateEma(candles, 20);
+    const ma21 = calculateEma(candles, 21);
     const atr14 = calculateAtr(candles, 14);
-    const state = classifyTrend(candles, ema20, atr14, candles.length - 1);
+    const state = classifyTrend(candles, ma21, atr14, candles.length - 1);
     expect(state).toBe("UPTREND");
   });
 
   test("DOWNTREND for steadily falling prices", () => {
     const candles = steadyFall;
-    const ema20 = calculateEma(candles, 20);
+    const ma21 = calculateEma(candles, 21);
     const atr14 = calculateAtr(candles, 14);
-    const state = classifyTrend(candles, ema20, atr14, candles.length - 1);
+    const state = classifyTrend(candles, ma21, atr14, candles.length - 1);
     expect(state).toBe("DOWNTREND");
   });
 
   test("FLAT for insufficient data (index < 5)", () => {
     const candles = steadyRise;
-    const ema20 = calculateEma(candles, 20);
+    const ma21 = calculateEma(candles, 21);
     const atr14 = calculateAtr(candles, 14);
-    const state = classifyTrend(candles, ema20, atr14, 3);
+    const state = classifyTrend(candles, ma21, atr14, 3);
     expect(state).toBe("FLAT");
   });
 
@@ -188,9 +188,9 @@ describe("classifyTrend", () => {
         c: 101 + Math.random() * 2,
       })),
     );
-    const ema20 = calculateEma(candles, 20);
+    const ma21 = calculateEma(candles, 21);
     const atr14 = calculateAtr(candles, 14);
-    const state = classifyTrend(candles, ema20, atr14, candles.length - 1);
+    const state = classifyTrend(candles, ma21, atr14, candles.length - 1);
     // có thể là FLAT hoặc UPTREND/DOWNTREND — không assert cứng, chỉ đảm bảo không crash
     expect(["UPTREND", "DOWNTREND", "FLAT"]).toContain(state);
   });
@@ -321,7 +321,7 @@ describe("detectCompression", () => {
       { o: 100.0, h: 100.3, l: 99.9, c: 100.1 },
     ];
     const candles = makeCandles([...baseCandles, ...tightCandles]);
-    const ema20 = calculateEma(candles, 20);
+    const ma21 = calculateEma(candles, 21);
     const atr14 = calculateAtr(candles, 14);
 
     // Verify atr14 at last index is non-null (enough data)
@@ -330,7 +330,7 @@ describe("detectCompression", () => {
 
     // Index of last tight candle
     const tightLast = candles.length - 1;
-    const comp = detectCompression(candles, ema20, atr14, tightLast, 5);
+    const comp = detectCompression(candles, ma21, atr14, tightLast, 5);
     expect(comp).not.toBeNull();
     expect(comp!.range).toBeGreaterThan(0);
   });
@@ -340,13 +340,13 @@ describe("detectCompression", () => {
       { o: 100, h: 101, l: 99, c: 100 },
       { o: 100, h: 101, l: 99, c: 100 },
     ]);
-    const ema20 = calculateEma(candles, 20);
+    const ma21 = calculateEma(candles, 21);
     const atr14 = calculateAtr(candles, 14);
-    const comp = detectCompression(candles, ema20, atr14, 1, 5);
+    const comp = detectCompression(candles, ma21, atr14, 1, 5);
     expect(comp).toBeNull();
   });
 
-  test("returns null when ema20 or atr14 is null at index", () => {
+  test("returns null when ma21 or atr14 is null at index", () => {
     const candles = makeCandles([
       { o: 100, h: 101, l: 99, c: 100 },
       { o: 100, h: 101, l: 99, c: 100 },
@@ -354,28 +354,37 @@ describe("detectCompression", () => {
       { o: 100, h: 101, l: 99, c: 100 },
       { o: 100, h: 101, l: 99, c: 100 },
     ]);
-    const ema20 = calculateEma(candles, 20); // all null — not enough data
+    const ma21 = calculateEma(candles, 21); // all null — not enough data
     const atr14 = calculateAtr(candles, 14); // all null
-    const comp = detectCompression(candles, ema20, atr14, 4, 5);
+    const comp = detectCompression(candles, ma21, atr14, 4, 5);
     expect(comp).toBeNull();
   });
 
   test("breakout candle must stay outside the compression window", () => {
     const candles = makeCandles([
-      ...Array.from({ length: 19 }, (_, i) => ({
-        o: 100 + i * 0.01,
-        h: 100.2 + i * 0.01,
-        l: 99.8 + i * 0.01,
-        c: 100.05 + i * 0.01,
+      // Let EMA21 initialize with some base candles
+      ...Array.from({ length: 21 }, (_, i) => ({
+        o: 100,
+        h: 100.1,
+        l: 99.9,
+        c: 100,
       })),
-      { o: 100.3, h: 100.35, l: 100.1, c: 100.28 },
-      { o: 100.35, h: 101.2, l: 100.05, c: 101.1 },
+      // Tight compression (5 candles)
+      { o: 100, h: 100.05, l: 99.95, c: 100 },
+      { o: 100, h: 100.05, l: 99.95, c: 100 },
+      { o: 100, h: 100.05, l: 99.95, c: 100 },
+      { o: 100, h: 100.05, l: 99.95, c: 100 },
+      { o: 100, h: 100.05, l: 99.95, c: 100 },
+      // Breakout candle
+      { o: 100, h: 101.5, l: 99.9, c: 101.4 },
     ]);
-    const ema20 = calculateEma(candles, 20);
+    const ma21 = calculateEma(candles, 21);
     const atr14 = calculateAtr(candles, 14);
 
-    const validWindow = detectCompression(candles, ema20, atr14, 19, 5);
-    const invalidWindow = detectCompression(candles, ema20, atr14, 20, 5);
+    // Check compression before breakout (window at index 25, includes indices 21-25)
+    const validWindow = detectCompression(candles, ma21, atr14, 25, 5);
+    // Check compression including breakout (window at index 26, includes indices 22-26, which includes the huge breakout)
+    const invalidWindow = detectCompression(candles, ma21, atr14, 26, 5);
 
     expect(validWindow).not.toBeNull();
     expect(invalidWindow).toBeNull();

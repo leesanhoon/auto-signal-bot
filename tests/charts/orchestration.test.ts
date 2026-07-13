@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Candle } from "../../src/charts/ohlc-provider.js";
 
 // ---------------------------------------------------------------------------
@@ -23,6 +23,33 @@ describe("getConfiguredChartEngineMode", () => {
       expect(mod.getConfiguredChartEngineMode()).toBe("deterministic");
     },
   );
+});
+
+describe("getEmaExitPeriod", () => {
+  beforeEach(() => {
+    delete process.env.EMA_EXIT_PERIOD;
+  });
+
+  afterEach(() => {
+    delete process.env.EMA_EXIT_PERIOD;
+  });
+
+  test("defaults to EMA21 when env is not set", async () => {
+    const mod = await import("../../src/charts/volman-config-env.js");
+    expect(mod.getEmaExitPeriod()).toBe(21);
+  });
+
+  test("falls back to EMA21 when env is invalid", async () => {
+    process.env.EMA_EXIT_PERIOD = "invalid";
+    const mod = await import("../../src/charts/volman-config-env.js");
+    expect(mod.getEmaExitPeriod()).toBe(21);
+  });
+
+  test("uses a valid configured period", async () => {
+    process.env.EMA_EXIT_PERIOD = "34";
+    const mod = await import("../../src/charts/volman-config-env.js");
+    expect(mod.getEmaExitPeriod()).toBe(34);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,13 @@ import { calculateAtr, calculateEma, detectCompression } from "../../../src/char
 import { detectIrb } from "../../../src/charts/setups/irb.js";
 import type { DetectionContext } from "../../../src/charts/setup-types.js";
 
+// IRB đòi hỏi RangeInner nằm GẦN CHÍNH GIỮA RangeOuter (theo tài liệu Bob Volman —
+// xem irb.ts), không phải sát biên như bản cũ. Toàn bộ block "compression" +
+// breakout bên dưới được dịch xuống SHIFT đơn vị so với bản gốc (vốn đặt sát đỉnh
+// warm-up range) để nó rơi vào giữa vùng RangeOuter được detect — vẫn giữ nguyên
+// hình dạng nội tại (nên cơ chế "shifted fallback" 1 nến vẫn được kích hoạt y hệt).
+const SHIFT = 1.375;
+
 function buildFallbackCandles(): Candle[] {
   const candles: Candle[] = [];
 
@@ -30,14 +37,14 @@ function buildFallbackCandles(): Candle[] {
     { high: 102.08, low: 101.7, close: 101.9 },
     { high: 102.07, low: 101.72, close: 101.92 },
     { high: 102.06, low: 101.74, close: 101.94 },
-  ];
+  ].map((c) => ({ high: c.high - SHIFT, low: c.low - SHIFT, close: c.close - SHIFT }));
 
   compression.forEach((candle, offset) => {
     const index = 12 + offset;
     candles.push({
       time: 1700000000000 + index * 3600000,
       open: candle.close - 0.04,
-      high: offset === compression.length - 1 ? 102.11 : candle.high,
+      high: offset === compression.length - 1 ? 102.11 - SHIFT : candle.high,
       low: candle.low,
       close: candle.close,
       volume: 90,
@@ -46,10 +53,10 @@ function buildFallbackCandles(): Candle[] {
 
   candles.push({
     time: 1700000000000 + 22 * 3600000,
-    open: 102.0,
-    high: 102.25,
-    low: 101.95,
-    close: 102.12,
+    open: 102.0 - SHIFT,
+    high: 102.25 - SHIFT,
+    low: 101.95 - SHIFT,
+    close: 102.12 - SHIFT,
     volume: 120,
   });
 
@@ -84,7 +91,7 @@ function buildVariantCandles(overrides: Array<{ index: number; high?: number; lo
 
 function buildContext(candles: Candle[]): DetectionContext {
   return {
-    ema20: calculateEma(candles, 20),
+    ma21: calculateEma(candles, 20),
     atr14: calculateAtr(candles, 14),
     pair: "EUR/USD",
     timeframe: "H4",
@@ -102,7 +109,7 @@ function legacyShiftedFallback(
 ): boolean {
   const rangeInner = detectCompression(
     candles,
-    ctx.ema20,
+    ctx.ma21,
     ctx.atr14,
     index - 1,
     matchedInnerWindow,
@@ -122,8 +129,8 @@ describe("IRB fallback branch", () => {
     const ctx = buildContext(candles);
     const index = candles.length - 1;
 
-    const rangeOuter = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, 10, 2.5);
-    const rangeInner = detectCompression(candles, ctx.ema20, ctx.atr14, index - 1, 4, 1.5);
+    const rangeOuter = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, 10, 2.5);
+    const rangeInner = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, 4, 1.5);
 
     expect(rangeOuter).not.toBeNull();
     expect(rangeInner).not.toBeNull();
@@ -134,8 +141,8 @@ describe("IRB fallback branch", () => {
     expect(signal!.setup).toBe("IRB");
     expect(signal!.direction).toBe("LONG");
     expect(signal!.triggerIndex).toBe(index);
-    expect(signal!.entry).toBe(102.11);
-    expect(signal!.ruleTrace).toContain("RangeInner pha index 21, RangeOuter pha index 22 -> chap nhan");
+    expect(signal!.entry).toBe(102.11 - SHIFT);
+    expect(signal!.ruleTrace).toContain("RangeInner pha index 21, RangeOuter pha index 22 -> chap nhan (LONG)");
     expect(
       legacyShiftedFallback(candles, ctx, index, 4, 1.5, "LONG", rangeOuter!),
     ).toBe(false);
@@ -153,7 +160,7 @@ describe("IRB fallback branch", () => {
       const ctx = buildContext(fixture.candles);
       const index = fixture.candles.length - 1;
       const currentSignal = detectIrb(fixture.candles, index, ctx);
-      const rangeOuter = detectCompression(fixture.candles, ctx.ema20, ctx.atr14, index - 1, 10, 2.5);
+      const rangeOuter = detectCompression(fixture.candles, ctx.ma21, ctx.atr14, index - 1, 10, 2.5);
       const legacyAccepts = rangeOuter !== null
         ? legacyShiftedFallback(fixture.candles, ctx, index, 4, 1.5, "LONG", rangeOuter)
         : false;

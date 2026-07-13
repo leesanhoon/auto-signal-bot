@@ -113,6 +113,7 @@ Các biến chính:
 - `API_FOOTBALL_KEY`
 - `API_FOOTBALL_BOOKMAKER`
 - `API_FOOTBALL_LEAGUE`
+- `TP_R_MULTIPLE` (mặc định `2`)
 
 ### 3. Cấu hình Telegram bot
 
@@ -190,7 +191,6 @@ npm run lottery-backtest
 
 ```bash
 npm test
-npm run test-analyze
 npm run test-model-compare
 ```
 

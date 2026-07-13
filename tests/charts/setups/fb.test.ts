@@ -23,15 +23,15 @@ function buildContext(
   timeframe: "M15" | "H4" | "D1" = "H4",
 ): DetectionContext {
   return {
-    ema20: calculateEma(candles, 20),
+    ma21: calculateEma(candles, 20),
     atr14: calculateAtr(candles, 14),
     pair,
     timeframe,
   };
 }
 
-describe("FB — First Break TP2 Calculation", () => {
-  test("LONG FB calculates TP2 = entry + (swingHigh - entry)/2 when swing is above entry, and TP2 > TP1", () => {
+describe("FB — First Break take-profit calculation", () => {
+  test("LONG FB uses the configured 2R take profit", () => {
     // Build uptrend followed by pullback to EMA, then FB break
     const candles: Candle[] = [];
 
@@ -91,31 +91,13 @@ describe("FB — First Break TP2 Calculation", () => {
 
     if (signal && signal.setup === "FB") {
       const entry = signal.entry; // should be high of signal bar = 115.0
-      const tp1 = signal.takeProfit1;
-      const tp2 = signal.takeProfit2;
+      const takeProfit = signal.takeProfit;
       const risk = entry - signal.stopLoss;
-
-      // TP1 should be entry + 1.5*risk
-      expect(tp1).toBeCloseTo(entry + 1.5 * risk);
-
-      // TP2 should be > TP1 (further up)
-      expect(tp2).toBeGreaterThan(tp1);
-
-      // TP2 should be closer to swing high level (within entry and swing high)
-      // TP2 = entry + (swingHigh - entry) * 0.5, where swingHigh should be around 112-112.5
-      // So TP2 should be around 115 + (112 - 115) * 0.5 = 114.5, which is less than entry
-      // Actually, let me recalculate: swingHigh is max of candles[i].high for i in [trendStartIndex-15, trendStartIndex)
-      // If trendStartIndex is around 28, then we look at candles 13-27
-      // In those candles, high is base + 0.6, so around 106.8 to 113.8
-      // So swingHigh should be around 113.8
-      // But the new logic requires swingHigh > entry (115.0), which is false
-      // So TP2 should fall back to default: entry + 2.5 * risk
-      const expectedDefaultTp2 = entry + 2.5 * risk;
-      expect(tp2).toBeCloseTo(expectedDefaultTp2, 0);
+      expect(takeProfit).toBeCloseTo(entry + 2 * risk);
     }
   });
 
-  test("SHORT FB calculates TP2 = entry - (entry - swingLow)/2 when swing is below entry, and TP2 < TP1", () => {
+  test("SHORT FB uses the configured 2R take profit", () => {
     // Build downtrend followed by pullback to EMA, then FB break
     const candles: Candle[] = [];
 
@@ -171,30 +153,13 @@ describe("FB — First Break TP2 Calculation", () => {
 
     if (signal && signal.setup === "FB") {
       const entry = signal.entry; // should be low of signal bar = 85.0
-      const tp1 = signal.takeProfit1;
-      const tp2 = signal.takeProfit2;
+      const takeProfit = signal.takeProfit;
       const risk = signal.stopLoss - entry;
-
-      // TP1 should be entry - 1.5*risk
-      expect(tp1).toBeCloseTo(entry - 1.5 * risk);
-
-      // TP2 should be < TP1 (further down)
-      expect(tp2).toBeLessThan(tp1);
-
-      // TP2 should be further down than entry
-      expect(tp2).toBeLessThan(entry);
-
-      // swingLow should be min of candles[i].low for i in [trendStartIndex-15, trendStartIndex)
-      // With similar trend start around index 28, we look at candles 13-27
-      // In those candles, low is base - 0.6, going from ~95.8 down to ~88.2
-      // So swingLow should be around 88.2
-      // If swingLow (88.2) < entry (85.0) is false, then TP2 = default = entry - 2.5 * risk
-      const expectedDefaultTp2 = entry - 2.5 * risk;
-      expect(tp2).toBeCloseTo(expectedDefaultTp2, 0);
+      expect(takeProfit).toBeCloseTo(entry - 2 * risk);
     }
   });
 
-  test("LONG FB with swing high on wrong side (below entry) uses 2.5R fallback", () => {
+  test("LONG FB target does not depend on a prior swing high", () => {
     // Build a sharp uptrend (no swing above current price), FB at the peak
     const candles: Candle[] = [];
 
@@ -250,21 +215,13 @@ describe("FB — First Break TP2 Calculation", () => {
 
     if (signal && signal.setup === "FB") {
       const entry = signal.entry;
-      const tp1 = signal.takeProfit1;
-      const tp2 = signal.takeProfit2;
+      const takeProfit = signal.takeProfit;
       const risk = entry - signal.stopLoss;
-
-      // Since swing high (around 115 from candles before trendStart) is below entry (116.2)
-      // TP2 should use fallback: entry + 2.5 * risk
-      const expectedTp2 = entry + 2.5 * risk;
-      expect(tp2).toBeCloseTo(expectedTp2);
-
-      // TP2 should still be > TP1
-      expect(tp2).toBeGreaterThan(tp1);
+      expect(takeProfit).toBeCloseTo(entry + 2 * risk);
     }
   });
 
-  test("SHORT FB with swing low on wrong side (above entry) uses 2.5R fallback", () => {
+  test("SHORT FB target does not depend on a prior swing low", () => {
     // Build a sharp downtrend, FB at new low
     const candles: Candle[] = [];
 
@@ -320,22 +277,13 @@ describe("FB — First Break TP2 Calculation", () => {
 
     if (signal && signal.setup === "FB") {
       const entry = signal.entry;
-      const tp1 = signal.takeProfit1;
-      const tp2 = signal.takeProfit2;
+      const takeProfit = signal.takeProfit;
       const risk = signal.stopLoss - entry;
-
-      // Since swing low (around 85-86 from candles before trendStart) is above entry (83.8)
-      // TP2 should use fallback: entry - 2.5 * risk
-      const expectedTp2 = entry - 2.5 * risk;
-      expect(tp2).toBeCloseTo(expectedTp2);
-
-      // TP2 should still be < TP1
-      expect(tp2).toBeLessThan(tp1);
+      expect(takeProfit).toBeCloseTo(entry - 2 * risk);
     }
   });
 
-  test("TP2 never equals TP1 and always moves away from entry", () => {
-    // Any valid FB should have TP2 strictly different from TP1 and further from entry
+  test("take profit is always placed 2R away from entry", () => {
     const candles: Candle[] = [];
 
     // Simple uptrend
@@ -375,22 +323,13 @@ describe("FB — First Break TP2 Calculation", () => {
 
     if (signal && signal.setup === "FB") {
       const entry = signal.entry;
-      const tp1 = signal.takeProfit1;
-      const tp2 = signal.takeProfit2;
+      const takeProfit = signal.takeProfit;
+      const risk = Math.abs(entry - signal.stopLoss);
 
-      // TP2 should never equal TP1
-      expect(tp2).not.toEqual(tp1);
-
-      // For LONG, both TP1 and TP2 should be > entry
       if (signal.direction === "LONG") {
-        expect(tp1).toBeGreaterThan(entry);
-        expect(tp2).toBeGreaterThan(entry);
-        // TP2 should be further (or at least not closer)
-        expect(Math.abs(tp2 - entry)).toBeGreaterThanOrEqual(Math.abs(tp1 - entry) * 0.8);
+        expect(takeProfit).toBeCloseTo(entry + 2 * risk);
       } else {
-        expect(tp1).toBeLessThan(entry);
-        expect(tp2).toBeLessThan(entry);
-        expect(Math.abs(tp2 - entry)).toBeGreaterThanOrEqual(Math.abs(tp1 - entry) * 0.8);
+        expect(takeProfit).toBeCloseTo(entry - 2 * risk);
       }
     }
   });
