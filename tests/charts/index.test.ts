@@ -347,6 +347,7 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendAllAnalyses).toHaveBeenCalledWith(MOCK_RESULT, undefined, {
       source: "cached",
       candleKey: "2026-07-03T08:deterministic",
+      timeframe: "H4",
     });
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });

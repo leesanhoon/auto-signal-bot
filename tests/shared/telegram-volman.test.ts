@@ -86,6 +86,31 @@ describe("sendAllAnalysesVolman", () => {
     expect(mockNotifier.sendPhoto).not.toHaveBeenCalled();
   });
 
+  test("shows the scanned timeframe from deliveryContext.timeframe in the header", async () => {
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(result, mockNotifier, { timeframe: "M15" });
+
+    const headerMessage = mockNotifier.sentMessages.find((msg) =>
+      msg.includes("Bob Volman Multi-Timeframe Scanner"),
+    );
+    expect(headerMessage).toBeDefined();
+    expect(headerMessage).toContain("[M15]");
+  });
+
+  test("falls back to a setup's primaryTimeframe when deliveryContext.timeframe is not given", async () => {
+    const setupWithTimeframe: TradeSetup = { ...minimalSetup, primaryTimeframe: "H1" };
+    const resultWithTimeframe: AnalysisResult = { ...result, setups: [setupWithTimeframe] };
+
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(resultWithTimeframe, mockNotifier);
+
+    const headerMessage = mockNotifier.sentMessages.find((msg) =>
+      msg.includes("Bob Volman Multi-Timeframe Scanner"),
+    );
+    expect(headerMessage).toBeDefined();
+    expect(headerMessage).toContain("[H1]");
+  });
+
   test("setup message has no consecutive blank lines when optional fields are absent", async () => {
     const mockNotifier = createMockNotifier();
     await sendAllAnalysesVolman(result, mockNotifier);

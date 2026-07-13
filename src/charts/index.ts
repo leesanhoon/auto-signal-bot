@@ -23,6 +23,7 @@ import {
   shouldUseLatestCacheForManualRun,
 } from "./volman-config-env.js";
 import type { AnalysisResult, TradeSetup } from "./chart-types-volman.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
 import { applySignalFreshnessGuard } from "./signal-freshness.js";
 import {
   getLastClosedCandleKey,
@@ -172,6 +173,7 @@ async function loadAnalysisForRun(
 async function handleAnalysisResult(
   result: AnalysisResult,
   origin: AnalysisOrigin,
+  analysisTimeframe: ChartTimeframe,
 ): Promise<void> {
   const threshold = getConfiguredChartSignalConfidenceThreshold();
 
@@ -286,6 +288,7 @@ async function handleAnalysisResult(
   await sendAllAnalysesVolman(result, undefined, {
     source: origin.source,
     candleKey: origin.candleKey,
+    timeframe: analysisTimeframe,
   });
 }
 
@@ -351,7 +354,7 @@ export async function main(): Promise<void> {
   const openTradeNotifications = await runCheckOpenTrades(primaryTimeframe);
 
   if (result && origin) {
-    await handleAnalysisResult(result, origin);
+    await handleAnalysisResult(result, origin, analysisTimeframe);
   } else {
     logger.warn(
       `⏭ Bỏ qua analyze — ngoài cửa sổ chạy cho last closed ${analysisTimeframe} candle (${candleBaseKey}), vẫn kiểm tra trade/pending`,

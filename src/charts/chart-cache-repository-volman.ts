@@ -88,6 +88,11 @@ export function isValidAnalysisResult(obj: unknown): obj is AnalysisResult {
     for (const { field, check } of SETUP_FIELD_CHECKS) {
       if (!check(setup[field])) return false;
     }
+    // Every setup produced by the live deterministic pipeline (BB/RB/ARB/IRB) now carries
+    // chartContext (added for the chart-photo-in-Telegram feature). A row cached before that
+    // change has setups with no chartContext at all — treat it as stale/invalid schema so the
+    // live pipeline recomputes instead of silently serving a signal with no chart photo.
+    if (setup.chartContext === undefined) return false;
   }
   return true;
 }

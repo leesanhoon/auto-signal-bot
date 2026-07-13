@@ -50,6 +50,12 @@ const MOCK_RESULT = {
       takeProfit2: "1.1120",
       riskReward: "1:2",
       summary: "Setup long",
+      chartContext: {
+        candles: [],
+        ema20: [],
+        triggerIndex: 0,
+        sliceStartIndex: 0,
+      },
     },
   ],
   noSetupReason: "",
@@ -211,6 +217,12 @@ describe("charts/chart-cache-repository-volman", () => {
       risks: ["Khối lượng yếu"],
       riskReward: "1:2",
       summary: "Setup long",
+      chartContext: {
+        candles: [],
+        ema20: [],
+        triggerIndex: 0,
+        sliceStartIndex: 0,
+      },
     };
 
     const validResult = {
@@ -245,6 +257,17 @@ describe("charts/chart-cache-repository-volman", () => {
       expect(chartCacheRepository.isValidAnalysisResult({
         ...validResult,
         setups: [{ pair: "EUR/USD", direction: "LONG" }], // thiếu hầu hết field
+      })).toBe(false);
+    });
+
+    test("setup thiếu chartContext (cache từ trước khi có tính năng chart-photo) → false", () => {
+      // Regression: một cached row ghi trước khi TradeSetup.chartContext tồn tại có đủ mọi
+      // field bắt buộc khác nhưng thiếu chartContext — phải bị coi là invalid/stale, không thì
+      // sendAllAnalysesVolman sẽ gửi text signal mà không có ảnh chart kèm theo (bug đã gặp).
+      const { chartContext, ...setupWithoutChartContext } = validSetup;
+      expect(chartCacheRepository.isValidAnalysisResult({
+        ...validResult,
+        setups: [setupWithoutChartContext],
       })).toBe(false);
     });
   });

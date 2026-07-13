@@ -380,7 +380,7 @@ export function buildPerformanceReportMessage(
 export async function sendAllAnalysesVolman(
   result: AnalysisResult,
   notifier: Notifier = telegramNotifier,
-  deliveryContext: { source?: "live" | "cached"; candleKey?: string } = {},
+  deliveryContext: { source?: "live" | "cached"; candleKey?: string; timeframe?: ChartTimeframe } = {},
 ): Promise<void> {
   const timestamp = new Date().toLocaleString("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
@@ -405,11 +405,15 @@ export async function sendAllAnalysesVolman(
   const attemptedCount =
     result.analysisStats?.attemptedPairs ?? result.summaries.length;
   const scannerLabel = "Bob Volman Multi-Timeframe Scanner";
+  // Fall back to a setup's own primaryTimeframe when the caller didn't pass one explicitly
+  // (e.g. existing callers/tests that only set source/candleKey).
+  const timeframe = deliveryContext.timeframe ?? result.setups[0]?.primaryTimeframe;
+  const timeframeTag = timeframe ? ` [${timeframe}]` : "";
 
   if (setups.length === 0) {
     await notifier.sendMessage(
       [
-        `⏸ *${scannerLabel}* — không có setup đạt ngưỡng (≥${threshold}%)${isCached ? " (cache)" : ""}`,
+        `⏸ *${scannerLabel}${timeframeTag}* — không có setup đạt ngưỡng (≥${threshold}%)${isCached ? " (cache)" : ""}`,
         `📅 ${timestamp} | Quét ${attemptedCount} cặp, ${summaries.length}/${result.summaries.length} đạt ngưỡng summary`,
       ].join("\n"),
     );
@@ -421,7 +425,7 @@ export async function sendAllAnalysesVolman(
 
   await notifier.sendMessage(
     [
-      `🚀 *${scannerLabel}${sourceLabel}*`,
+      `🚀 *${scannerLabel}${timeframeTag}${sourceLabel}*`,
       `📅 ${timestamp}`,
       cacheLine,
       `📊 Quét *${result.summaries.length}* cặp → *${summaries.length}* đạt ngưỡng (≥${threshold}%) → *${setups.length}* setup${setupHeaderSuffix}`,
