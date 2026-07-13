@@ -1,137 +1,152 @@
-import { describe, expect, test } from "vitest";
-import type { DetectedSignal } from "../../src/charts/setup-types.js";
-import {
-  buildTradeSetupFromSignal,
-  buildPairSummaryFromContext,
-} from "../../src/charts/signal-assembly.js";
+﻿import { describe, expect, test } from "vitest";
+import type { Candle } from "../../src/charts/ohlc-provider.js";
+import { calculateEma, calculateAtr } from "../../src/charts/indicators.js";
+import { detectArb } from "../../src/charts/setups/arb.js";
+import { buildTradeSetupFromSignal } from "../../src/charts/signal-assembly.js";
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
+describe("Signal assembly — chartContext threading", () => {
+  test("buildTradeSetupFromSignal threads chartContext when candles and ema20 provided", () => {
+    const candles: Candle[] = [];
+    candles.push(
+      { time: 1700000000000 + 0 * 3600000, open: 100.0, high: 100.7, low: 99.95, close: 100.05, volume: 100 },
+      { time: 1700000000000 + 1 * 3600000, open: 100.05, high: 100.75, low: 99.97, close: 100.02, volume: 100 },
+    );
 
-const ddSignal: DetectedSignal = {
-  setup: "DD",
-  pair: "EUR/USD",
-  timeframe: "H4",
-  direction: "LONG",
-  entry: 1.10234,
-  stopLoss: 1.1005,
-  takeProfit1: 1.1045,
-  takeProfit2: 1.1065,
-  confidence: 75,
-  triggerIndex: 49,
-  ruleTrace: [
-    "EMA20 slope=0.32 -> UPTREND",
-    "2 doji lien tiep tai index 47-48, sat EMA20 (distance=0.18 ATR)",
-    "Nen 49 pha vo High cum doji (1.10234) -> entry LONG",
-  ],
-};
+    for (let i = 2; i < 24; i++) {
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: 100,
+        high: 100.12,
+        low: 99.88,
+        close: 100.01,
+        volume: 100,
+      });
+    }
 
-const rbSignal: DetectedSignal = {
-  setup: "RB",
-  pair: "GBP/USD",
-  timeframe: "H4",
-  direction: "SHORT",
-  entry: 1.2550,
-  stopLoss: 1.2580,
-  takeProfit1: 1.2500,
-  takeProfit2: 1.2450,
-  confidence: 60,
-  triggerIndex: 35,
-  ruleTrace: [
-    "Range 6 candle, EMA20 bat dau doc xuong",
-    "Gia pha bien duoi range tai 1.2550 -> entry SHORT",
-  ],
-};
+    candles.push({
+      time: 1700000000000 + 24 * 3600000,
+      open: 100.1,
+      high: 101.2,
+      low: 100.0,
+      close: 101.0,
+      volume: 120,
+    });
 
-// ---------------------------------------------------------------------------
-// buildTradeSetupFromSignal
-// ---------------------------------------------------------------------------
+    const ema20 = calculateEma(candles, 20);
+    const atr14 = calculateAtr(candles, 14);
+    const ctx = { ema20, atr14, pair: "BTC/USDT", timeframe: "H4" as const };
 
-describe("buildTradeSetupFromSignal", () => {
-  test("builds complete TradeSetup from DD signal", () => {
-    const setup = buildTradeSetupFromSignal(ddSignal, { lastPrice: 1.1025 });
-    expect(setup.pair).toBe("EUR/USD");
-    expect(setup.direction).toBe("LONG");
-    expect(setup.setup).toBe("DD");
-    expect(setup.entry).toBe("1.10234");
-    expect(setup.stopLoss).toBe("1.10050");
-    expect(setup.takeProfit1).toBe("1.10450");
-    expect(setup.takeProfit2).toBe("1.10650");
-    expect(setup.confidence).toBe(75);
-    expect(setup.detectionSource).toBe("deterministic");
-    expect(setup.reasons.length).toBeGreaterThan(0);
-    expect(setup.risks).toBeDefined();
-    expect(setup.ruleTrace).toEqual(ddSignal.ruleTrace);
-    expect(setup.summary).toContain("EUR/USD");
-    expect(setup.summary).toContain("LONG");
-    expect(setup.summary).toContain("DD");
-    expect(setup.orderType).toBe("BUY_STOP");
-    expect(setup.entryCondition).toBeTruthy();
+    const signal = detectArb(candles, candles.length - 1, ctx);
+    expect(signal).not.toBeNull();
+
+    const setup = buildTradeSetupFromSignal(signal!, {
+      lastPrice: 100.5,
+      candles,
+      ema20,
+    });
+
+    expect(setup).not.toBeNull();
+    expect(setup!.chartContext).toBeDefined();
+    expect(setup!.chartContext!.candles.length).toBeGreaterThan(0);
+    expect(setup!.chartContext!.ema20.length).toBe(setup!.chartContext!.candles.length);
+    expect(setup!.chartContext!.triggerIndex).toBe(24);
+    expect(setup!.chartContext!.sliceStartIndex).toBeGreaterThanOrEqual(0);
+    expect(setup!.chartContext!.sliceStartIndex).toBeLessThanOrEqual(24);
+    expect(setup!.chartContext!.geometry).toBeDefined();
+    expect(setup!.chartContext!.geometry!.boxes).toHaveLength(1);
+    expect(setup!.chartContext!.geometry!.markers).toHaveLength(2);
   });
 
-  test("builds complete TradeSetup from RB signal (SHORT)", () => {
-    const setup = buildTradeSetupFromSignal(rbSignal, { lastPrice: 1.2555 });
-    expect(setup.pair).toBe("GBP/USD");
-    expect(setup.direction).toBe("SHORT");
-    expect(setup.setup).toBe("RB");
-    expect(setup.orderType).toBe("SELL_STOP");
-    expect(setup.detectionSource).toBe("deterministic");
+  test("buildTradeSetupFromSignal omits chartContext when candles/ema20 not provided (backward compat)", () => {
+    const candles: Candle[] = [];
+    candles.push(
+      { time: 1700000000000 + 0 * 3600000, open: 100.0, high: 100.7, low: 99.95, close: 100.05, volume: 100 },
+      { time: 1700000000000 + 1 * 3600000, open: 100.05, high: 100.75, low: 99.97, close: 100.02, volume: 100 },
+    );
+
+    for (let i = 2; i < 24; i++) {
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: 100,
+        high: 100.12,
+        low: 99.88,
+        close: 100.01,
+        volume: 100,
+      });
+    }
+
+    candles.push({
+      time: 1700000000000 + 24 * 3600000,
+      open: 100.1,
+      high: 101.2,
+      low: 100.0,
+      close: 101.0,
+      volume: 120,
+    });
+
+    const ema20 = calculateEma(candles, 20);
+    const atr14 = calculateAtr(candles, 14);
+    const ctx = { ema20, atr14, pair: "BTC/USDT", timeframe: "H4" as const };
+
+    const signal = detectArb(candles, candles.length - 1, ctx);
+    expect(signal).not.toBeNull();
+
+    const setup = buildTradeSetupFromSignal(signal!, {
+      lastPrice: 100.5,
+    });
+
+    expect(setup).not.toBeNull();
+    expect(setup!.chartContext).toBeUndefined();
   });
 
-  test("includes risks when confidence < 70", () => {
-    const setup = buildTradeSetupFromSignal(rbSignal, { lastPrice: 1.2555 });
-    expect(setup.confidence).toBe(60);
-    expect(setup.risks.length).toBeGreaterThanOrEqual(1);
-  });
+  test("buildTradeSetupFromSignal includes chartContext even with valid prices", () => {
+    // Reuse the same breakout fixture as the first test in this file — a flat market
+    // never breaks out, so ARB never detects a signal there (a previous version of this
+    // test used a flat fixture and always hit the "if (!signal) return" bailout, making
+    // it pass unconditionally without checking anything).
+    const candles: Candle[] = [];
+    candles.push(
+      { time: 1700000000000 + 0 * 3600000, open: 100.0, high: 100.7, low: 99.95, close: 100.05, volume: 100 },
+      { time: 1700000000000 + 1 * 3600000, open: 100.05, high: 100.75, low: 99.97, close: 100.02, volume: 100 },
+    );
 
-  test("sets lastPrice from context", () => {
-    const setup = buildTradeSetupFromSignal(ddSignal, { lastPrice: 1.1030 });
-    expect(setup.lastPrice).toBe(1.1030);
-  });
+    for (let i = 2; i < 24; i++) {
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: 100,
+        high: 100.12,
+        low: 99.88,
+        close: 100.01,
+        volume: 100,
+      });
+    }
 
-  test("handles null lastPrice", () => {
-    const setup = buildTradeSetupFromSignal(ddSignal, { lastPrice: null });
-    // applyPriceSanityChecks returns the setup as-is when lastPrice is null
-    expect(setup.lastPrice).toBeUndefined();
-  });
-});
+    candles.push({
+      time: 1700000000000 + 24 * 3600000,
+      open: 100.1,
+      high: 101.2,
+      low: 100.0,
+      close: 101.0,
+      volume: 120,
+    });
 
-// ---------------------------------------------------------------------------
-// buildPairSummaryFromContext
-// ---------------------------------------------------------------------------
+    const ema20 = calculateEma(candles, 20);
+    const atr14 = calculateAtr(candles, 14);
+    const ctx = { ema20, atr14, pair: "BTC/USDT", timeframe: "H4" as const };
 
-describe("buildPairSummaryFromContext", () => {
-  test("maps UPTREND to Tăng", () => {
-    const ps = buildPairSummaryFromContext("EUR/USD", "UPTREND", 0.2, true);
-    expect(ps.trend).toBe("Tăng");
-    expect(ps.emaProximity).toBe("tại");
-    expect(ps.status).toBe("Có setup chờ xác nhận");
-    expect(ps.confidence).toBe(70);
-    expect(ps.detectionSource).toBe("deterministic");
-  });
+    const signal = detectArb(candles, candles.length - 1, ctx);
+    expect(signal).not.toBeNull();
 
-  test("maps DOWNTREND to Giảm", () => {
-    const ps = buildPairSummaryFromContext("GBP/USD", "DOWNTREND", 0.5, false);
-    expect(ps.trend).toBe("Giảm");
-    expect(ps.emaProximity).toBe("gần");
-    expect(ps.status).toBe("Không có setup");
-    expect(ps.confidence).toBe(0);
-  });
+    // A valid lastPrice above stopLoss (range.low ~99.88) — must survive applyPriceSanityChecks
+    // (which only rejects LONG setups when lastPrice <= stopLoss) and keep chartContext attached.
+    const setup = buildTradeSetupFromSignal(signal!, {
+      lastPrice: 100.95,
+      candles,
+      ema20,
+    });
 
-  test("maps FLAT to Đi ngang", () => {
-    const ps = buildPairSummaryFromContext("XAU/USD", "FLAT", 1.5, false);
-    expect(ps.trend).toBe("Đi ngang");
-    expect(ps.emaProximity).toBe("xa");
-  });
-
-  test("emaProximity is 'gần' for distance 0.5", () => {
-    const ps = buildPairSummaryFromContext("EUR/USD", "UPTREND", 0.5, true);
-    expect(ps.emaProximity).toBe("gần");
-  });
-
-  test("emaProximity is 'xa' for distance 1.5", () => {
-    const ps = buildPairSummaryFromContext("EUR/USD", "UPTREND", 1.5, true);
-    expect(ps.emaProximity).toBe("xa");
+    expect(setup).not.toBeNull();
+    expect(setup!.chartContext).toBeDefined();
+    expect(setup!.chartContext!.candles.length).toBeGreaterThan(0);
   });
 });

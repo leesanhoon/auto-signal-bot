@@ -109,6 +109,27 @@ cho cache read ([chart-cache-repository.ts](../src/charts/chart-cache-repository
 thay cho cast no-op trước đó), và dọn `index.ts` không còn tự định nghĩa validate
 trùng lặp.
 
+## Chart Geometry — Minh hoạ signal bằng hình ảnh
+
+Từ task `setup-chart-telegram`, field `geometry` được thêm vào `DetectedSignal` để lưu lại 
+thông tin hình học (range/block box + marker) mà detector đã dùng để ra quyết định. Mục 
+đích: vẽ chart SVG → rasterize PNG → gửi Telegram kèm signal text.
+
+**Các setup có geometry**: BB, RB, ARB, IRB — các setup đang chạy live. DD, FB, SB không 
+có geometry (không chạy live).
+
+**Cấu trúc**:
+- `DetectedSignal.geometry?: SetupChartGeometry`
+  - `boxes: CompressionWindow[]` — range/block được detect (BB/RB/ARB dùng 1 box, IRB dùng 2)
+  - `markers: ChartMarker[]` — điểm mốc phụ, ví dụ edge-test failures ở ARB
+- `ChartContext` — slice candles + EMA20 + geometry, threaded qua `TradeSetup.chartContext` 
+  để renderer dùng (xem [setup-chart-renderer.ts](../src/charts/setup-chart-renderer.ts))
+
+Chart được vẽ ở [setup-chart-renderer.ts](../src/charts/setup-chart-renderer.ts) 
+(`buildSetupChartSvg` → `renderSetupChartPng`) và gọi từ 
+[telegram-volman.ts](../src/shared/telegram-volman.ts) (`sendAllAnalysesVolman`) — 
+gửi ảnh **trước** text message, error render/send ảnh không làm hỏng flow text.
+
 ## Trạng thái hiện tại
 
 - Toàn bộ 28 finding qua 4 vòng review: đã fix hoặc là cleanup/observability không chặn

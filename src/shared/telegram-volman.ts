@@ -9,6 +9,7 @@ import { createLogger } from "./logger.js";
 import type { PerformanceReport, ClosedPositionSnapshot } from "../charts/performance-tracking-volman.js";
 import { getConfiguredChartSignalConfidenceThreshold } from "../charts/volman-config-env.js";
 import { sendMessage, telegramNotifier } from "./telegram-client.js";
+import { renderSetupChartsBatch, type SetupChartInput } from "../charts/setup-chart-renderer.js";
 
 const logger = createLogger("shared:telegram-volman");
 
@@ -430,7 +431,58 @@ export async function sendAllAnalysesVolman(
       .join("\n"),
   );
 
+  // Build batch input for chart rendering
+  const chartInputs: Array<{ setup: TradeSetup; input: SetupChartInput }> = [];
   for (const setup of setups) {
+    if (!setup.chartContext) continue;
+    const entry = Number(setup.entry);
+    const stopLoss = Number(setup.stopLoss);
+    const takeProfit1 = Number(setup.takeProfit1);
+    const takeProfit2 = Number(setup.takeProfit2);
+    if (![entry, stopLoss, takeProfit1, takeProfit2].every(Number.isFinite)) continue;
+    chartInputs.push({
+      setup,
+      input: {
+        pair: setup.pair,
+        setup: setup.setup,
+        direction: setup.direction,
+        entry,
+        stopLoss,
+        takeProfit1,
+        takeProfit2,
+        chartContext: setup.chartContext,
+      },
+    });
+  }
+
+  let chartBuffers: (Buffer | null)[] = [];
+  try {
+    chartBuffers = await renderSetupChartsBatch(chartInputs.map((c) => c.input));
+  } catch (err) {
+    logger.warn("Render chart batch failed, fallback to text-only", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    chartBuffers = [];
+  }
+
+  const chartBufferByPair = new Map<string, Buffer>();
+  chartInputs.forEach(({ setup }, i) => {
+    const buf = chartBuffers[i];
+    if (buf) chartBufferByPair.set(setup.pair, buf);
+  });
+
+  for (const setup of setups) {
+    const chartBuffer = chartBufferByPair.get(setup.pair);
+    if (chartBuffer) {
+      try {
+        const shortCaption = `${setup.pair} ${setup.direction} — ${setup.setup} (${setup.confidence}%)`;
+        await notifier.sendPhoto(chartBuffer, shortCaption);
+      } catch (err) {
+        logger.warn(`Gửi chart ảnh cho ${setup.pair} thất bại, tiếp tục gửi text`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     await notifier.sendMessage(buildCopyableSetup(setup));
     logger.info(`  ✓ Sent setup: ${setup.pair} ${setup.direction}`);
     await new Promise((resolve) => setTimeout(resolve, 1_000));

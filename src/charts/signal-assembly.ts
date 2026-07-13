@@ -1,5 +1,6 @@
 import type { DetectedSignal, SetupKind } from "./setup-types.js";
 import type { TradeSetup, PairSummary, ChartTimeframe, ChartOrderType } from "./chart-types-volman.js";
+import type { Candle } from "./ohlc-provider.js";
 import type { TrendState } from "./indicators.js";
 import { formatPrice, applyPriceSanityChecks } from "./analyzer-volman.js";
 import { calculateRiskRewardPlan } from "./position-engine-volman.js";
@@ -86,9 +87,9 @@ function buildRisks(signal: DetectedSignal): string[] {
  */
 export function buildTradeSetupFromSignal(
   signal: DetectedSignal,
-  ohlcContext: { lastPrice: number | null },
+  ohlcContext: { lastPrice: number | null; candles?: Candle[]; ema20?: (number | null)[] },
 ): TradeSetup | null {
-  const { setup, pair, direction, entry, stopLoss, takeProfit1, takeProfit2, confidence, triggerIndex, ruleTrace, timeframe } = signal;
+  const { setup, pair, direction, entry, stopLoss, takeProfit1, takeProfit2, confidence, triggerIndex, ruleTrace, timeframe, geometry } = signal;
 
   // Determine order type
   const isLastCandle = triggerIndex === triggerIndex; // signal is at current index - no way to know "last" without passing array length
@@ -124,6 +125,21 @@ export function buildTradeSetupFromSignal(
   };
   const rrp = calculateRiskRewardPlan(mockSetup);
 
+  // Build chartContext if candles and ema20 are available
+  const CHART_CONTEXT_WINDOW = 60;
+  let chartContext: TradeSetup["chartContext"];
+  if (ohlcContext.candles && ohlcContext.ema20) {
+    const sliceStartIndex = Math.max(0, triggerIndex - CHART_CONTEXT_WINDOW);
+    const sliceEndIndex = Math.min(ohlcContext.candles.length, triggerIndex + 2);
+    chartContext = {
+      candles: ohlcContext.candles.slice(sliceStartIndex, sliceEndIndex),
+      ema20: ohlcContext.ema20.slice(sliceStartIndex, sliceEndIndex),
+      triggerIndex,
+      sliceStartIndex,
+      geometry,
+    };
+  }
+
   const tradeSetup: TradeSetup = {
     pair,
     direction,
@@ -143,6 +159,7 @@ export function buildTradeSetupFromSignal(
     lastPrice: ohlcContext.lastPrice ?? undefined,
     ruleTrace,
     detectionSource: "deterministic",
+    chartContext,
   };
 
   // Apply price sanity checks

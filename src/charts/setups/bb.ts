@@ -103,5 +103,6 @@ export function detectBb(
     confidence,
     triggerIndex: block.endIndex,
     ruleTrace: trace,
+    geometry: { boxes: [block], markers: [] },
   };
 }

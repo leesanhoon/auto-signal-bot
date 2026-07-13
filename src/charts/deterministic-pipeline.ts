@@ -134,7 +134,7 @@ export async function analyzeAllChartsDeterministic(
       // ---- Build outputs ----
       const setups: AnalysisResult["setups"] = [];
       for (const signal of resolved) {
-        const setup = buildTradeSetupFromSignal(signal, { lastPrice });
+        const setup = buildTradeSetupFromSignal(signal, { lastPrice, candles: primaryCandles, ema20 });
         if (setup !== null) setups.push(setup);
       }
 

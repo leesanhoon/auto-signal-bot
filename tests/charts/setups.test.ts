@@ -173,6 +173,10 @@ describe("BB — Block Break", () => {
     // Signal now triggers at block.endIndex (last candle of block), not at breakout candle
     expect(signal!.triggerIndex).toBe(27); // block ends at index 27
     expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
+    expect(signal!.geometry).toBeDefined();
+    expect(signal!.geometry!.boxes).toHaveLength(1);
+    expect(signal!.geometry!.boxes[0].high).toBeCloseTo(108.18);
+    expect(signal!.geometry!.boxes[0].low).toBeCloseTo(107.86);
   });
 });
 
@@ -221,6 +225,10 @@ describe("RB — Range Break", () => {
     expect(signal!.direction).toBe("LONG");
     expect(signal!.triggerIndex).toBe(last);
     expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
+    expect(signal!.geometry).toBeDefined();
+    expect(signal!.geometry!.boxes).toHaveLength(1);
+    expect(signal!.geometry!.boxes[0].high).toBeLessThanOrEqual(101.2);
+    expect(signal!.geometry!.boxes[0].low).toBeCloseTo(98.9, 1);
   });
 });
 
@@ -267,6 +275,11 @@ describe("ARB — Advanced Range Break", () => {
     expect(signal!.ruleTrace.join("\n")).toContain("Breakout LONG phat hien");
     expect(signal!.ruleTrace.join("\n")).toContain("Edge test #1");
     expect(signal!.ruleTrace.join("\n")).toContain("Edge test #2");
+    expect(signal!.geometry).toBeDefined();
+    expect(signal!.geometry!.boxes).toHaveLength(1);
+    expect(signal!.geometry!.boxes[0].high).toBeCloseTo(100.12);
+    expect(signal!.geometry!.boxes[0].low).toBeCloseTo(99.88);
+    expect(signal!.geometry!.markers).toHaveLength(2);
   });
 
   test("does not count an upper-edge probe that closes beyond the lower boundary", () => {
@@ -340,6 +353,11 @@ describe("ARB — Advanced Range Break", () => {
     expect(signal!.ruleTrace.join("\n")).toContain("Breakout SHORT phat hien");
     expect(signal!.ruleTrace.join("\n")).toContain("Edge test #1");
     expect(signal!.ruleTrace.join("\n")).toContain("Edge test #2");
+    expect(signal!.geometry).toBeDefined();
+    expect(signal!.geometry!.boxes).toHaveLength(1);
+    expect(signal!.geometry!.boxes[0].high).toBeCloseTo(100.12);
+    expect(signal!.geometry!.boxes[0].low).toBeCloseTo(99.88);
+    expect(signal!.geometry!.markers).toHaveLength(2);
   });
 });
 
@@ -388,6 +406,10 @@ describe("IRB — Inside Range Break", () => {
     expect(signal!.direction).toBe("LONG");
     expect(signal!.triggerIndex).toBe(last);
     expect(signal!.entry).toBeGreaterThan(signal!.stopLoss);
+    expect(signal!.geometry).toBeDefined();
+    expect(signal!.geometry!.boxes).toHaveLength(2);
+    expect(signal!.geometry!.boxes[0].high).toBeLessThanOrEqual(signal!.geometry!.boxes[1].high);
+    expect(signal!.geometry!.boxes[0].low).toBeGreaterThanOrEqual(signal!.geometry!.boxes[1].low);
   });
 });
 

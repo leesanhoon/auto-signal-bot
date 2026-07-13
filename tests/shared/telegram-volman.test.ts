@@ -41,7 +41,46 @@ const result: AnalysisResult = {
 };
 
 describe("sendAllAnalysesVolman", () => {
-  test("never calls sendPhoto (no chart-image scanning in the live pipeline)", async () => {
+  test("calls sendPhoto before sendMessage for setup with chartContext", async () => {
+    const setupWithChart: TradeSetup = {
+      ...minimalSetup,
+      chartContext: {
+        candles: [],
+        ema20: [],
+        triggerIndex: 10,
+        sliceStartIndex: 0,
+        geometry: {
+          boxes: [],
+          markers: [],
+        },
+      },
+    };
+
+    const resultWithChart: AnalysisResult = {
+      ...result,
+      setups: [setupWithChart],
+    };
+
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(resultWithChart, mockNotifier);
+
+    expect(mockNotifier.sendPhoto).toHaveBeenCalled();
+
+    // Verify actual call ORDER, not just that both were called — sendPhoto must fire
+    // before the specific sendMessage call carrying this setup's text (there's also a
+    // header and footer sendMessage call, so match by content rather than assuming
+    // "last call" is the setup's).
+    const sendMessageMock = vi.mocked(mockNotifier.sendMessage).mock;
+    const setupMessageCallIndex = sendMessageMock.calls.findIndex(
+      (call) => call[0].includes("EURUSD") && call[0].includes("LONG"),
+    );
+    expect(setupMessageCallIndex).toBeGreaterThanOrEqual(0);
+    const setupMessageOrder = sendMessageMock.invocationCallOrder[setupMessageCallIndex];
+    const sendPhotoOrder = vi.mocked(mockNotifier.sendPhoto).mock.invocationCallOrder[0];
+    expect(sendPhotoOrder).toBeLessThan(setupMessageOrder);
+  });
+
+  test("does not call sendPhoto for setup without chartContext", async () => {
     const mockNotifier = createMockNotifier();
     await sendAllAnalysesVolman(result, mockNotifier);
     expect(mockNotifier.sendPhoto).not.toHaveBeenCalled();
@@ -116,6 +155,74 @@ describe("sendAllAnalysesVolman", () => {
     expect(footerMessage).toBeDefined();
     expect(footerMessage).not.toContain("\n\n");
     expect(footerMessage).toContain("Xong");
+  });
+
+  test("sendMessage is called even if sendPhoto fails", async () => {
+    const setupWithChart: TradeSetup = {
+      ...minimalSetup,
+      chartContext: {
+        candles: [],
+        ema20: [],
+        triggerIndex: 10,
+        sliceStartIndex: 0,
+        geometry: {
+          boxes: [],
+          markers: [],
+        },
+      },
+    };
+
+    const resultWithChart: AnalysisResult = {
+      ...result,
+      setups: [setupWithChart],
+    };
+
+    const mockNotifier = createMockNotifier();
+    mockNotifier.sendPhoto = vi.fn(async () => {
+      throw new Error("Photo send failed");
+    });
+
+    await sendAllAnalysesVolman(resultWithChart, mockNotifier);
+
+    expect(mockNotifier.sendPhoto).toHaveBeenCalled();
+    expect(mockNotifier.sendMessage).toHaveBeenCalled();
+    const setupMsg = mockNotifier.sentMessages.find(
+      (msg) => msg.includes("EURUSD") && msg.includes("LONG")
+    );
+    expect(setupMsg).toBeDefined();
+  });
+
+  test("sendMessage always called for each setup regardless of chartContext", async () => {
+    const setupWithoutChart: TradeSetup = minimalSetup;
+    const setupWithChart: TradeSetup = {
+      ...minimalSetup,
+      pair: "GBPUSD",
+      chartContext: {
+        candles: [],
+        ema20: [],
+        triggerIndex: 10,
+        sliceStartIndex: 0,
+      },
+    };
+
+    const resultMixed: AnalysisResult = {
+      ...result,
+      setups: [setupWithoutChart, setupWithChart],
+    };
+
+    const mockNotifier = createMockNotifier();
+    await sendAllAnalysesVolman(resultMixed, mockNotifier);
+
+    const eurusdMsg = mockNotifier.sentMessages.find(
+      (msg) => msg.includes("EURUSD")
+    );
+    const gbpusdMsg = mockNotifier.sentMessages.find(
+      (msg) => msg.includes("GBPUSD")
+    );
+
+    expect(eurusdMsg).toBeDefined();
+    expect(gbpusdMsg).toBeDefined();
+    expect(mockNotifier.sendPhoto).toHaveBeenCalledTimes(1);
   });
 });
 

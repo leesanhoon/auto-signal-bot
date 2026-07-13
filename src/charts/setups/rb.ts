@@ -131,6 +131,7 @@ export function detectRb(
         confidence,
         triggerIndex: index,
         ruleTrace: trace,
+        geometry: { boxes: [range], markers: [] },
       };
     }
   }

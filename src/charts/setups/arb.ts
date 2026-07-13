@@ -1,5 +1,5 @@
 import type { Candle } from "../ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
+import type { DetectedSignal, DetectionContext, SetupKind, ChartMarker } from "../setup-types.js";
 import { detectCompression, isFalseBreak } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, applyStandardConfidenceAdjustments } from "./shared.js";
 
@@ -62,8 +62,23 @@ export function detectArb(
   }
   trace.push(`EMA20 slope=${slope!.toFixed(2)} cung huong breakout ${direction}`);
 
+  // Slope alone can pass after a sharp extension away from EMA20 that only now reverts back
+  // through it (mean-reversion pullback, not a trend-aligned breakout). A genuine ARB range
+  // consolidates near EMA20; if the whole range sits far away from EMA20, price already
+  // detached from it before the "breakout" ever happened, so require the range to be near EMA20.
+  const emaDistance = direction === "LONG"
+    ? Math.max(0, range.low - ema)
+    : Math.max(0, ema - range.high);
+  const maxEmaDistance = 0.5 * atr;
+  if (emaDistance > maxEmaDistance) {
+    trace.push(`Range qua xa EMA20 (khoang cach=${emaDistance.toFixed(5)} > ${maxEmaDistance.toFixed(5)}) -> gia khong con ton trong EMA`);
+    return null;
+  }
+  trace.push(`Range gan EMA20 (khoang cach=${emaDistance.toFixed(5)} <= ${maxEmaDistance.toFixed(5)})`);
+
   // Count edge tests: scan back from range start for false breaks at the same edge
   let edgeTestCount = 0;
+  const edgeTestMarkers: ChartMarker[] = [];
   const testLookback = Math.max(0, range.startIndex - 15);
   const levelHigh = range.high;
   const levelLow = range.low;
@@ -76,12 +91,16 @@ export function detectArb(
       // For LONG: a failed test means price probed above the upper boundary, then closed back inside.
       if (candle.high > levelHigh && candle.close >= levelLow && candle.close <= levelHigh) {
         edgeTestCount++;
+        const price = candle.high;
+        edgeTestMarkers.push({ index: i, price, label: `Edge test #${edgeTestCount}` });
         trace.push(`Edge test #${edgeTestCount} at index ${i}: high=${candle.high.toFixed(5)}, close=${candle.close.toFixed(5)}`);
       }
     } else {
       // For SHORT: a failed test means price probed below the lower boundary, then closed back inside.
       if (candle.low < levelLow && candle.close >= levelLow && candle.close <= levelHigh) {
         edgeTestCount++;
+        const price = candle.low;
+        edgeTestMarkers.push({ index: i, price, label: `Edge test #${edgeTestCount}` });
         trace.push(`Edge test #${edgeTestCount} at index ${i}: low=${candle.low.toFixed(5)}, close=${candle.close.toFixed(5)}`);
       }
     }
@@ -149,5 +168,6 @@ export function detectArb(
     confidence,
     triggerIndex: index,
     ruleTrace: trace,
+    geometry: { boxes: [range], markers: edgeTestMarkers },
   };
 }
