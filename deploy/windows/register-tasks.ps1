@@ -55,14 +55,14 @@ function Register-BotTask([string]$job, $triggers) {
 
 # analyze (Volman) — đóng cửa nến H4 mỗi ngày từ T2 đến CN.
 # = VN 03:05,07:05,11:05,15:05,19:05,23:05
-Register-BotTask "analyze" @(
-    (New-ScheduledTaskTrigger -Daily -At "03:05"),
-    (New-ScheduledTaskTrigger -Daily -At "07:05"),
-    (New-ScheduledTaskTrigger -Daily -At "11:05"),
-    (New-ScheduledTaskTrigger -Daily -At "15:05"),
-    (New-ScheduledTaskTrigger -Daily -At "19:05"),
-    (New-ScheduledTaskTrigger -Daily -At "23:05")
-)
+# Register-BotTask "analyze" @(
+#     (New-ScheduledTaskTrigger -Daily -At "03:05"),
+#     (New-ScheduledTaskTrigger -Daily -At "07:05"),
+#     (New-ScheduledTaskTrigger -Daily -At "11:05"),
+#     (New-ScheduledTaskTrigger -Daily -At "15:05"),
+#     (New-ScheduledTaskTrigger -Daily -At "19:05"),
+#     (New-ScheduledTaskTrigger -Daily -At "23:05")
+# )
 
 # Volman multi-timeframe independent tasks — mỗi timeframe chạy riêng
 # M15: mỗi 15 phút
