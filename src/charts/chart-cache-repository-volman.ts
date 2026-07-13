@@ -12,16 +12,10 @@ export async function saveChartAnalysisCache(
   result: AnalysisResult,
 ): Promise<void> {
   try {
-    // Loại bỏ buffer (binary) khỏi screenshots trước khi lưu JSONB
     const serializable = {
       summaries: result.summaries,
       setups: result.setups,
       noSetupReason: result.noSetupReason,
-      screenshots: result.screenshots.map((s) => ({
-        chart: s.chart,
-        filepath: s.filepath,
-        lastPrice: s.lastPrice,
-      })),
       ...(result.analysisStats ? { analysisStats: result.analysisStats } : {}),
     };
 
@@ -78,7 +72,7 @@ function isValidAnalysisStats(obj: unknown): obj is AnalysisStats {
 export function isValidAnalysisResult(obj: unknown): obj is AnalysisResult {
   if (typeof obj !== "object" || obj === null) return false;
   const r = obj as Record<string, unknown>;
-  if (!Array.isArray(r.summaries) || !Array.isArray(r.setups) || !Array.isArray(r.screenshots)) return false;
+  if (!Array.isArray(r.summaries) || !Array.isArray(r.setups)) return false;
   if (typeof r.noSetupReason !== "string" && r.noSetupReason !== undefined) return false;
   if (r.analysisStats !== undefined && !isValidAnalysisStats(r.analysisStats)) return false;
   // Validate each TradeSetup has required fields via schema-driven checks
@@ -97,7 +91,7 @@ export function isValidAnalysisResult(obj: unknown): obj is AnalysisResult {
   return true;
 }
 
-function toCachedAnalysisResult(raw: unknown): AnalysisResult | null {
+async function toCachedAnalysisResult(raw: unknown, candleKey: string): Promise<AnalysisResult | null> {
   if (!isValidAnalysisResult(raw)) {
     return null;
   }
@@ -107,7 +101,6 @@ function toCachedAnalysisResult(raw: unknown): AnalysisResult | null {
     summaries: r.summaries ?? [],
     setups: r.setups ?? [],
     noSetupReason: r.noSetupReason ?? "",
-    screenshots: [],
     ...(r.analysisStats ? { analysisStats: r.analysisStats } : {}),
   };
 }
@@ -138,7 +131,7 @@ export async function loadChartAnalysisCache(
 
   if (!row?.result) return null;
 
-  const result = toCachedAnalysisResult(row.result);
+  const result = await toCachedAnalysisResult(row.result, candleKey);
   if (!result) {
     logger.warn("Cache schema invalid, treating as miss", { candleKey });
     return null;
@@ -167,7 +160,7 @@ export async function loadLatestChartAnalysisCache(
 
   if (!row?.result || typeof row.candle_key !== "string") return null;
 
-  const result = toCachedAnalysisResult(row.result);
+  const result = await toCachedAnalysisResult(row.result, row.candle_key);
   if (!result) {
     logger.warn("Latest cache schema invalid, treating as miss", {
       candleKey: row.candle_key,

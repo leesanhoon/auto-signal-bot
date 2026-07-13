@@ -1,6 +1,6 @@
 import type { Candle } from "./ohlc-provider.js";
 import type { ChartContext } from "./chart-types-volman.js";
-import { chromium } from "playwright";
+import { chromium, type Browser } from "playwright";
 import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:setup-chart-renderer");
@@ -207,6 +207,21 @@ export async function renderSetupChartPng(svg: string): Promise<Buffer> {
   }
 }
 
+async function renderOneSetupChart(
+  browser: Browser,
+  input: SetupChartInput,
+): Promise<Buffer> {
+  const svg = buildSetupChartSvg(input);
+  const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
+  try {
+    await page.setContent(`<html><body style="margin:0;padding:0">${svg}</body></html>`);
+    const buffer = await page.screenshot({ type: "png" });
+    return Buffer.from(buffer);
+  } finally {
+    await page.close();
+  }
+}
+
 export async function renderSetupChartsBatch(
   inputs: SetupChartInput[],
 ): Promise<(Buffer | null)[]> {
@@ -218,17 +233,28 @@ export async function renderSetupChartsBatch(
     const results: (Buffer | null)[] = [];
 
     for (const input of inputs) {
+      let buffer: Buffer | null = null;
+
       try {
-        const svg = buildSetupChartSvg(input);
-        const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
-        await page.setContent(`<html><body style="margin:0;padding:0">${svg}</body></html>`);
-        const buffer = await page.screenshot({ type: "png" });
-        results.push(Buffer.from(buffer));
-        await page.close();
+        buffer = await renderOneSetupChart(browser, input);
       } catch (error) {
-        logger.warn(`Failed to render chart for ${input.pair} ${input.setup}:`, error);
-        results.push(null);
+        logger.warn(
+          `Chart render attempt 1/2 failed for ${input.pair} ${input.setup}, retrying:`,
+          error,
+        );
+
+        try {
+          buffer = await renderOneSetupChart(browser, input);
+        } catch (error2) {
+          logger.error(
+            `Chart render attempt 2/2 failed for ${input.pair} ${input.setup}, giving up:`,
+            error2,
+          );
+          buffer = null;
+        }
       }
+
+      results.push(buffer);
     }
 
     return results;

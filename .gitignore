@@ -3,7 +3,6 @@ dist/
 logs/
 .playwright-browsers/
 data/
-screenshots/
 .env
 *.png
 supabase/.temp/

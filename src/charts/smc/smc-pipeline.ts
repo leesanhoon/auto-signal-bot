@@ -540,7 +540,6 @@ export async function analyzeAllChartsSmc(
     summaries,
     setups,
     noSetupReason: noSetupReasons.join("\n").trim(),
-    screenshots: [],
     analysisStats: {
       attemptedPairs: pairs.length,
       okPairs,

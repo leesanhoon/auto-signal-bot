@@ -190,7 +190,6 @@ export async function analyzeAllChartsDeterministic(
     summaries,
     setups,
     noSetupReason: noSetupReasons.join("\n").trim(),
-    screenshots: [],
     analysisStats: {
       attemptedPairs,
       okPairs,

@@ -30,13 +30,6 @@ export type ChartAnalysisSource = {
   lastPrice?: number | null;
 };
 
-export type ScreenshotResult = {
-  chart: ChartConfig;
-  buffer: Buffer;
-  filepath: string;
-  lastPrice: number | null;
-};
-
 export type PendingOrderStatus = "PENDING" | "TRIGGERED" | "EXPIRED" | "CANCELLED";
 
 export type PendingOrder = {

@@ -37,7 +37,6 @@ const result: AnalysisResult = {
   summaries: [{ pair: "EURUSD", trend: "up", status: "ok", confidence: 85 }],
   setups: [minimalSetup],
   noSetupReason: "",
-  screenshots: [],
 };
 
 describe("sendAllAnalysesVolman", () => {

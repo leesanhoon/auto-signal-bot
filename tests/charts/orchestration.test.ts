@@ -49,10 +49,8 @@ describe("analyzeAllChartsDeterministic", () => {
     expect(result).toHaveProperty("summaries");
     expect(result).toHaveProperty("setups");
     expect(result).toHaveProperty("noSetupReason");
-    expect(result).toHaveProperty("screenshots");
     expect(result.summaries).toEqual([]);
     expect(result.setups).toEqual([]);
-    expect(result.screenshots).toEqual([]);
   });
 
   test("handles OHLC fetch error gracefully (skips pair)", async () => {

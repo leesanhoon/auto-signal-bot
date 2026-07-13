@@ -1,4 +1,4 @@
-import { fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
+import { fetchCandleRangeStats, findChartForPair } from "./candle-range-stats.js";
 import { CHARTS } from "./volman-charts.config.js";
 import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository-volman.js";
 import { buildPositionDecisionMessage, buildPositionClosedMessage } from "../shared/telegram-volman.js";

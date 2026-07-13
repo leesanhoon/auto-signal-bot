@@ -1,15 +1,12 @@
-import { basename } from "path";
 import type { AnalysisResult, TradeSetup } from "../charts/chart-types-smc.js";
 import type {
-  ScreenshotResult,
-  ChartAnalysisSource,
   ChartTimeframe,
 } from "../charts/chart-types-common.js";
 import type { Notifier } from "./notifier.js";
 import { createLogger } from "./logger.js";
 import type { PerformanceReport } from "../charts/performance-tracking-smc.js";
 import { getConfiguredSmcMinSignalConfidence } from "../charts/smc-config-env.js";
-import { sendMessage, sendPhoto, telegramNotifier } from "./telegram-client.js";
+import { telegramNotifier } from "./telegram-client.js";
 
 const logger = createLogger("shared:telegram-smc");
 
@@ -180,97 +177,6 @@ export function buildSmcSignalMessage(setup: TradeSetup): string {
     `THẬN TRỌNG: ${setup.caution ?? "Thanh khoản thấp ngoài khung giờ vàng có thể gây biến động bất ngờ."}`,
   );
   return lines.join("\n");
-}
-
-function normalizeChartKey(value: string): string {
-  return value.replace(/[\s\/_.:-]+/g, "").toUpperCase();
-}
-
-function normalizeSetupTimeframe(setup: TradeSetup): ChartTimeframe {
-  const raw = setup.primaryTimeframe?.trim().toUpperCase();
-  return raw === "D1" || raw === "H4" || raw === "M15" ? raw : "H4";
-}
-
-export function findScreenshotForSetup(
-  setup: TradeSetup,
-  screenshots: ScreenshotResult[],
-): { screenshot?: ScreenshotResult; usedFallback: boolean } {
-  const preferredTimeframe = normalizeSetupTimeframe(setup);
-  const preferredTargets: Array<
-    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
-  > = [];
-  const fallbackTargets: Array<
-    Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
-  > = [];
-
-  for (const chart of setup.sourceCharts ?? []) {
-    if (chart.timeframe === preferredTimeframe) preferredTargets.push(chart);
-    else fallbackTargets.push(chart);
-  }
-
-  if (setup.telegramChart) {
-    if (setup.telegramChart.timeframe === preferredTimeframe)
-      preferredTargets.push(setup.telegramChart);
-    else fallbackTargets.push(setup.telegramChart);
-  }
-
-  const findExact = (
-    targets: Array<
-      Pick<ChartAnalysisSource, "filepath" | "symbol" | "timeframe">
-    >,
-  ): ScreenshotResult | undefined => {
-    for (const target of targets) {
-      const exactTriple = screenshots.find(
-        (s) =>
-          s.filepath === target.filepath &&
-          s.chart.symbol === target.symbol &&
-          s.chart.timeframe === target.timeframe,
-      );
-      if (exactTriple) return exactTriple;
-    }
-
-    for (const target of targets) {
-      const exactSymbolTimeframe = screenshots.find(
-        (s) =>
-          s.chart.symbol === target.symbol &&
-          s.chart.timeframe === target.timeframe,
-      );
-      if (exactSymbolTimeframe) return exactSymbolTimeframe;
-    }
-
-    for (const target of targets) {
-      if (!target.filepath) continue;
-      const exactFilepath = screenshots.find(
-        (s) => s.filepath === target.filepath,
-      );
-      if (exactFilepath) return exactFilepath;
-    }
-
-    return undefined;
-  };
-
-  const preferredMatch = findExact(preferredTargets);
-  if (preferredMatch)
-    return { screenshot: preferredMatch, usedFallback: false };
-
-  const fallbackMatch = findExact(fallbackTargets);
-  if (fallbackMatch) return { screenshot: fallbackMatch, usedFallback: true };
-
-  const normalizedPair = normalizeChartKey(setup.pair);
-  const byPreferredTimeframe = screenshots.find(
-    (s) =>
-      normalizeChartKey(s.chart.symbol).includes(normalizedPair) &&
-      s.chart.timeframe === preferredTimeframe,
-  );
-  if (byPreferredTimeframe)
-    return { screenshot: byPreferredTimeframe, usedFallback: true };
-
-  return {
-    screenshot: screenshots.find((s) =>
-      normalizeChartKey(s.chart.symbol).includes(normalizedPair),
-    ),
-    usedFallback: true,
-  };
 }
 
 export function buildHeartbeatMessage(options: {
@@ -468,31 +374,6 @@ export async function sendAllAnalysesSmc(
   );
 
   for (const setup of setups) {
-    const confidence = setup.confidence ?? 0;
-    const { screenshot, usedFallback } = findScreenshotForSetup(
-      setup,
-      result.screenshots,
-    );
-
-    if (screenshot) {
-      try {
-        const caption = `📊 ${screenshot.chart.symbol} ${screenshot.chart.timeframe} — ${setup.direction} (${confidence}% 🔥)\nNguồn ảnh: ${basename(screenshot.filepath)}`;
-        (setup as Record<string, unknown>).chartFallbackUsed = usedFallback;
-        await notifier.sendPhoto(screenshot.buffer, caption);
-        if (usedFallback) {
-          logger.warn(
-            `  ! Sent chart for ${setup.pair} using fallback screenshot ${screenshot.chart.symbol} ${screenshot.chart.timeframe}`,
-          );
-        } else {
-          logger.info(
-            `  ✓ Sent chart: ${setup.pair} (confidence ${confidence}%)`,
-          );
-        }
-      } catch (error) {
-        logger.error(`  ✗ Failed to send chart ${setup.pair}:`, error);
-      }
-    }
-
     await notifier.sendMessage(buildSmcSignalMessage(setup));
     logger.info(`  ✓ Sent setup: ${setup.pair} ${setup.direction}`);
     await new Promise((resolve) => setTimeout(resolve, 1_000));

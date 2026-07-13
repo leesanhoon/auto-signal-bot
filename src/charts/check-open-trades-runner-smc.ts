@@ -1,4 +1,4 @@
-import { fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
+import { fetchCandleRangeStats, findChartForPair } from "./candle-range-stats.js";
 import { CHARTS } from "./smc-charts.config.js";
 import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository-smc.js";
 import { buildPositionDecisionMessage } from "../shared/telegram-smc.js";

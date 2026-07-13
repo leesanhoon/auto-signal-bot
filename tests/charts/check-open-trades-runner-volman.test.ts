@@ -32,7 +32,7 @@ const screenshotMocks = vi.hoisted(() => ({
 vi.mock("../../src/charts/positions-repository-volman.js", () => positionsRepoMocks);
 vi.mock("../../src/shared/telegram-volman.js", () => telegramMocks);
 vi.mock("../../src/shared/telegram-client.js", () => telegramClientMocks);
-vi.mock("../../src/charts/screenshot.js", () => screenshotMocks);
+vi.mock("../../src/charts/candle-range-stats.js", () => screenshotMocks);
 vi.mock("../../src/charts/volman-charts.config.js", () => ({
   CHARTS: [],
 }));

@@ -1,80 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const state = vi.hoisted(() => ({
-  launch: vi.fn(),
-}));
+const candleRangeStats = await import("../../src/charts/candle-range-stats.js");
 
-vi.mock("playwright", () => ({
-  chromium: {
-    launch: state.launch,
-  },
-}));
-
-const screenshot = await import("../../src/charts/screenshot.js");
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-describe("charts/screenshot", () => {
-  beforeEach(() => {
-    state.launch.mockReset();
-  });
-
-  test("captureChartScreenshot waits for screenshot promise before closing the page", async () => {
-    const screenshotResult = deferred<Buffer>();
-    const close = vi.fn(async () => undefined);
-    const screenshotMock = vi.fn(() => screenshotResult.promise);
-    const waitForTimeout = vi.fn(async () => undefined);
-    const waitForSelector = vi.fn(async () => ({
-      contentFrame: async () => ({
-        waitForSelector: async () => undefined,
-        locator: () => ({
-          innerText: async () => "1m\n30m\n1h\n4h\nIndicators\nC\n1.14525",
-        }),
-      }),
-    }));
-
-    state.launch.mockResolvedValue({
-      newContext: async () => ({
-        newPage: async () => ({
-          setContent: async () => undefined,
-          waitForSelector,
-          waitForTimeout,
-          screenshot: screenshotMock,
-          close,
-        }),
-      }),
-      close: async () => undefined,
-    });
-
-    const buildChartHtmlMock = () => "<html></html>";
-    const promise = screenshot.captureChartScreenshot({
-      symbol: "OANDA:EURUSD",
-      name: "EUR/USD H4",
-      interval: "240",
-      description: "EUR/USD — H4",
-      timeframe: "H4",
-    }, buildChartHtmlMock);
-
-    await Promise.resolve();
-    expect(close).not.toHaveBeenCalled();
-
-    screenshotResult.resolve(Buffer.from("image"));
-    const result = await promise;
-
-    expect(close).toHaveBeenCalledTimes(1);
-    expect(screenshotMock).toHaveBeenCalledTimes(1);
-    expect(result.lastPrice).toBe(1.14525);
-    expect(result.buffer).toEqual(Buffer.from("image"));
-  });
-
+describe("charts/candle-range-stats", () => {
   describe("fetchCandleRangeStats", () => {
     const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart/EURUSD%3DX?interval=2m&range=1d";
 
@@ -117,7 +45,7 @@ describe("charts/screenshot", () => {
       vi.stubGlobal("fetch", fetch);
 
       // sinceMs = nowSec * 1000 (epoch-ms) → sinceSec = nowSec
-      const result = await screenshot.fetchCandleRangeStats("OANDA:EURUSD", nowSec * 1000);
+      const result = await candleRangeStats.fetchCandleRangeStats("OANDA:EURUSD", nowSec * 1000);
 
       expect(result).not.toBeNull();
       expect(result!.high).toBe(101);  // max(100, 101), KHÔNG phải 999
@@ -138,7 +66,7 @@ describe("charts/screenshot", () => {
       });
       vi.stubGlobal("fetch", fetch);
 
-      const result = await screenshot.fetchCandleRangeStats("OANDA:EURUSD", 500_000);
+      const result = await candleRangeStats.fetchCandleRangeStats("OANDA:EURUSD", 500_000);
 
       expect(result).toBeNull();
     });
@@ -155,7 +83,7 @@ describe("charts/screenshot", () => {
       });
       vi.stubGlobal("fetch", fetch);
 
-      const result = await screenshot.fetchCandleRangeStats("OANDA:EURUSD", 999_999);
+      const result = await candleRangeStats.fetchCandleRangeStats("OANDA:EURUSD", 999_999);
 
       expect(result).toBeNull();
     });
@@ -176,7 +104,7 @@ describe("charts/screenshot", () => {
       });
       vi.stubGlobal("fetch", fetch);
 
-      const result = await screenshot.fetchCandleRangeStats("OANDA:EURUSD", 1_000);
+      const result = await candleRangeStats.fetchCandleRangeStats("OANDA:EURUSD", 1_000);
 
       expect(result).toBeNull();
     });
@@ -197,13 +125,13 @@ describe("charts/screenshot", () => {
       });
       vi.stubGlobal("fetch", fetch);
 
-      const result = await screenshot.fetchCandleRangeStats("OANDA:EURUSD", 1_000);
+      const result = await candleRangeStats.fetchCandleRangeStats("OANDA:EURUSD", 1_000);
 
       expect(result).toBeNull();
     });
 
     test("symbol không trong FALLBACK_SYMBOLS — trả null", async () => {
-      const result = await screenshot.fetchCandleRangeStats("UNKNOWN:PAIR", 1_000);
+      const result = await candleRangeStats.fetchCandleRangeStats("UNKNOWN:PAIR", 1_000);
       expect(result).toBeNull();
     });
 
@@ -211,7 +139,7 @@ describe("charts/screenshot", () => {
       const fetch = vi.fn().mockResolvedValue({ ok: false, status: 429 });
       vi.stubGlobal("fetch", fetch);
 
-      const result = await screenshot.fetchCandleRangeStats("OANDA:EURUSD", 1_000);
+      const result = await candleRangeStats.fetchCandleRangeStats("OANDA:EURUSD", 1_000);
       expect(result).toBeNull();
     });
   });

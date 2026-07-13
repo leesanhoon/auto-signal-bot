@@ -1,4 +1,4 @@
-import { fetchCandleRangeStats, findChartForPair } from "./screenshot.js";
+import { fetchCandleRangeStats, findChartForPair } from "./candle-range-stats.js";
 import {
   findOpenPositionIdByPair,
   loadPendingOrders,

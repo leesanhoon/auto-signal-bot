@@ -1,7 +1,7 @@
 import "../shared/env.js";
-import { readdir, readFile } from "fs/promises";
+import { readdir } from "fs/promises";
 import { join, extname } from "path";
-import type { ScreenshotResult, ChartConfig, ChartTimeframe } from "./chart-types-common.js";
+import type { ChartTimeframe } from "./chart-types-common.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
 import { createLogger } from "../shared/logger.js";
 
@@ -30,30 +30,17 @@ async function main(): Promise<void> {
 
   logger.info("Found test charts", { count: files.length });
 
-  const screenshots: ScreenshotResult[] = [];
+  const pairs: Array<{ pair: string; symbol: string }> = [];
   for (const file of files) {
     const filepath = join(TEST_DIR, file);
-    const buffer = await readFile(filepath);
     const name = file.replace(extname(file), "").replace(/[-_]/g, " ");
     const timeframe = inferTimeframe(file);
-    const chart: ChartConfig = {
-      name: `${name} ${timeframe}`,
-      symbol: name,
-      interval: timeframe === "D1" ? "D" : timeframe === "M15" ? "15" : "240",
-      description: `Test - ${name} - ${timeframe}`,
-      timeframe,
-    };
-    screenshots.push({ chart, buffer: Buffer.from(buffer), filepath, lastPrice: null });
+    pairs.push({ pair: `${name} ${timeframe}`, symbol: name });
     logger.info("Loaded chart fixture", { file, timeframe });
   }
 
   logger.info("Analyzing fixtures with deterministic pipeline");
-  const result = await analyzeAllChartsDeterministic(
-    screenshots.map((s) => ({
-      pair: s.chart.name.replace(` ${s.chart.timeframe}`, ""),
-      symbol: s.chart.symbol,
-    })),
-  );
+  const result = await analyzeAllChartsDeterministic(pairs);
 
   logger.info("Analysis result start");
 

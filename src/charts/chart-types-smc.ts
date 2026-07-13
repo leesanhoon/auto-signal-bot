@@ -2,14 +2,12 @@ import type {
   ChartTimeframe,
   ChartOrderType,
   ChartAnalysisSource,
-  ScreenshotResult,
 } from "./chart-types-common.js";
 
 export type {
   ChartTimeframe,
   ChartOrderType,
   ChartAnalysisSource,
-  ScreenshotResult,
 };
 
 export type TradeSetup = {
@@ -75,6 +73,5 @@ export type AnalysisResult = {
   summaries: PairSummary[];
   setups: TradeSetup[];
   noSetupReason: string;
-  screenshots: ScreenshotResult[];
   analysisStats?: AnalysisStats;
 };

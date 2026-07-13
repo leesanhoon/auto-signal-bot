@@ -2,7 +2,6 @@ import type {
   ChartTimeframe,
   ChartOrderType,
   ChartAnalysisSource,
-  ScreenshotResult,
 } from "./chart-types-common.js";
 import type { Candle } from "./ohlc-provider.js";
 import type { SetupChartGeometry } from "./setup-types.js";
@@ -11,7 +10,6 @@ export type {
   ChartTimeframe,
   ChartOrderType,
   ChartAnalysisSource,
-  ScreenshotResult,
 };
 
 export type ChartContext = {
@@ -72,6 +70,5 @@ export type AnalysisResult = {
   summaries: PairSummary[];
   setups: TradeSetup[];
   noSetupReason: string;
-  screenshots: ScreenshotResult[];
   analysisStats?: AnalysisStats;
 };

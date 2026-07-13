@@ -66,14 +66,6 @@ const MOCK_RESULT = {
     skippedPairs: 5,
     setupCount: 1,
   },
-  screenshots: [
-    {
-      chart: { name: "EURUSD H4", symbol: "EURUSD", interval: "H4", description: "H4", timeframe: "H4" as const },
-      buffer: Buffer.from("fake-image-bytes"),
-      filepath: "/charts/eurusd-h4.png",
-      lastPrice: 1.1005,
-    },
-  ],
 };
 
 describe("charts/chart-cache-repository-volman", () => {
@@ -102,34 +94,6 @@ describe("charts/chart-cache-repository-volman", () => {
   });
 
   describe("saveChartAnalysisCache", () => {
-    test("upsert với candle_key và result đã loại bỏ buffer khỏi screenshots", async () => {
-      repoState.upsertResult = { error: null };
-
-      await chartCacheRepository.saveChartAnalysisCache(CANDLE_KEY, MOCK_RESULT);
-
-      expect(repoState.from).toHaveBeenCalledWith("analysis_cache_volman");
-      expect(repoState.from().upsert).toHaveBeenCalledTimes(1);
-
-      const upsertArg = (repoState.from().upsert as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(upsertArg.candle_key).toBe(CANDLE_KEY);
-      expect(upsertArg.result.summaries).toEqual(MOCK_RESULT.summaries);
-      expect(upsertArg.result.setups).toEqual(MOCK_RESULT.setups);
-      expect(upsertArg.result.noSetupReason).toBe(MOCK_RESULT.noSetupReason);
-      expect(upsertArg.result.analysisStats).toEqual(MOCK_RESULT.analysisStats);
-
-      // Buffer bị loại bỏ — chỉ giữ chart, filepath, lastPrice
-      expect(upsertArg.result.screenshots).toHaveLength(1);
-      expect(upsertArg.result.screenshots[0]).toEqual({
-        chart: MOCK_RESULT.screenshots[0].chart,
-        filepath: MOCK_RESULT.screenshots[0].filepath,
-        lastPrice: MOCK_RESULT.screenshots[0].lastPrice,
-      });
-      // Buffer không được lưu
-      expect(upsertArg.result.screenshots[0]).not.toHaveProperty("buffer");
-
-      expect(upsertArg.candle_key).toBe(CANDLE_KEY);
-    });
-
     test("upsert lỗi — không throw (fail silent)", async () => {
       repoState.upsertResult = { error: { message: "DB error" } };
 
@@ -141,7 +105,7 @@ describe("charts/chart-cache-repository-volman", () => {
   });
 
   describe("loadChartAnalysisCache", () => {
-    test("trả về AnalysisResult khi có data hợp lệ — screenshots luôn rỗng", async () => {
+    test("trả về AnalysisResult khi có data hợp lệ", async () => {
       repoState.selectResult = {
         data: {
           result: {
@@ -149,7 +113,6 @@ describe("charts/chart-cache-repository-volman", () => {
             setups: MOCK_RESULT.setups,
             noSetupReason: MOCK_RESULT.noSetupReason,
             analysisStats: MOCK_RESULT.analysisStats,
-            screenshots: [],
           },
         },
         error: null,
@@ -162,8 +125,6 @@ describe("charts/chart-cache-repository-volman", () => {
       expect(result!.setups).toEqual(MOCK_RESULT.setups);
       expect(result!.noSetupReason).toBe(MOCK_RESULT.noSetupReason);
       expect(result!.analysisStats).toEqual(MOCK_RESULT.analysisStats);
-      // screenshots luôn rỗng
-      expect(result!.screenshots).toEqual([]);
     });
 
     test("không có row — trả null", async () => {
@@ -184,7 +145,6 @@ describe("charts/chart-cache-repository-volman", () => {
             setups: MOCK_RESULT.setups,
             noSetupReason: MOCK_RESULT.noSetupReason,
             analysisStats: MOCK_RESULT.analysisStats,
-            screenshots: [],
           },
           created_at: "2026-07-03T08:05:00.000Z",
         },
@@ -195,7 +155,6 @@ describe("charts/chart-cache-repository-volman", () => {
 
       expect(result).not.toBeNull();
       expect(result?.candleKey).toBe("2026-07-03T08:deterministic");
-      expect(result?.result.screenshots).toEqual([]);
       expect(repoState.from).toHaveBeenCalledWith("analysis_cache_volman");
       expect(repoState.from().ilike).toHaveBeenCalledWith("candle_key", "%:deterministic:multi");
       expect(repoState.from().order).toHaveBeenCalledWith("created_at", { ascending: false });
@@ -229,7 +188,6 @@ describe("charts/chart-cache-repository-volman", () => {
       summaries: [{ pair: "EUR/USD", trend: "LONG", status: "tích lũy", confidence: 80 }],
       setups: [validSetup],
       noSetupReason: "",
-      screenshots: [],
     };
 
     test("valid analysis result → true", () => {

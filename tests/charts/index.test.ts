@@ -64,10 +64,6 @@ const mocks = vi.hoisted(() => ({
 // ============================================================
 // Hoisted vi.mock calls — these are hoisted to top of file
 // ============================================================
-vi.mock("../../src/charts/screenshot.js", () => ({
-  captureAllCharts: mocks.captureAllCharts,
-}));
-
 vi.mock("../../src/charts/analyzer-common.js", () => ({
   buildChartAnalysisCacheKey: mocks.buildChartAnalysisCacheKey,
 }));
@@ -187,7 +183,6 @@ const MOCK_RESULT = {
     },
   ],
   noSetupReason: "",
-  screenshots: [],
 };
 
 // ============================================================
@@ -479,7 +474,6 @@ describe("charts/index main() — H4 close guard", () => {
       summaries: [],
       setups: [],
       noSetupReason: "",
-      screenshots: [],
       analysisStats: {
         attemptedPairs: 8,
         okPairs: 0,
