@@ -65,8 +65,9 @@ export function detectBb(
   trace.push(`Block sat EMA21, distance=${block.distanceToEma.toFixed(2)} ATR`);
 
   // Classify compression tightness
-  const tightness = classifyCompressionTightness(block, kBlock, atr);
-  trace.push(`Nen ${tightness} (range=${block.range.toFixed(5)}, max=${(kBlock * atr).toFixed(5)})`);
+  const blockAtr = ctx.atr14[block.endIndex]!;
+  const tightness = classifyCompressionTightness(block, kBlock, blockAtr);
+  trace.push(`Nen ${tightness} (range=${block.range.toFixed(5)}, max=${(kBlock * blockAtr).toFixed(5)})`);
 
   // Direction is determined by trend (BEFORE breakout happens) — signal when block is
   // ready, NOT when price has already broken out. Neu cung 1 block van con "sat EMA"

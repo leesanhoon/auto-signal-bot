@@ -179,6 +179,36 @@ describe("BB — Block Break", () => {
     expect(signal!.geometry!.boxes[0].high).toBeCloseTo(108.18);
     expect(signal!.geometry!.boxes[0].low).toBeCloseTo(107.86);
   });
+
+  test("classifies a block as LOOSE using the block's own ATR, not the breakout candle's inflated ATR", () => {
+    // A gentle uptrend (drift 0.0046/candle) keeps EMA21 close to price (BB requires
+    // block.distanceToEma <= 0.35 ATR) while |slope| still clears the 0.15 threshold.
+    // The block (index 41-44) has range 0.1538, which is LOOSE relative to its own
+    // ATR (atr14[44] = 0.14) but would misclassify as TIGHT if the breakout candle's
+    // inflated ATR (atr14[45], driven by a large high-low wick) were used instead.
+    const drift = 0.0046;
+    const candles: Candle[] = [];
+    for (let i = 0; i < 40; i++) {
+      const base = 100 + i * drift;
+      candles.push({ time: 1700000000000 + i * 3600000, open: base, high: base + 0.08, low: base - 0.06, close: base + 0.02, volume: 100 });
+    }
+    for (let i = 40; i < 45; i++) {
+      const base = 100 + i * drift;
+      candles.push({ time: 1700000000000 + i * 3600000, open: base, high: base + 0.08, low: base - 0.06, close: base + 0.02, volume: 90 });
+    }
+    const base45 = 100 + 45 * drift;
+    candles.push({ time: 1700000000000 + 45 * 3600000, open: base45, high: 101.0, low: base45 - 0.3, close: 100.95, volume: 120 });
+
+    const ctx = buildContext(candles);
+    const last = candles.length - 1;
+    const signal = detectBb(candles, last, ctx);
+
+    expect(signal).not.toBeNull();
+    expect(signal!.ruleTrace.find((t) => t.startsWith("Nen "))).toBe(
+      "Nen LOOSE (range=0.15380, max=0.16800)",
+    );
+    expect(signal!.confidence).toBe(65);
+  });
 });
 
 // ---------------------------------------------------------------------------
