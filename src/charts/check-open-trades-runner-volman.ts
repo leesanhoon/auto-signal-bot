@@ -1,7 +1,7 @@
 import { fetchCandleRangeStats, findChartForPair } from "./candle-range-stats.js";
 import { getCharts } from "./volman-charts.config.js";
 import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository-volman.js";
-import { buildPositionDecisionMessage, buildPositionClosedMessage } from "../shared/telegram-volman.js";
+import { buildPositionClosedMessage } from "../shared/telegram-volman.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
@@ -87,28 +87,7 @@ export async function processPosition(position: Awaited<ReturnType<typeof loadOp
     return true;
   }
 
-  const message = buildPositionDecisionMessage(
-    {
-      id: position.id,
-      pair: position.pair,
-      direction: position.direction,
-      setup: position.setup,
-      entry: position.entry,
-      stopLoss: position.stopLoss,
-      takeProfit1: position.takeProfit1,
-      takeProfit2: position.takeProfit2,
-      reasons: position.reasons,
-      openedAt: position.openedAt ? new Date(position.openedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : null,
-      lastDecision: position.lastDecision,
-      lastDecisionConfidence: position.lastDecisionConfidence,
-      lastDecisionComment: position.lastDecisionComment,
-      tradeStage: patch?.tradeStage ?? position.tradeStage,
-    },
-    decision,
-  );
-
-  await sendMessage(`${message}\n\n*Cập nhật lúc:* ${formatCheckedAt()}`);
-  return true;
+  return false;
 }
 
 const ALL_POSITION_TIMEFRAMES: Array<"M15" | "M30" | "H1" | "H4" | "D1"> = [

@@ -122,7 +122,7 @@ describe("check-open-trades-runner-volman", () => {
     expect(telegram.buildPositionDecisionMessage).not.toHaveBeenCalled();
   });
 
-  test("uses Binance reconcile for an executed position", async () => {
+  test("uses Binance reconcile for an executed position and sends no notification on HOLD", async () => {
     const executed = { ...position, binanceSymbol: "BTCUSDT" };
     binance.reconcileBinancePosition.mockResolvedValue({
       decision: "HOLD",
@@ -135,11 +135,56 @@ describe("check-open-trades-runner-volman", () => {
       closePosition: false,
     });
 
-    await processPosition(executed as any);
+    const sentNotification = await processPosition(executed as any);
 
     expect(binance.reconcileBinancePosition).toHaveBeenCalledWith(executed);
     expect(candles.fetchCandleRangeStats).not.toHaveBeenCalled();
-    expect(telegram.buildPositionDecisionMessage).toHaveBeenCalled();
+    expect(repository.updatePositionDecision).toHaveBeenCalledWith(
+      executed.id,
+      expect.objectContaining({ decision: "HOLD" }),
+      null,
+    );
+    expect(telegram.buildPositionDecisionMessage).not.toHaveBeenCalled();
+    expect(telegramClient.sendMessage).not.toHaveBeenCalled();
+    expect(sentNotification).toBe(false);
+  });
+
+  test("persists and announces a stop-loss close", async () => {
+    const decision = {
+      decision: "STOP" as const,
+      confidence: 99,
+      comment: "SL reached",
+      managementAction: "NONE" as const,
+    };
+    decisions.resolveOpenPositionDecision.mockReturnValue(decision);
+    repository.buildPositionManagementPatch.mockReturnValue({
+      patch: {
+        tradeStage: "closed",
+        lastManagementAction: "NONE",
+      },
+      closePosition: true,
+    });
+    repository.closePosition.mockResolvedValue({
+      closeReason: "stop_loss",
+      realizedExitPrice: "1.0960",
+      realizedRiskRewardRatio: -1,
+      outcome: "loss",
+    });
+
+    const sentNotification = await processPosition(position as any);
+
+    expect(repository.closePosition).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, pair: "EUR/USD" }),
+      decision,
+      expect.objectContaining({ tradeStage: "closed" }),
+    );
+    expect(telegram.buildPositionClosedMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, pair: "EUR/USD" }),
+      expect.objectContaining({ closeReason: "stop_loss" }),
+      expect.any(Object),
+    );
+    expect(telegramClient.sendMessage).toHaveBeenCalledTimes(1);
+    expect(sentNotification).toBe(true);
   });
 
   test("runCheckOpenTrades processes every open position", async () => {
