@@ -3,12 +3,12 @@ import type { Candle } from "./ohlc-provider.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { calculateEma, calculateAtr, classifyTrend, averageAtr } from "./indicators.js";
 import { detectDdb } from "./setups/ddb.js";
-import { detectFb } from "./setups/fb.js";
+// import { detectFb } from "./setups/fb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
 import { detectSb } from "./setups/sb.js";
 import { detectBb } from "./setups/bb.js";
-import { detectRb } from "./setups/rb.js";
-import { detectArb } from "./setups/arb.js";
-import { detectIrb } from "./setups/irb.js";
+// import { detectRb } from "./setups/rb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
+// import { detectArb } from "./setups/arb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
+// import { detectIrb } from "./setups/irb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
 import { runSbDetection } from "./setup-sb-runner.js";
 import { buildTradeSetupFromSignal, buildPairSummaryFromContext } from "./signal-assembly.js";
 import type { DetectedSignal } from "./setup-types.js";
@@ -39,9 +39,9 @@ export function passesDeterministicWindowFilter(
  * 1. Fetch OHLC history for the runtime timeframe (200 bars)
  * 2. Session/volatility filter (ATR floor only; crypto trades 24/7)
  * 3. Calculate indicators (EMA21, ATR14)
- * 4. Run all 7 Volman setup detectors (DDB, FB, SB, BB, RB, ARB, IRB) on the single most
- *    recently closed candle only (no retroactive lookback — a missed run drops that
- *    candle's trigger rather than reporting it late)
+ * 4. Run active Volman setup detectors (DDB, SB, BB — FB/RB/ARB/IRB temporarily disabled)
+ *    on the single most recently closed candle only (no retroactive lookback — a missed
+ *    run drops that candle's trigger rather than reporting it late)
  * 5. Drop signals invalidated by a false break
  * 6. Resolve conflicts (max 1 signal per pair)
  * 7. Build TradeSetup[] and PairSummary[] from signals
@@ -101,10 +101,11 @@ export async function analyzeAllChartsDeterministic(
         timeframe: analysisTimeframe,
       };
 
-      // ---- Run all 7 Volman setup detectors on the single most recently closed candle ----
+      // ---- Run Volman setup detectors on the single most recently closed candle ----
+      // TẠM TẮT: chỉ chạy DDB, SB, BB — FB/RB/ARB/IRB tắt tạm thời (xem import phía trên)
       const startDetectIndex = lastIndex;
       const allSignals: DetectedSignal[] = [];
-      const detectors = [detectDdb, detectFb, detectSb, detectBb, detectRb, detectArb, detectIrb];
+      const detectors = [detectDdb, detectSb, detectBb];
 
       for (let i = startDetectIndex; i <= lastIndex; i++) {
         for (const detector of detectors) {

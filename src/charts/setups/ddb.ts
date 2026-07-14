@@ -1,7 +1,19 @@
 import type { Candle } from "../ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../setup-types.js";
+import type {
+  DetectedSignal,
+  DetectionContext,
+  SetupKind,
+  SetupChartGeometry,
+} from "../setup-types.js";
 import { classifyTrend, isDoji } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
+import {
+  baseConfidence,
+  computeSlope,
+  computeBodyRatio,
+  computeTakeProfit,
+  applyStandardConfidenceAdjustments,
+  isHarmonicPullback,
+} from "./shared.js";
 
 /**
  * DDB — Double Doji Break
@@ -51,7 +63,9 @@ export function detectDdb(
   // Check price near EMA21: distance ≤ 0.3 ATR
   const distance = Math.abs(candles[index].close - ema) / atr;
   if (distance > 0.3) {
-    trace.push(`Gia cach EMA21 ${distance.toFixed(2)} ATR (>0.3) -> khong sat EMA`);
+    trace.push(
+      `Gia cach EMA21 ${distance.toFixed(2)} ATR (>0.3) -> khong sat EMA`,
+    );
     return null;
   }
   trace.push(`Custer doji sat EMA21, distance=${distance.toFixed(2)} ATR`);
@@ -63,30 +77,56 @@ export function detectDdb(
   }
   // pullbackStartIndex is now the candle before the first doji (or 0)
 
-  const isHarmonic = isHarmonicPullback(candles, pullbackStartIndex, dojiStart - 1, atr);
+  const isHarmonic = isHarmonicPullback(
+    candles,
+    pullbackStartIndex,
+    dojiStart - 1,
+    atr,
+  );
   if (!isHarmonic) {
-    trace.push(`Pullback toi custer doji khong phai song hieu hoa (ngang hoac danh gia 2 lan)`);
+    trace.push(
+      `Pullback toi custer doji khong phai song hieu hoa (ngang hoac danh gia 2 lan)`,
+    );
     return null;
   }
   trace.push(`Pullback la song hieu hoa`);
 
   // Direction & entry
   const direction = trend === "UPTREND" ? "LONG" : "SHORT";
-  const dojiHigh = Math.max(...candles.slice(dojiStart, index + 1).map((c) => c.high));
-  const dojiLow = Math.min(...candles.slice(dojiStart, index + 1).map((c) => c.low));
-  trace.push(`Cum doji: dinh=${dojiHigh.toFixed(5)}, day=${dojiLow.toFixed(5)}`);
+  const dojiHigh = Math.max(
+    ...candles.slice(dojiStart, index + 1).map((c) => c.high),
+  );
+  const dojiLow = Math.min(
+    ...candles.slice(dojiStart, index + 1).map((c) => c.low),
+  );
+  trace.push(
+    `Cum doji: dinh=${dojiHigh.toFixed(5)}, day=${dojiLow.toFixed(5)}`,
+  );
   const entry = direction === "LONG" ? dojiHigh : dojiLow;
   const stopBuffer = 0.1 * atr;
-  const stopLoss = direction === "LONG" ? dojiLow - stopBuffer : dojiHigh + stopBuffer;
+  const stopLoss =
+    direction === "LONG" ? dojiLow - stopBuffer : dojiHigh + stopBuffer;
   const takeProfit = computeTakeProfit(direction, entry, stopLoss);
 
-  trace.push(`Nen ${index} xac nhan -> entry ${direction} tai ${entry.toFixed(5)}`);
+  trace.push(
+    `Nen ${index} xac nhan -> entry ${direction} tai ${entry.toFixed(5)}`,
+  );
 
   // Confidence
   let confidence = baseConfidence;
   const slope = computeSlope(ctx.ma21, ctx.atr14, index);
-  const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
-  confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
+  const bodyRatio = computeBodyRatio(
+    candles[index].open,
+    candles[index].high,
+    candles[index].low,
+    candles[index].close,
+  );
+  confidence = applyStandardConfidenceAdjustments(
+    confidence,
+    slope,
+    bodyRatio,
+    trace,
+  );
 
   const highlightCandles = [];
   for (let i = dojiStart; i <= index; i++) {
@@ -100,7 +140,10 @@ export function detectDdb(
     lines: [
       {
         points: [
-          { index: pullbackStartIndex, price: candles[pullbackStartIndex].close },
+          {
+            index: pullbackStartIndex,
+            price: candles[pullbackStartIndex].close,
+          },
           { index: dojiStart, price: candles[dojiStart].close },
         ],
         label: "Pullback",

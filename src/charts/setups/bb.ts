@@ -1,7 +1,22 @@
 import type { Candle } from "../ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
-import { classifyTrend, detectCompression, classifyCompressionTightness } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
+import type {
+  DetectedSignal,
+  DetectionContext,
+  SetupKind,
+} from "../setup-types.js";
+import {
+  classifyTrend,
+  detectCompression,
+  classifyCompressionTightness,
+} from "../indicators.js";
+import {
+  baseConfidence,
+  computeSlope,
+  computeBodyRatio,
+  computeTakeProfit,
+  applyStandardConfidenceAdjustments,
+  applyCompressionTightnessBonus,
+} from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";
 
 /**
@@ -34,7 +49,9 @@ export function detectBb(
   // khong lien quan gi den viec doi thoi diem phat tin hieu pre-position)
   const slope = computeSlope(ctx.ma21, ctx.atr14, index);
   if (slope === null || Math.abs(slope) <= 0.15) {
-    trace.push(`|slope|=${slope !== null ? Math.abs(slope).toFixed(2) : 'null'} <= 0.15 -> khong du doc cho BB`);
+    trace.push(
+      `|slope|=${slope !== null ? Math.abs(slope).toFixed(2) : "null"} <= 0.15 -> khong du doc cho BB`,
+    );
     return null;
   }
   trace.push(`EMA21 slope=${slope.toFixed(2)}`);
@@ -44,10 +61,21 @@ export function detectBb(
   let block: ReturnType<typeof detectCompression> = null;
 
   for (const w of windowSizes) {
-    block = detectCompression(candles, ctx.ma21, ctx.atr14, index - 1, w, kBlock);
+    block = detectCompression(
+      candles,
+      ctx.ma21,
+      ctx.atr14,
+      index - 1,
+      w,
+      kBlock,
+    );
     if (block !== null) {
-      trace.push(`Block detected w=${w}, range=${block.range.toFixed(5)}, distanceToEma=${block.distanceToEma.toFixed(2)}`);
-      trace.push(`Hop nen: dinh=${block.high.toFixed(5)}, day=${block.low.toFixed(5)}`);
+      trace.push(
+        `Block detected w=${w}, range=${block.range.toFixed(5)}, distanceToEma=${block.distanceToEma.toFixed(2)}`,
+      );
+      trace.push(
+        `Hop nen: dinh=${block.high.toFixed(5)}, day=${block.low.toFixed(5)}`,
+      );
       break;
     }
   }
@@ -59,7 +87,9 @@ export function detectBb(
 
   // Block must be near EMA21
   if (block.distanceToEma > 0.35) {
-    trace.push(`Block cach EMA21 ${block.distanceToEma.toFixed(2)} ATR (>0.35) -> khong sat EMA`);
+    trace.push(
+      `Block cach EMA21 ${block.distanceToEma.toFixed(2)} ATR (>0.35) -> khong sat EMA`,
+    );
     return null;
   }
   trace.push(`Block sat EMA21, distance=${block.distanceToEma.toFixed(2)} ATR`);
@@ -67,7 +97,9 @@ export function detectBb(
   // Classify compression tightness
   const blockAtr = ctx.atr14[block.endIndex]!;
   const tightness = classifyCompressionTightness(block, kBlock, blockAtr);
-  trace.push(`Nen ${tightness} (range=${block.range.toFixed(5)}, max=${(kBlock * blockAtr).toFixed(5)})`);
+  trace.push(
+    `Nen ${tightness} (range=${block.range.toFixed(5)}, max=${(kBlock * blockAtr).toFixed(5)})`,
+  );
 
   // Direction is determined by trend (BEFORE breakout happens) — signal when block is
   // ready, NOT when price has already broken out. Neu cung 1 block van con "sat EMA"
@@ -77,19 +109,33 @@ export function detectBb(
   // lap thuc te (pre-position stop entry cho block ready truoc khi breakout xay ra).
   const direction = trend === "UPTREND" ? "LONG" : "SHORT";
 
-  trace.push(`Block san sang, theo trend ${direction}: STOP chap Binance truoc khi gia breakout`);
+  trace.push(
+    `Block san sang, theo trend ${direction}: STOP chap Binance truoc khi gia breakout`,
+  );
 
   // Entry/Stop/Target
   const entry = direction === "LONG" ? block.high : block.low;
   const stopLoss = direction === "LONG" ? block.low : block.high;
   const takeProfit = computeTakeProfit(direction, entry, stopLoss);
 
-  trace.push(`Entry ${direction} tai ${entry.toFixed(5)}, Stop=${stopLoss.toFixed(5)}`);
+  trace.push(
+    `Entry ${direction} tai ${entry.toFixed(5)}, Stop=${stopLoss.toFixed(5)}`,
+  );
 
   // Confidence
   let confidence = baseConfidence;
-  const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
-  confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
+  const bodyRatio = computeBodyRatio(
+    candles[index].open,
+    candles[index].high,
+    candles[index].low,
+    candles[index].close,
+  );
+  confidence = applyStandardConfidenceAdjustments(
+    confidence,
+    slope,
+    bodyRatio,
+    trace,
+  );
   confidence = applyCompressionTightnessBonus(confidence, tightness, trace);
 
   return {

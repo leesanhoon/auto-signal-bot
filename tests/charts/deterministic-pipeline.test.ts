@@ -95,7 +95,7 @@ describe("deterministic pipeline", () => {
     const detectedAtLastIndex = vi.fn((_candles: Candle[], i: number) =>
       i === 30
         ? {
-            setup: "RB",
+            setup: "BB",
             pair: "EUR/USD",
             timeframe: "H4",
             direction: "LONG",
@@ -110,8 +110,8 @@ describe("deterministic pipeline", () => {
     );
     mocks.detectDd.mockReturnValue(null);
     mocks.detectFb.mockReturnValue(null);
-    mocks.detectBb.mockReturnValue(null);
-    mocks.detectRb.mockImplementation(detectedAtLastIndex);
+    mocks.detectBb.mockImplementation(detectedAtLastIndex);
+    mocks.detectRb.mockReturnValue(null);
     mocks.detectArb.mockReturnValue(null);
     mocks.detectIrb.mockReturnValue(null);
 
