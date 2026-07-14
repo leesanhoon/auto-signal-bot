@@ -1,6 +1,8 @@
 import type { CandleRangeStats, ChartTimeframe, ChartConfig } from "./chart-types-common.js";
 import { createLogger } from "../shared/logger.js";
 import { toBinanceSymbol } from "./ohlc-provider.js";
+import { withRetry } from "../shared/retry.js";
+import { withConfiguredRateLimit } from "../shared/rate-limit.js";
 
 const logger = createLogger("charts:candle-range-stats");
 
@@ -77,17 +79,59 @@ async function fetchFallbackLastPrice(symbol: string): Promise<number | null> {
 }
 
 const BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines";
+const BINANCE_RATE_LIMIT_CONFIG = {
+  key: "binance",
+  envVar: "BINANCE_RATE_LIMIT_RPM",
+  defaultRpm: 300,
+} as const;
 
-async function fetchBinanceCandleRangeStats(bnSymbol: string, sinceMs: number): Promise<CandleRangeStats | null> {
+async function fetchBinanceKlinesForRangeStats(bnSymbol: string, sinceMs: number): Promise<unknown> {
   const url = `${BINANCE_KLINES_URL}?symbol=${encodeURIComponent(bnSymbol)}&interval=15m&startTime=${sinceMs}&limit=1000`;
   const response = await fetch(url, { headers: { "user-agent": "Mozilla/5.0" } });
   if (!response.ok) {
-    return null;
+    let apiMessage: string | undefined;
+    try {
+      apiMessage = ((await response.clone().json()) as { msg?: string })?.msg;
+    } catch {
+      // ignore — Binance error body isn't always JSON
+    }
+    const error = new Error(
+      `Binance API tra ve ${response.status} cho ${bnSymbol}${apiMessage ? `: ${apiMessage}` : ""}`,
+    );
+    (error as any).status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+async function fetchBinanceCandleRangeStats(bnSymbol: string, sinceMs: number): Promise<CandleRangeStats | Error> {
+  let body: unknown;
+  try {
+    body = await withConfiguredRateLimit(BINANCE_RATE_LIMIT_CONFIG, () =>
+      withRetry(() => fetchBinanceKlinesForRangeStats(bnSymbol, sinceMs), {
+        maxAttempts: 3,
+        baseDelayMs: 1000,
+        isRetryable: (error) => {
+          const status = (error as { status?: number }).status;
+          // 418/429 = ban/rate-limit; retrying immediately makes bans worse.
+          // 400 = bad request; retrying won't change the outcome.
+          return status !== 418 && status !== 429 && status !== 400;
+        },
+        onRetry: (error, attempt, maxAttempts, delayMs) => {
+          logger.warn(
+            `Binance candle range stats retry ${attempt}/${maxAttempts} sau ${delayMs}ms cho ${bnSymbol}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        },
+      }),
+    );
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.warn("Failed to fetch Binance candle range stats", { symbol: bnSymbol, error: err });
+    return err;
   }
 
-  const body = (await response.json()) as unknown;
   if (!Array.isArray(body) || body.length === 0) {
-    return null;
+    return new Error(`Binance khong tra ve klines cho ${bnSymbol}`);
   }
 
   let high = -Infinity;
@@ -104,13 +148,13 @@ async function fetchBinanceCandleRangeStats(bnSymbol: string, sinceMs: number): 
   }
 
   if (!Number.isFinite(high) || !Number.isFinite(low)) {
-    return null;
+    return new Error(`Khong parse duoc high/low tu klines Binance cho ${bnSymbol}`);
   }
 
   return { high, low, lastClose };
 }
 
-export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Promise<CandleRangeStats | null> {
+export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Promise<CandleRangeStats | Error> {
   const bnSymbol = toBinanceSymbol(symbol);
   if (bnSymbol) {
     return fetchBinanceCandleRangeStats(bnSymbol, sinceMs);
@@ -118,7 +162,7 @@ export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Pr
 
   const fallbackSymbol = FALLBACK_SYMBOLS[symbol];
   if (!fallbackSymbol) {
-    return null;
+    return new Error(`Khong co Binance hoac Yahoo fallback symbol cho ${symbol}`);
   }
 
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(fallbackSymbol)}?interval=2m&range=1d`;
@@ -126,7 +170,7 @@ export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Pr
     headers: { "user-agent": "Mozilla/5.0" },
   });
   if (!response.ok) {
-    return null;
+    return new Error(`Yahoo Finance API tra ve ${response.status} cho ${fallbackSymbol}`);
   }
 
   const payload = (await response.json()) as {
@@ -147,7 +191,7 @@ export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Pr
   const result = payload.chart?.result?.[0];
   const quote = result?.indicators?.quote?.[0];
   if (!quote) {
-    return null;
+    return new Error(`Yahoo Finance response thieu quote cho ${fallbackSymbol}`);
   }
 
   const timestamps = result?.timestamp ?? [];
@@ -159,14 +203,14 @@ export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Pr
   // Chuyển sinceMs về seconds để so sánh
   const sinceSec = Math.floor(sinceMs / 1000);
 
-  // Nếu không có timestamp, không thể lọc theo sinceMs — trả null để fallback về AI vision
+  // Nếu không có timestamp, không thể lọc theo sinceMs — trả lỗi để fallback về AI vision
   if (timestamps.length === 0) {
-    return null;
+    return new Error(`Yahoo Finance response thieu timestamp cho ${fallbackSymbol}`);
   }
 
-  // Nếu timestamps không khớp độ dài với highs/lows → dữ liệu không nhất quán, trả null
+  // Nếu timestamps không khớp độ dài với highs/lows → dữ liệu không nhất quán, trả lỗi
   if (timestamps.length !== highs.length) {
-    return null;
+    return new Error(`Yahoo Finance timestamps/highs khong khop do dai cho ${fallbackSymbol}`);
   }
 
   // Lọc chỉ giữ các nến có timestamp >= sinceMs
@@ -187,7 +231,7 @@ export async function fetchCandleRangeStats(symbol: string, sinceMs: number): Pr
   }
 
   if (filteredHighs.length === 0 || filteredLows.length === 0) {
-    return null;
+    return new Error(`Khong co nen nao sau sinceMs cho ${fallbackSymbol}`);
   }
 
   const high = Math.max(...filteredHighs);
