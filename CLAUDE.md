@@ -173,7 +173,7 @@ LUÔN áp dụng quy tắc sau — không được bỏ trống field `model`:
 - **Task reviewer (spec compliance + code quality review):**
   dùng `claude-sonnet-5` — không hạ xuống Haiku, review cần đủ khả năng bắt lỗi
 - **Architecture / design / brainstorming / writing-plans:**
-  giữ nguyên model của Lead (Sonnet hoặc cao hơn) — không delegate xuống subagent rẻ
+  giữ nguyên model của Lead (Sonnet) — không delegate xuống subagent rẻ
 
 ### Ghi log để audit
 
