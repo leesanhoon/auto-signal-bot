@@ -44,6 +44,25 @@ nearEma      = math.abs(blockMid - ema21) <= bbNearEmaAtrMult * atr14
 bbLongCond  = enableBB and isUptrend   and isTightBlock and nearEma and close > blockHigh and close[1] <= blockHigh
 bbShortCond = enableBB and isDowntrend and isTightBlock and nearEma and close < blockLow  and close[1] >= blockLow
 
+// ---------- RB compression + entry ----------
+rbHigh       = ta.highest(high[1], rbWindow)
+rbLow        = ta.lowest(low[1], rbWindow)
+rbRange      = rbHigh - rbLow
+isTightRange = rbRange <= rbKBlock * atr14
+flatBefore   = math.abs(slope[1]) <= trendSlopeThreshold
+
+touchTolerance  = rbTouchAtrMult * atr14
+touchHighSeries = (rbHigh - high) <= touchTolerance ? 1.0 : 0.0
+touchLowSeries  = (low - rbLow)  <= touchTolerance ? 1.0 : 0.0
+touchesHigh = math.sum(touchHighSeries[1], rbWindow)
+touchesLow  = math.sum(touchLowSeries[1], rbWindow)
+
+rbLongBreak  = close > rbHigh and close[1] <= rbHigh
+rbShortBreak = close < rbLow  and close[1] >= rbLow
+
+rbLongCond  = enableRB and isTightRange and flatBefore and touchesHigh >= rbMinTouches and rbLongBreak  and slope > 0
+rbShortCond = enableRB and isTightRange and flatBefore and touchesLow  >= rbMinTouches and rbShortBreak and slope < 0
+
 // ---------- Active trade tracking (single trade at a time) ----------
 var float activeEntry = na
 var float activeSL    = na
@@ -56,28 +75,37 @@ var label entryLabel  = na
 
 canOpenNewTrade = na(activeEntry)
 
-if canOpenNewTrade and bbLongCond
-    risk = close - blockLow
+longSignal  = bbLongCond or rbLongCond
+shortSignal = bbShortCond or rbShortCond
+
+if canOpenNewTrade and longSignal
+    isBB  = bbLongCond
+    slLevel = isBB ? blockLow : rbLow
+    risk = close - slLevel
     activeEntry := close
-    activeSL    := blockLow
+    activeSL    := slLevel
     activeTP    := close + tpRMultiple * risk
     activeSide  := "long"
     activeBE    := false
-    entryLabel := label.new(bar_index, low, "BB LONG", style=label.style_label_up, color=color.green, textcolor=color.white, yloc=yloc.belowbar)
+    entryLabel := label.new(bar_index, low, (isBB ? "BB" : "RB") + " LONG", style=label.style_label_up, color=color.green, textcolor=color.white, yloc=yloc.belowbar)
     slLine := line.new(bar_index, activeSL, bar_index, activeSL, extend=extend.right, color=color.red, width=1)
     tpLine := line.new(bar_index, activeTP, bar_index, activeTP, extend=extend.right, color=color.green, width=1)
 
-if canOpenNewTrade and bbShortCond and na(activeEntry)
-    risk = blockHigh - close
+if canOpenNewTrade and shortSignal and na(activeEntry)
+    isBB  = bbShortCond
+    slLevel = isBB ? blockHigh : rbHigh
+    risk = slLevel - close
     activeEntry := close
-    activeSL    := blockHigh
+    activeSL    := slLevel
     activeTP    := close - tpRMultiple * risk
     activeSide  := "short"
     activeBE    := false
-    entryLabel := label.new(bar_index, high, "BB SHORT", style=label.style_label_down, color=color.red, textcolor=color.white, yloc=yloc.abovebar)
+    entryLabel := label.new(bar_index, high, (isBB ? "BB" : "RB") + " SHORT", style=label.style_label_down, color=color.red, textcolor=color.white, yloc=yloc.abovebar)
     slLine := line.new(bar_index, activeSL, bar_index, activeSL, extend=extend.right, color=color.red, width=1)
     tpLine := line.new(bar_index, activeTP, bar_index, activeTP, extend=extend.right, color=color.green, width=1)
 
 // ---------- Alerts ----------
 alertcondition(bbLongCond,  title="BB Long",  message="Volman BB Long signal")
 alertcondition(bbShortCond, title="BB Short", message="Volman BB Short signal")
+alertcondition(rbLongCond,  title="RB Long",  message="Volman RB Long signal")
+alertcondition(rbShortCond, title="RB Short", message="Volman RB Short signal")
