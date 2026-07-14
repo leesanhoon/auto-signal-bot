@@ -153,8 +153,9 @@ run:
    builder-pattern style as `buildPositionClosedMessage` in
    `telegram-volman.ts`) reminding the user to move SL to entry, then:
    - Update the position record's `stopLoss` field to `entry`.
-   - Mark the position as notified (new field, e.g. `breakevenNotifiedAt`) so
-     the reminder is sent at most once per position.
+   - "Already notified" is inferred by comparing `entry` and `stopLoss`
+     (equal ⇒ already at breakeven) — no new DB column, so a position is
+     notified at most once without any schema change.
 3. Future SL-hit checks for this position now compare against the updated
    (breakeven) SL, so a subsequent close is correctly reported as breakeven
    rather than a loss.
@@ -191,4 +192,5 @@ set). No code changes required for this item.
 
 - `SIGNAL_MAX_ENTRY_DISTANCE_PCT` (default `50`) — entry-distance gate
   threshold, percent.
-- New position-record field: `breakevenNotifiedAt` (timestamp, nullable).
+- No new position-record field or migration — breakeven-notified state is
+  inferred from `entry === stopLoss` (see item 5 above).
