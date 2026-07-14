@@ -33,11 +33,12 @@ async function evaluateOpenPosition(
     return resolveOpenPositionDecision(position, null, "missing_chart_config");
   }
 
-  const stats = await fetchCandleRangeStats(chart.symbol, new Date(position.openedAt).getTime());
-  if (stats === null) {
-    logger.warn("Failed to fetch OHLC for open position; sending explicit warning", { pair: position.pair, id: position.id });
+  const statsResult = await fetchCandleRangeStats(chart.symbol, new Date(position.openedAt).getTime());
+  const stats = statsResult instanceof Error ? null : statsResult;
+  if (statsResult instanceof Error) {
+    logger.warn("Failed to fetch OHLC for open position; sending explicit warning", { pair: position.pair, id: position.id, error: statsResult });
     await sendMessage(
-      `⚠️ *Check Open Trades*\n\nKhông lấy được OHLC để kiểm tra vị thế #${position.id} ${position.pair}.\nBot tạm giữ vị thế nhưng không thể xác minh SL/TP trong lượt này. Vui lòng kiểm tra dữ liệu thị trường / nguồn chart.`,
+      `⚠️ *Check Open Trades*\n\nKhông lấy được OHLC để kiểm tra vị thế #${position.id} ${position.pair}.\nBot tạm giữ vị thế nhưng không thể xác minh SL/TP trong lượt này. Vui lòng kiểm tra dữ liệu thị trường / nguồn chart.\nLỗi: ${statsResult.message}`,
     );
   }
 

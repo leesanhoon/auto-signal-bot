@@ -187,6 +187,36 @@ describe("check-open-trades-runner-volman", () => {
     expect(sentNotification).toBe(true);
   });
 
+  test("khi fetchCandleRangeStats trả về Error, gửi cảnh báo kèm lý do lỗi và giữ vị thế", async () => {
+    candles.fetchCandleRangeStats.mockResolvedValue(
+      new Error("Binance API tra ve 429 cho FLOWUSDT: Way too many requests"),
+    );
+    decisions.resolveOpenPositionDecision.mockReturnValue({
+      decision: "HOLD",
+      confidence: 50,
+      comment: "Chưa lấy được OHLC để kiểm tra SL/TP, giữ vị thế.",
+      managementAction: "NONE",
+    });
+    repository.buildPositionManagementPatch.mockReturnValue({
+      patch: null,
+      closePosition: false,
+    });
+
+    const sentNotification = await processPosition(position as any);
+
+    expect(decisions.resolveOpenPositionDecision).toHaveBeenCalledWith(
+      position,
+      null,
+      undefined,
+      null,
+    );
+    expect(telegramClient.sendMessage).toHaveBeenCalledTimes(1);
+    const message = telegramClient.sendMessage.mock.calls[0][0] as string;
+    expect(message).toContain("Không lấy được OHLC");
+    expect(message).toContain("Way too many requests");
+    expect(sentNotification).toBe(false);
+  });
+
   test("runCheckOpenTrades processes every open position", async () => {
     repository.loadOpenPositions.mockResolvedValue([]);
     await runCheckOpenTrades();
