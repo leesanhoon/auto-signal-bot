@@ -3,12 +3,12 @@ import type { Candle } from "./ohlc-provider.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { calculateEma, calculateAtr, classifyTrend, averageAtr } from "./indicators.js";
 import { detectDdb } from "./setups/ddb.js";
-// import { detectFb } from "./setups/fb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
+import { detectFb } from "./setups/fb.js";
 import { detectSb } from "./setups/sb.js";
 import { detectBb } from "./setups/bb.js";
-// import { detectRb } from "./setups/rb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
-// import { detectArb } from "./setups/arb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
-// import { detectIrb } from "./setups/irb.js"; // TẠM TẮT — chỉ dùng BB, DDB, SB
+import { detectRb } from "./setups/rb.js";
+import { detectArb } from "./setups/arb.js";
+import { detectIrb } from "./setups/irb.js";
 import { runSbDetection } from "./setup-sb-runner.js";
 import { buildTradeSetupFromSignal, buildPairSummaryFromContext } from "./signal-assembly.js";
 import type { DetectedSignal } from "./setup-types.js";
@@ -101,11 +101,10 @@ export async function analyzeAllChartsDeterministic(
         timeframe: analysisTimeframe,
       };
 
-      // ---- Run Volman setup detectors on the single most recently closed candle ----
-      // TẠM TẮT: chỉ chạy DDB, SB, BB — FB/RB/ARB/IRB tắt tạm thời (xem import phía trên)
+      // ---- Run all 7 Volman setup detectors on the single most recently closed candle ----
       const startDetectIndex = lastIndex;
       const allSignals: DetectedSignal[] = [];
-      const detectors = [detectDdb, detectSb, detectBb];
+      const detectors = [detectDdb, detectFb, detectSb, detectBb, detectRb, detectArb, detectIrb];
 
       for (let i = startDetectIndex; i <= lastIndex; i++) {
         for (const detector of detectors) {
