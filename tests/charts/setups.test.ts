@@ -540,6 +540,57 @@ describe("IRB — Inside Range Break", () => {
     expect(signal!.geometry!.boxes[0].high).toBeLessThanOrEqual(signal!.geometry!.boxes[1].high);
     expect(signal!.geometry!.boxes[0].low).toBeGreaterThanOrEqual(signal!.geometry!.boxes[1].low);
   });
+
+  test("classifies RangeOuter as LOOSE using the range's own ATR, not the breakout candle's inflated ATR", () => {
+    // Same RangeOuter/RangeInner fixture as the existing IRB test above, but with a
+    // larger breakout wick (high=106 instead of 101.8) that inflates atr14 at the
+    // breakout candle (1.299) relative to the ranges' own last candle, index 33
+    // (0.632) — RangeOuter (width 1.5) is LOOSE against the ranges' own ATR but would
+    // misclassify as TIGHT against the inflated one. RangeOuter's tightness label
+    // doesn't feed the confidence bonus (only RangeInner's does), so confidence is
+    // unchanged by this fix — only the ruleTrace label differs.
+    const candles: Candle[] = [];
+    for (let i = 0; i < 20; i++) {
+      const base = 100;
+      candles.push({
+        time: 1700000000000 + i * 3600000,
+        open: base, high: base + 0.2, low: base - 0.2, close: base + 0.05,
+        volume: 100,
+      });
+    }
+    const outerVals: Array<[number, number, number]> = [
+      [99.8, 100.9, 100.2], [99.7, 101.0, 100.5], [99.9, 100.8, 100.1], [99.65, 101.05, 100.6],
+      [99.85, 100.85, 99.9], [99.7, 101.0, 100.4], [99.9, 100.75, 100.05], [99.6, 101.1, 100.5],
+      [99.8, 100.9, 100.15], [99.7, 101.0, 100.6],
+    ];
+    outerVals.forEach(([low, high, close], i) => {
+      const t = 20 + i;
+      candles.push({ time: 1700000000000 + t * 3600000, open: close - 0.1, high, low, close, volume: 100 });
+    });
+    const innerVals: Array<[number, number, number]> = [
+      [100.28, 100.42, 100.35],
+      [100.3, 100.4, 100.33],
+      [100.27, 100.38, 100.32],
+      [100.29, 100.41, 100.36],
+    ];
+    innerVals.forEach(([low, high, close], i) => {
+      const t = 30 + i;
+      candles.push({ time: 1700000000000 + t * 3600000, open: close - 0.02, high, low, close, volume: 90 });
+    });
+    candles.push({
+      time: 1700000000000 + 34 * 3600000,
+      open: 100.5, high: 106, low: 100.45, close: 101.6,
+      volume: 120,
+    });
+
+    const ctx = buildContext(candles);
+    const last = candles.length - 1;
+    const signal = detectIrb(candles, last, ctx);
+
+    expect(signal).not.toBeNull();
+    expect(signal!.ruleTrace).toContain("RangeInner TIGHT, RangeOuter LOOSE");
+    expect(signal!.confidence).toBe(40);
+  });
 });
 
 // ---------------------------------------------------------------------------
