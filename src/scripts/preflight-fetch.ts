@@ -1,5 +1,7 @@
 import "../shared/env.js";
 import { formatFetchErrorDetails } from "../shared/fetch-diagnostics.js";
+import { chromium } from "playwright";
+import { getPlaywrightDiagnostics } from "../charts/setup-chart-renderer.js";
 
 type CheckResult = {
   name: string;
@@ -92,6 +94,21 @@ async function main(): Promise<void> {
       }),
     );
   }
+
+  checks.push(
+    runCheck("Playwright Chromium", async () => {
+      try {
+        const browser = await chromium.launch({
+          args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+        await browser.close();
+        return `Launch OK | ${getPlaywrightDiagnostics()}`;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`${message} | ${getPlaywrightDiagnostics()}`);
+      }
+    }),
+  );
 
   const results = await Promise.all(checks);
   let hasFailure = false;
