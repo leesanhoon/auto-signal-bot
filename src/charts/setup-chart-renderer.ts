@@ -250,6 +250,7 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
 
 export async function renderSetupChartPng(svg: string): Promise<Buffer> {
   const browser = await chromium.launch({
+    channel: "chromium",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   try {
@@ -281,6 +282,7 @@ export async function renderSetupChartsBatch(
   inputs: SetupChartInput[],
 ): Promise<(Buffer | null)[]> {
   const browser = await chromium.launch({
+    channel: "chromium",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
