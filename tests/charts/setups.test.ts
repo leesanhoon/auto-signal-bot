@@ -476,6 +476,49 @@ describe("ARB — Advanced Range Break", () => {
     );
     expect(signal!.confidence).toBe(70);
   });
+
+  test("rejects a range whose EMA21 distance only clears the gate when using the breakout candle's inflated ATR", () => {
+    // A gap-up ("jump") from a flat base to a new flat/range level leaves EMA21
+    // lagging behind the range by a real, sustained margin (emaDistance=1.34998).
+    // Using the range's own ATR (atr14[range.endIndex], correct) this distance is
+    // too far from EMA21 and the signal is correctly rejected. Using the breakout
+    // candle's inflated ATR (atr14[index], the bug this plan fixes) the same
+    // distance would incorrectly clear the gate and the signal would be accepted
+    // (confidence 70) — this is the exact class of bug reported for the XLM/USDT
+    // SHORT signal that motivated this fix.
+    const jump = 14;
+    const flatW = 2.0;
+    const flatLevel = 100 + jump;
+    const breakoutClose = flatLevel + flatW / 2 + 0.4;
+    const h = breakoutClose + 15;
+
+    const candles: Candle[] = [];
+    for (let i = 0; i < 6; i++) {
+      candles.push({ time: 1700000000000 + i * 3600000, open: 100, high: 100.05, low: 99.95, close: 100.0, volume: 100 });
+    }
+    candles.push({ time: 1700000000000 + 6 * 3600000, open: 100, high: flatLevel + 0.05, low: 99.95, close: flatLevel, volume: 100 });
+    candles.push(
+      { time: 1700000000000 + 7 * 3600000, open: flatLevel, high: flatLevel + flatW / 2 + 0.08, low: flatLevel - 0.03, close: flatLevel, volume: 100 },
+      { time: 1700000000000 + 8 * 3600000, open: flatLevel, high: flatLevel + flatW / 2 + 0.06, low: flatLevel - 0.03, close: flatLevel, volume: 100 },
+    );
+    for (let i = 9; i < 25; i++) {
+      candles.push({ time: 1700000000000 + i * 3600000, open: flatLevel, high: flatLevel + flatW / 2, low: flatLevel - flatW / 2, close: flatLevel + 0.01, volume: 100 });
+    }
+    candles.push({
+      time: 1700000000000 + 25 * 3600000,
+      open: flatLevel + 0.1,
+      high: h,
+      low: flatLevel - flatW / 2,
+      close: breakoutClose,
+      volume: 120,
+    });
+
+    const ctx = buildContext(candles);
+    const last = candles.length - 1;
+    const signal = detectArb(candles, last, ctx);
+
+    expect(signal).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

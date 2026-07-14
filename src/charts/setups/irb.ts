@@ -166,6 +166,8 @@ export function detectIrb(
   trace.push(`Entry ${direction} tai ${entry.toFixed(5)}, Stop=${stopLoss.toFixed(5)}`);
 
   // Classify compression tightness for both ranges
+  // Both ranges currently share endIndex = index - 1, so these two reads resolve to the
+  // same array slot today; kept separate in case that relationship ever changes.
   const tightnessInner = classifyCompressionTightness(rangeInner, kBlockInner, ctx.atr14[rangeInner.endIndex]!);
   const tightnessOuter = classifyCompressionTightness(rangeOuter, kBlockOuter, ctx.atr14[rangeOuter.endIndex]!);
   trace.push(`RangeInner ${tightnessInner}, RangeOuter ${tightnessOuter}`);
