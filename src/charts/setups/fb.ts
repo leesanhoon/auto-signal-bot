@@ -4,6 +4,29 @@ import { classifyTrend } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
 
 /**
+ * Tìm điểm bắt đầu pullback: nến cực trị của trend (đỉnh cao nhất với LONG,
+ * đáy thấp nhất với SHORT) trong [trendStartIndex, index). Nhiều nến bằng nhau
+ * → chọn nến muộn nhất (gần pullback nhất). Export để unit test trực tiếp —
+ * điều kiện kích hoạt detectFb quá chặt để fixture full-detector tin cậy.
+ */
+export const findPullbackStartIndex = (
+  candles: Candle[],
+  trendStartIndex: number,
+  index: number,
+  direction: "LONG" | "SHORT",
+): number => {
+  let extremeIndex = trendStartIndex;
+  for (let i = trendStartIndex; i < index; i++) {
+    if (direction === "LONG") {
+      if (candles[i].high >= candles[extremeIndex].high) extremeIndex = i;
+    } else {
+      if (candles[i].low <= candles[extremeIndex].low) extremeIndex = i;
+    }
+  }
+  return extremeIndex;
+};
+
+/**
  * FB — First Break
  * New trend with EMA21 recently switched from FLAT/opposite.
  * First price touch of EMA21 since trend formed → signal bar closes in trend direction.
@@ -144,13 +167,19 @@ export function detectFb(
   const slope = computeSlope(ctx.ma21, ctx.atr14, index);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
 
+  // Đường pullback vẽ từ CỰC TRỊ trend (đỉnh/đáy) về nến chạm EMA21, không phải
+  // từ điểm bắt đầu trend — trước đây line đè lên toàn bộ con sóng trend.
+  const pullbackStartIndex = findPullbackStartIndex(candles, trendStartIndex, index, direction);
+  const pullbackStartPrice =
+    direction === "LONG" ? candles[pullbackStartIndex].high : candles[pullbackStartIndex].low;
+
   const geometry: SetupChartGeometry = {
     boxes: [],
     markers: [],
     lines: [
       {
         points: [
-          { index: trendStartIndex, price: candles[trendStartIndex].close },
+          { index: pullbackStartIndex, price: pullbackStartPrice },
           { index, price: candles[index].close },
         ],
         label: "Pullback",

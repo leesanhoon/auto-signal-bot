@@ -6,7 +6,7 @@ import { resolveSetupConflicts } from "../../src/charts/setup-resolver.js";
 
 // Import all detectors
 import { detectDdb } from "../../src/charts/setups/ddb.js";
-import { detectFb } from "../../src/charts/setups/fb.js";
+import { detectFb, findPullbackStartIndex } from "../../src/charts/setups/fb.js";
 import { detectBb } from "../../src/charts/setups/bb.js";
 import { detectRb } from "../../src/charts/setups/rb.js";
 import { detectArb } from "../../src/charts/setups/arb.js";
@@ -125,6 +125,62 @@ describe("FB — First Break", () => {
     // FB has strict conditions — may be null if trend isn't "new"
     // Just check it doesn't crash and returns DetectedSignal or null
     expect(signal === null || signal!.setup === "FB").toBe(true);
+  });
+});
+
+describe("FB — findPullbackStartIndex", () => {
+  const mkHL = (prices: Array<{ h: number; l: number }>): Candle[] =>
+    prices.map((p, i) => ({
+      time: 1700000000000 + i * 3600000,
+      open: (p.h + p.l) / 2,
+      high: p.h,
+      low: p.l,
+      close: (p.h + p.l) / 2,
+      volume: 100,
+    }));
+
+  test("LONG: trả index nến có high cao nhất trong [trendStartIndex, index)", () => {
+    // Trend lên đạt đỉnh tại index 3 (high 106), rồi pullback xuống về index 5
+    const candles = mkHL([
+      { h: 101, l: 100 }, // 0
+      { h: 103, l: 101 }, // 1
+      { h: 105, l: 103 }, // 2
+      { h: 106, l: 104 }, // 3 ← đỉnh trend
+      { h: 104, l: 102 }, // 4 pullback
+      { h: 103, l: 101 }, // 5 ← nến tín hiệu (index)
+    ]);
+    expect(findPullbackStartIndex(candles, 0, 5, "LONG")).toBe(3);
+  });
+
+  test("SHORT: trả index nến có low thấp nhất trong [trendStartIndex, index)", () => {
+    const candles = mkHL([
+      { h: 106, l: 105 }, // 0
+      { h: 104, l: 103 }, // 1
+      { h: 102, l: 100 }, // 2 ← đáy trend
+      { h: 103, l: 101 }, // 3 pullback lên
+      { h: 104, l: 102 }, // 4 ← nến tín hiệu
+    ]);
+    expect(findPullbackStartIndex(candles, 0, 4, "SHORT")).toBe(2);
+  });
+
+  test("nhiều nến cùng cực trị: chọn nến muộn nhất (gần pullback nhất)", () => {
+    const candles = mkHL([
+      { h: 106, l: 104 }, // 0 high 106
+      { h: 106, l: 104 }, // 1 high 106 (bằng) ← phải chọn nến này
+      { h: 104, l: 102 }, // 2
+      { h: 103, l: 101 }, // 3 ← nến tín hiệu
+    ]);
+    expect(findPullbackStartIndex(candles, 0, 3, "LONG")).toBe(1);
+  });
+
+  test("không quét nến tín hiệu (index) — cực trị chỉ tìm trong [trendStartIndex, index)", () => {
+    // Nến tín hiệu (index 2) có high cao nhất nhưng KHÔNG được chọn
+    const candles = mkHL([
+      { h: 104, l: 102 }, // 0 ← cực trị hợp lệ
+      { h: 103, l: 101 }, // 1
+      { h: 110, l: 100 }, // 2 ← nến tín hiệu, high cao nhất nhưng ngoài phạm vi quét
+    ]);
+    expect(findPullbackStartIndex(candles, 0, 2, "LONG")).toBe(0);
   });
 });
 

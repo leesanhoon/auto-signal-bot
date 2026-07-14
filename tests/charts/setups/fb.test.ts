@@ -31,7 +31,7 @@ function buildContext(
 }
 
 describe("FB — First Break take-profit calculation", () => {
-  test("returns pullback geometry from trend start to the signal candle", () => {
+  test("returns pullback geometry from trend extreme to the signal candle", () => {
     const candles = makeCandles(
       Array.from({ length: 13 }, (_, index) => {
         if (index >= 8 && index <= 11) {
@@ -63,9 +63,10 @@ describe("FB — First Break take-profit calculation", () => {
 
     expect(signal).not.toBeNull();
     expect(signal!.geometry!.lines).toHaveLength(1);
+    // Pullback line now starts from trend extreme (high for LONG) at index 8, not from close
     expect(signal!.geometry!.lines![0]).toEqual({
       points: [
-        { index: 8, price: candles[8].close },
+        { index: 8, price: candles[8].high },
         { index: 12, price: candles[12].close },
       ],
       label: "Pullback",
