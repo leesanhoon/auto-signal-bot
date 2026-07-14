@@ -85,4 +85,34 @@ describe("charts/position-engine", () => {
     ).toEqual({ patch: null, closePosition: false });
   });
 
+  test("derives a non-closing patch for a breakeven notify decision", () => {
+    const decision = {
+      decision: "HOLD" as const,
+      confidence: 90,
+      comment: "Đã đạt 1R — dời SL về entry 1.1000.",
+      managementAction: "BREAKEVEN_NOTIFY" as const,
+    };
+
+    const { patch, closePosition } = deriveManagementPatch(decision);
+
+    expect(closePosition).toBe(false);
+    expect(patch).toMatchObject({
+      lastManagementAction: "BREAKEVEN_NOTIFY",
+      lastManagementComment: decision.comment,
+    });
+    expect(patch?.tradeStage).toBeUndefined();
+  });
+
+  test("a plain HOLD with managementAction NONE still produces no patch", () => {
+    const { patch, closePosition } = deriveManagementPatch({
+      decision: "HOLD",
+      confidence: 50,
+      comment: "no change",
+      managementAction: "NONE",
+    });
+
+    expect(patch).toBeNull();
+    expect(closePosition).toBe(false);
+  });
+
 });

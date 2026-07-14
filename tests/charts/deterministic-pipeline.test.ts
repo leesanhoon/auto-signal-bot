@@ -134,6 +134,42 @@ describe("deterministic pipeline", () => {
     });
   });
 
+  test("only scans the single most recently closed candle (lookback = 1)", async () => {
+    const candles: Candle[] = Array.from({ length: 41 }, (_, i) => ({
+      time: (i + 1) * 1000,
+      open: 1 + i * 0.001,
+      high: 1.1 + i * 0.001,
+      low: 0.9 + i * 0.001,
+      close: 1.05 + i * 0.001,
+      volume: 10 + i,
+    }));
+    mocks.fetchOhlcHistory.mockResolvedValue(candles);
+    mocks.calculateEma.mockReturnValue(candles.map(() => 1));
+    mocks.calculateAtr.mockReturnValue(candles.map(() => 0.5));
+
+    const scannedIndices: number[] = [];
+    const recordIndex = vi.fn((_candles: Candle[], i: number) => {
+      scannedIndices.push(i);
+      return null;
+    });
+    mocks.detectDd.mockImplementation(recordIndex);
+    mocks.detectFb.mockImplementation(recordIndex);
+    mocks.detectBb.mockImplementation(recordIndex);
+    mocks.detectRb.mockImplementation(recordIndex);
+    mocks.detectArb.mockImplementation(recordIndex);
+    mocks.detectIrb.mockImplementation(recordIndex);
+
+    await analyzeAllChartsDeterministic([{ pair: "EUR/USD", symbol: "OANDA:EURUSD" }], {
+      timeframeMode: "single",
+      primaryTimeframe: "H4",
+    });
+
+    // lastIndex is 40 (41 candles, 0-based). Only index 40 should ever be scanned.
+    // This distinguishes from the old formula Math.max(30, lastIndex - 5) = Math.max(30, 35) = 35,
+    // which would have scanned indices 35-40 (6 candles total).
+    expect(new Set(scannedIndices)).toEqual(new Set([40]));
+  });
+
   test("records skippedPairs when runtime filter rejects a pair", async () => {
     const candles: Candle[] = Array.from({ length: 31 }, (_, i) => ({
       time: (i + 1) * 1000,

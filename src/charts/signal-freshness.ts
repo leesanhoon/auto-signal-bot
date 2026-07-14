@@ -1,5 +1,6 @@
 import type { TradeSetup } from "./chart-types-volman.js";
 import { fetchLastPrice } from "./ohlc-provider.js";
+import { getConfiguredSignalMaxEntryDistancePercent } from "./volman-config-env.js";
 import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:signal-freshness");
@@ -70,7 +71,42 @@ export async function applySignalFreshnessGuard(
     };
   }
 
+  const maxDistancePercent = getConfiguredSignalMaxEntryDistancePercent();
+  if (isEntryTooFarFromMarket(setup.direction, lastPrice, entry, takeProfit1, maxDistancePercent)) {
+    const reason =
+      `Gia da chay qua xa entry truoc khi gui tin hieu (da di >= ${maxDistancePercent}% quang duong toi TP1, ` +
+      `gia hien tai: ${formatPrice(lastPrice)}). Entry: ${formatPrice(entry)}, TP1: ${formatPrice(takeProfit1)}.`;
+
+    return {
+      ...setup,
+      noSetupReason: reason,
+    };
+  }
+
   return setup as SetupWithFreshness;
+}
+
+/**
+ * True when price has already traveled at least `maxDistancePercent` of the
+ * distance from entry to TP1, in the setup's own direction. Used to skip
+ * sending a signal that would show an entry the market has already left far
+ * behind (see docs/superpowers/specs/2026-07-14-signal-timing-fix-design.md).
+ */
+export function isEntryTooFarFromMarket(
+  direction: "LONG" | "SHORT",
+  lastPrice: number,
+  entry: number,
+  takeProfit1: number,
+  maxDistancePercent: number,
+): boolean {
+  const totalDistance = Math.abs(takeProfit1 - entry);
+  if (totalDistance <= 0) return false;
+
+  const traveled = direction === "LONG" ? lastPrice - entry : entry - lastPrice;
+  if (traveled <= 0) return false;
+
+  const progressPercent = (traveled / totalDistance) * 100;
+  return progressPercent >= maxDistancePercent;
 }
 
 function isSetupStale(

@@ -26,6 +26,7 @@ export type SetupChartInput = {
   entry: number;
   stopLoss: number;
   takeProfit: number;
+  livePrice?: number | null;
   chartContext: ChartContext;
 };
 
@@ -46,6 +47,7 @@ function buildCoordMap(
   candles: Candle[],
   stopLoss: number,
   takeProfit: number,
+  livePrice: number | null,
 ): CoordMap {
   const marginLeft = 40;
   const marginRight = 40;
@@ -54,9 +56,15 @@ function buildCoordMap(
   const chartWidth = 900 - marginLeft - marginRight;
   const chartHeight = 500 - marginTop - marginBottom;
 
-  // Find min/max price including SL and TP
-  let minPrice = Math.min(...candles.map((c) => c.low), stopLoss, takeProfit);
-  let maxPrice = Math.max(...candles.map((c) => c.high), stopLoss, takeProfit);
+  const priceInputs = [
+    ...candles.map((c) => c.low),
+    ...candles.map((c) => c.high),
+    stopLoss,
+    takeProfit,
+    ...(livePrice !== null && Number.isFinite(livePrice) ? [livePrice] : []),
+  ];
+  let minPrice = Math.min(...priceInputs);
+  let maxPrice = Math.max(...priceInputs);
 
   // Add 5% padding
   const padding = (maxPrice - minPrice) * 0.05;
@@ -91,10 +99,10 @@ function mapYCoord(price: number, coord: CoordMap): number {
 }
 
 export function buildSetupChartSvg(input: SetupChartInput): string {
-  const { pair, setup, direction, entry, stopLoss, takeProfit, chartContext } = input;
+  const { pair, setup, direction, entry, stopLoss, takeProfit, livePrice, chartContext } = input;
   const { candles, ma21, sliceStartIndex, geometry } = chartContext;
 
-  const coord = buildCoordMap(candles, stopLoss, takeProfit);
+  const coord = buildCoordMap(candles, stopLoss, takeProfit, livePrice ?? null);
 
   let svg = `<svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" style="font-family:Arial,sans-serif">`;
 
@@ -227,6 +235,17 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
 
     // Label on the right
     svg += `<text x="${x2 + 5}" y="${y + 4}" font-size="10" fill="${line.color}">${line.label}</text>`;
+  }
+
+  // Draw live price line — distinct color/style from entry/SL/TP so the gap
+  // between the (possibly stale) entry and current price is visually obvious.
+  if (livePrice !== null && livePrice !== undefined && Number.isFinite(livePrice)) {
+    const y = mapYCoord(livePrice, coord);
+    const x1 = coord.marginLeft;
+    const x2 = 900 - coord.marginRight;
+
+    svg += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#00CFFF" stroke-width="1.5" opacity="0.9"/>`;
+    svg += `<text x="${x1 + 5}" y="${y - 6}" font-size="10" fill="#00CFFF">Giá hiện tại ${livePrice.toFixed(5)}</text>`;
   }
 
   // Draw the setup label near its breakout/signal point

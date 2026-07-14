@@ -41,6 +41,15 @@ function buildCloseDecision(comment: string): PositionDecisionOutcome {
   };
 }
 
+function buildBreakevenDecision(comment: string): PositionDecisionOutcome {
+  return {
+    decision: "HOLD",
+    confidence: 90,
+    comment,
+    managementAction: "BREAKEVEN_NOTIFY",
+  };
+}
+
 
 export function resolveOpenPositionDecision(
   position: Pick<OpenPosition, "direction" | "entry" | "stopLoss" | "takeProfit1">,
@@ -83,6 +92,18 @@ export function resolveOpenPositionDecision(
   if (emaContext) {
     const emaDecision = resolveEmaExitDecision(position.direction, emaContext.lastClose, emaContext.emaValue, emaContext.period);
     if (emaDecision) return emaDecision;
+  }
+
+  const alreadyAtBreakeven = Math.abs(entry - stopLoss) < 1e-9;
+  if (!alreadyAtBreakeven) {
+    const oneRLevel = 2 * entry - stopLoss;
+    const reached1R =
+      position.direction === "LONG" ? stats.high >= oneRLevel : stats.low <= oneRLevel;
+    if (reached1R) {
+      return buildBreakevenDecision(
+        `Giá đã đạt 1R (${formatPrice(oneRLevel)}) — dời SL về entry ${formatPrice(entry)}.`,
+      );
+    }
   }
 
   return buildHoldDecision("Chưa chạm SL/TP theo dữ liệu OHLC.");

@@ -186,7 +186,7 @@ export function buildTradeSetupFromSignal(
   let chartContext: TradeSetup["chartContext"];
   if (ohlcContext.candles && ohlcContext.ma21) {
     const sliceStartIndex = Math.max(0, triggerIndex - CHART_CONTEXT_WINDOW);
-    const sliceEndIndex = Math.min(ohlcContext.candles.length, triggerIndex + 2);
+    const sliceEndIndex = ohlcContext.candles.length;
     chartContext = {
       candles: ohlcContext.candles.slice(sliceStartIndex, sliceEndIndex),
       ma21: ohlcContext.ma21.slice(sliceStartIndex, sliceEndIndex),

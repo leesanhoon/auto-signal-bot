@@ -158,4 +158,10 @@ describe("charts/positions-repository-volman", () => {
     });
     expect(update).not.toHaveProperty("binance_tp2_order_id");
   });
+
+  test("applyBreakevenStopLoss updates stop_loss to the given entry price", async () => {
+    await repository.applyBreakevenStopLoss(1, "1.1000");
+
+    expect(dbState.update).toHaveBeenCalledWith({ stop_loss: "1.1000" });
+  });
 });

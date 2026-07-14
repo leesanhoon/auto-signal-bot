@@ -1,7 +1,7 @@
 import { fetchCandleRangeStats, findChartForPair } from "./candle-range-stats.js";
 import { getCharts } from "./volman-charts.config.js";
-import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository-volman.js";
-import { buildPositionClosedMessage } from "../shared/telegram-volman.js";
+import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision, applyBreakevenStopLoss } from "./positions-repository-volman.js";
+import { buildPositionClosedMessage, buildBreakevenReminderMessage } from "../shared/telegram-volman.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
@@ -63,6 +63,22 @@ export async function processPosition(position: Awaited<ReturnType<typeof loadOp
   const decision = await evaluateOpenPosition(position);
   const { patch, closePosition: shouldClose } = buildPositionManagementPatch(position, decision);
   await updatePositionDecision(position.id, decision, patch);
+
+  if (decision.managementAction === "BREAKEVEN_NOTIFY" && !shouldClose) {
+    await applyBreakevenStopLoss(position.id, position.entry);
+    const breakevenMessage = buildBreakevenReminderMessage(
+      {
+        id: position.id,
+        pair: position.pair,
+        direction: position.direction,
+        setup: position.setup,
+        entry: position.entry,
+      },
+      decision.comment,
+    );
+    await sendMessage(`${breakevenMessage}\n\n*Cập nhật lúc:* ${formatCheckedAt()}`);
+    return true;
+  }
 
   if (shouldClose) {
     const snapshot = await closePosition(position, decision, patch);

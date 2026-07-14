@@ -99,6 +99,15 @@ export function getConfiguredTpRMultiple(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 2;
 }
 
+// Nguong % quang duong tu entry den TP1 ma gia da chay qua truoc khi tu choi
+// gui tin hieu (chong "duoi gia" — xem docs/superpowers/specs/2026-07-14-signal-timing-fix-design.md).
+export function getConfiguredSignalMaxEntryDistancePercent(): number {
+  const raw = process.env.SIGNAL_MAX_ENTRY_DISTANCE_PCT?.trim();
+  if (!raw) return 50;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 100 ? parsed : 50;
+}
+
 // ============================================================================
 // EMA Exit configuration (đóng lệnh khi nến đóng cửa cắt EMA ngược hướng)
 // ============================================================================

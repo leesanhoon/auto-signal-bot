@@ -355,6 +355,26 @@ export function buildPositionClosedMessage(
   return lines.filter((line) => line !== "").join("\n");
 }
 
+export function buildBreakevenReminderMessage(
+  position: {
+    id: number;
+    pair: string;
+    direction: "LONG" | "SHORT";
+    setup: string | null;
+    entry: string;
+  },
+  comment: string,
+): string {
+  const lines = [
+    `🎯 *Vị thế #${position.id} đạt 1R* — ${position.pair} ${position.direction}`,
+    position.setup ? `📋 ${position.setup}` : "",
+    comment,
+    `👉 Dời Stop Loss về entry (${position.entry}) trên sàn để bảo toàn hoà vốn.`,
+  ];
+
+  return lines.filter((line) => line !== "").join("\n");
+}
+
 export function buildPerformanceReportMessage(
   report: PerformanceReport,
 ): string {
@@ -465,6 +485,7 @@ export async function sendAllAnalysesVolman(
         entry,
         stopLoss,
         takeProfit,
+        livePrice: setup.lastPrice ?? null,
         chartContext: setup.chartContext,
       },
     });

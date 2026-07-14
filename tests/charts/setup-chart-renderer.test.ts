@@ -154,6 +154,50 @@ describe("Chart renderer", () => {
       expect(svg).toContain("ETH/USDT SHORT — BB");
       expect(svg).toContain("Entry");
     });
+
+    test("draws a distinctly-colored live price line when livePrice is provided", () => {
+      const svg = buildSetupChartSvg({
+        pair: "EUR/USD",
+        setup: "RB",
+        direction: "LONG",
+        entry: 1.1,
+        stopLoss: 1.09,
+        takeProfit: 1.12,
+        livePrice: 1.115,
+        chartContext: {
+          candles: [
+            { time: 1, open: 1.1, high: 1.11, low: 1.09, close: 1.105, volume: 10 },
+            { time: 2, open: 1.105, high: 1.116, low: 1.1, close: 1.115, volume: 12 },
+          ],
+          ma21: [1.1, 1.11],
+          triggerIndex: 0,
+          sliceStartIndex: 0,
+        },
+      });
+
+      expect(svg).toContain("Giá hiện tại");
+      // Live price line must use a color distinct from entry (#FFFF00), SL (#FF0000), TP (#00AA00).
+      expect(svg).toContain('stroke="#00CFFF"');
+    });
+
+    test("omits the live price line when livePrice is not provided", () => {
+      const svg = buildSetupChartSvg({
+        pair: "EUR/USD",
+        setup: "RB",
+        direction: "LONG",
+        entry: 1.1,
+        stopLoss: 1.09,
+        takeProfit: 1.12,
+        chartContext: {
+          candles: [{ time: 1, open: 1.1, high: 1.11, low: 1.09, close: 1.105, volume: 10 }],
+          ma21: [1.1],
+          triggerIndex: 0,
+          sliceStartIndex: 0,
+        },
+      });
+
+      expect(svg).not.toContain("Giá hiện tại");
+    });
   });
 
   describe("renderSetupChartPng", () => {

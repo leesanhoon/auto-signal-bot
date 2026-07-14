@@ -442,6 +442,14 @@ export async function closePosition(
   return snapshot;
 }
 
+export async function applyBreakevenStopLoss(id: number, entry: string): Promise<void> {
+  const { error } = await (getDb().from("open_positions_volman") as any)
+    .update({ stop_loss: entry })
+    .eq("id", id);
+
+  if (error) throw new Error(`applyBreakevenStopLoss failed: ${error.message}`);
+}
+
 export type BinanceExecutionDetails = {
   binanceSymbol: string;
   binanceLeverage: number;

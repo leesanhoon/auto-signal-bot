@@ -3,7 +3,7 @@ import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:position-engine");
 
-export type PositionDecisionAction = "NONE" | "TAKE_PROFIT_CLOSE";
+export type PositionDecisionAction = "NONE" | "TAKE_PROFIT_CLOSE" | "BREAKEVEN_NOTIFY";
 
 export type PositionDecisionOutcome = {
   decision: "HOLD" | "CLOSE" | "STOP";
@@ -193,9 +193,21 @@ export function buildOpenPositionInsertRow(
 export function deriveManagementPatch(
   decision: PositionDecisionOutcome,
 ): { patch: OpenPositionManagementPatch | null; closePosition: boolean } {
+  const now = new Date().toISOString();
+
+  if (decision.managementAction === "BREAKEVEN_NOTIFY") {
+    return {
+      patch: {
+        lastManagementAction: decision.managementAction,
+        lastManagementComment: decision.comment,
+        lastManagementAt: now,
+      },
+      closePosition: false,
+    };
+  }
+
   if (decision.decision === "HOLD") return { patch: null, closePosition: false };
 
-  const now = new Date().toISOString();
   return {
     patch: {
       tradeStage: "closed",

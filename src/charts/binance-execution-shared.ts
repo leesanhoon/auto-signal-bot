@@ -130,7 +130,7 @@ export type PositionDecisionOutcome = {
   decision: "HOLD" | "STOP" | "CLOSE";
   confidence: number;
   comment: string;
-  managementAction: "NONE" | "TAKE_PROFIT_CLOSE";
+  managementAction: "NONE" | "TAKE_PROFIT_CLOSE" | "BREAKEVEN_NOTIFY";
 };
 
 export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome> = {

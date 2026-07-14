@@ -28,6 +28,7 @@ import {
   sendAllAnalysesVolman,
   buildPositionClosedMessage,
   buildPositionDecisionMessage,
+  buildBreakevenReminderMessage,
 } from "../../src/shared/telegram-volman.js";
 import type {
   AnalysisResult,
@@ -483,6 +484,27 @@ describe("buildPositionClosedMessage", () => {
       "Lý do: Đóng khẩn cấp do lỗi thực thi trên sàn (fail-safe)",
     );
     expect(message).not.toContain("Đóng thủ công (tín hiệu đảo chiều)");
+  });
+});
+
+describe("buildBreakevenReminderMessage", () => {
+  test("renders a breakeven reminder with pair, direction, and entry", () => {
+    const message = buildBreakevenReminderMessage(
+      {
+        id: 7,
+        pair: "EUR/USD",
+        direction: "LONG",
+        setup: "RB",
+        entry: "1.1000",
+      },
+      "Giá đã đạt 1R (1.1040) — dời SL về entry 1.1000.",
+    );
+
+    expect(message).toContain("#7");
+    expect(message).toContain("EUR/USD");
+    expect(message).toContain("LONG");
+    expect(message).toContain("1R");
+    expect(message).toContain("1.1000");
   });
 });
 

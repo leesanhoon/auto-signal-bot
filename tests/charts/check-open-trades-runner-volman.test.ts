@@ -5,10 +5,12 @@ const repository = vi.hoisted(() => ({
   updatePositionDecision: vi.fn(),
   closePosition: vi.fn(),
   loadOpenPositions: vi.fn(),
+  applyBreakevenStopLoss: vi.fn(),
 }));
 const telegram = vi.hoisted(() => ({
   buildPositionDecisionMessage: vi.fn(),
   buildPositionClosedMessage: vi.fn(),
+  buildBreakevenReminderMessage: vi.fn(),
 }));
 const telegramClient = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 const decisions = vi.hoisted(() => ({ resolveOpenPositionDecision: vi.fn() }));
@@ -215,6 +217,38 @@ describe("check-open-trades-runner-volman", () => {
     expect(message).toContain("Không lấy được OHLC");
     expect(message).toContain("Way too many requests");
     expect(sentNotification).toBe(false);
+  });
+
+  test("sends a breakeven reminder and moves stop-loss to entry without closing the position", async () => {
+    const decision = {
+      decision: "HOLD" as const,
+      confidence: 90,
+      comment: "Giá đã đạt 1R (1.1040) — dời SL về entry 1.1000.",
+      managementAction: "BREAKEVEN_NOTIFY" as const,
+    };
+    decisions.resolveOpenPositionDecision.mockReturnValue(decision);
+    repository.buildPositionManagementPatch.mockReturnValue({
+      patch: {
+        lastManagementAction: "BREAKEVEN_NOTIFY",
+        lastManagementComment: decision.comment,
+      },
+      closePosition: false,
+    });
+    repository.applyBreakevenStopLoss.mockResolvedValue(undefined);
+    telegram.buildBreakevenReminderMessage.mockReturnValue("breakeven reminder");
+
+    const sentNotification = await processPosition(position as any);
+
+    expect(repository.applyBreakevenStopLoss).toHaveBeenCalledWith(1, position.entry);
+    expect(telegram.buildBreakevenReminderMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, pair: "EUR/USD" }),
+      decision.comment,
+    );
+    expect(telegramClient.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("breakeven reminder"),
+    );
+    expect(repository.closePosition).not.toHaveBeenCalled();
+    expect(sentNotification).toBe(true);
   });
 
   test("runCheckOpenTrades processes every open position", async () => {

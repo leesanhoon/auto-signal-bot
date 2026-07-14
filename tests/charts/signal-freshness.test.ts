@@ -101,7 +101,7 @@ describe("applySignalFreshnessGuard", () => {
   });
 
   test("SHORT setup: fresh when price above TP1 and below SL", async () => {
-    mockFetchLastPrice.mockResolvedValue(1.0950);
+    mockFetchLastPrice.mockResolvedValue(1.0975);
 
     const result = await applySignalFreshnessGuard(mockSetupShort, "OANDA:EURUSD");
 
@@ -230,7 +230,7 @@ describe("applySignalFreshnessGuard", () => {
       takeProfit1: "43,000.00",
     };
 
-    mockFetchLastPrice.mockResolvedValue(42500);
+    mockFetchLastPrice.mockResolvedValue(42400);
 
     const result = await applySignalFreshnessGuard(setupWithCommas, "OANDA:EURUSD");
 
@@ -259,6 +259,62 @@ describe("applySignalFreshnessGuard", () => {
     mockFetchLastPrice.mockResolvedValue(1.1050);
 
     const result = await applySignalFreshnessGuard(invalidSetup, "OANDA:EURUSD");
+
+    expect(result.noSetupReason).toBeUndefined();
+  });
+
+  test("LONG setup: skipped when price has run >=50% of the way to TP1 (default threshold)", async () => {
+    // entry=1.1000, TP1=1.1100 -> total distance 0.0100. 50% = 1.1050.
+    mockFetchLastPrice.mockResolvedValue(1.1051);
+
+    const result = await applySignalFreshnessGuard(mockSetupLong, "OANDA:EURUSD");
+
+    expect(result.noSetupReason).toBeDefined();
+    expect(result.noSetupReason).toContain("chay qua xa entry");
+  });
+
+  test("LONG setup: NOT skipped when price has run <50% of the way to TP1", async () => {
+    mockFetchLastPrice.mockResolvedValue(1.1049);
+
+    const result = await applySignalFreshnessGuard(mockSetupLong, "OANDA:EURUSD");
+
+    expect(result.noSetupReason).toBeUndefined();
+  });
+
+  test("SHORT setup: skipped when price has run >=50% of the way to TP1 (default threshold)", async () => {
+    // entry=1.1000, TP1=1.0900 -> total distance 0.0100. 50% = 1.0950.
+    mockFetchLastPrice.mockResolvedValue(1.0949);
+
+    const result = await applySignalFreshnessGuard(mockSetupShort, "OANDA:EURUSD");
+
+    expect(result.noSetupReason).toBeDefined();
+    expect(result.noSetupReason).toContain("chay qua xa entry");
+  });
+
+  test("SHORT setup: NOT skipped when price has run <50% of the way to TP1", async () => {
+    mockFetchLastPrice.mockResolvedValue(1.0951);
+
+    const result = await applySignalFreshnessGuard(mockSetupShort, "OANDA:EURUSD");
+
+    expect(result.noSetupReason).toBeUndefined();
+  });
+
+  test("respects SIGNAL_MAX_ENTRY_DISTANCE_PCT override", async () => {
+    process.env.SIGNAL_MAX_ENTRY_DISTANCE_PCT = "30";
+    // entry=1.1000, TP1=1.1100 -> total distance 0.0100. 30% = 1.1030.
+    mockFetchLastPrice.mockResolvedValue(1.1031);
+
+    const result = await applySignalFreshnessGuard(mockSetupLong, "OANDA:EURUSD");
+
+    expect(result.noSetupReason).toBeDefined();
+    delete process.env.SIGNAL_MAX_ENTRY_DISTANCE_PCT;
+  });
+
+  test("price moving against the setup direction does not trigger the distance gate", async () => {
+    // LONG setup, price dipped slightly below entry but still above SL — 0% progress toward TP1.
+    mockFetchLastPrice.mockResolvedValue(1.0990);
+
+    const result = await applySignalFreshnessGuard(mockSetupLong, "OANDA:EURUSD");
 
     expect(result.noSetupReason).toBeUndefined();
   });
