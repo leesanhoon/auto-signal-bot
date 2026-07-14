@@ -38,7 +38,7 @@ function toTradeSetup(order: PendingOrder): TradeSetup {
   };
 }
 
-async function reviewPendingOrder(order: PendingOrder): Promise<{ status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string }> {
+export async function reviewPendingOrder(order: PendingOrder): Promise<{ status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string }> {
   const chart = findChartForPair(await getCharts(), order.pair, order.primaryTimeframe ?? "H4");
   if (!chart) {
     logger.warn("No chart configuration found; sending explicit warning", { pair: order.pair, id: order.id });
@@ -48,11 +48,12 @@ async function reviewPendingOrder(order: PendingOrder): Promise<{ status: "TRIGG
     return resolvePendingOrderDecision(order, null, "missing_chart_config");
   }
 
-  const stats = await fetchCandleRangeStats(chart.symbol, new Date(order.createdAt).getTime());
-  if (stats === null) {
-    logger.warn("Failed to fetch OHLC for pending order; sending explicit warning", { pair: order.pair, id: order.id });
+  const statsResult = await fetchCandleRangeStats(chart.symbol, new Date(order.createdAt).getTime());
+  const stats = statsResult instanceof Error ? null : statsResult;
+  if (statsResult instanceof Error) {
+    logger.warn("Failed to fetch OHLC for pending order; sending explicit warning", { pair: order.pair, id: order.id, error: statsResult });
     await sendMessage(
-      `⚠️ *Check Pending Orders*\n\nKhông lấy được OHLC để kiểm tra lệnh chờ #${order.id} ${order.pair}.\nBot tạm giữ lệnh chờ nhưng không thể xác minh trigger / invalidation trong lượt này. Vui lòng kiểm tra dữ liệu thị trường / nguồn chart.`,
+      `⚠️ *Check Pending Orders*\n\nKhông lấy được OHLC để kiểm tra lệnh chờ #${order.id} ${order.pair}.\nBot tạm giữ lệnh chờ nhưng không thể xác minh trigger / invalidation trong lượt này. Vui lòng kiểm tra dữ liệu thị trường / nguồn chart.\nLỗi: ${statsResult.message}`,
     );
   }
   return resolvePendingOrderDecision(order, stats);
