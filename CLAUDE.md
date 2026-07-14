@@ -102,10 +102,10 @@ Cập nhật result.md với evidence verify mới
 
 ### Role mapping
 
-| Runtime | Lead | Worker |
-|---|---|---|
-| Claude Desktop | Sonnet 5 | Haiku |
-| Codex Desktop | `gpt-5.4` + `model_reasoning_effort=medium` | `gpt-5.4-mini` + `model_reasoning_effort=low` |
+| Runtime        | Lead                                        | Worker                                        |
+| -------------- | ------------------------------------------- | --------------------------------------------- |
+| Claude Desktop | Sonnet 5                                    | Haiku                                         |
+| Codex Desktop  | `gpt-5.4` + `model_reasoning_effort=medium` | `gpt-5.4-mini` + `model_reasoning_effort=low` |
 
 ### Codex Desktop usage
 
@@ -152,3 +152,38 @@ npm run test
 - Prefer arrow functions
 - Error handling: return Error objects where project convention expects it
 - Test files mirror `src/` structure under `tests/`
+
+## Model Policy cho Superpowers Subagent Dispatch
+
+Khi dispatch bất kỳ subagent nào qua các skill của Superpowers
+(subagent-driven-development, executing-plans, hoặc bất kỳ skill nào dùng Task tool),
+LUÔN áp dụng quy tắc sau — không được bỏ trống field `model`:
+
+### Bắt buộc chỉ định model tường minh
+
+- KHÔNG được để field `model` trống trong lời gọi Task tool.
+- KHÔNG được để subagent tự động kế thừa model của session cha.
+
+### Phân cấp model theo loại việc
+
+- **Implementer (viết code theo task cụ thể, 1-2 file, cơ học rõ ràng):**
+  dùng `claude-haiku-4-5`
+- **Implementer cho task multi-file / cần hiểu context rộng hơn:**
+  dùng `claude-haiku-4-5`
+- **Task reviewer (spec compliance + code quality review):**
+  dùng `claude-sonnet-5` — không hạ xuống Haiku, review cần đủ khả năng bắt lỗi
+- **Architecture / design / brainstorming / writing-plans:**
+  giữ nguyên model của Lead (Sonnet hoặc cao hơn) — không delegate xuống subagent rẻ
+
+### Ghi log để audit
+
+Mỗi khi dispatch xong 1 task, ghi thêm model đã dùng vào dòng ledger
+(`.superpowers/sdd/progress.md` hoặc file progress tương đương), định dạng:
+
+Task N: complete (model: haiku, commits <base7>..<head7>, review clean)
+
+### Khi nghi ngờ
+
+Nếu không chắc task đủ đơn giản cho Haiku, mặc định dùng Sonnet trước —
+báo lại cho tôi biết lý do hạ/nâng cấp model nếu có escalation từ subagent
+(status BLOCKED hoặc NEEDS_CONTEXT).
