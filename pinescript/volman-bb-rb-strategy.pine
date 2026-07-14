@@ -90,3 +90,27 @@ if strategy.position_size == 0 and shortSignal
     beDone     := false
     strategy.entry("Short", strategy.short)
     strategy.exit("Short Exit", from_entry="Short", stop=slPrice, limit=tpPrice)
+
+// ---------- Breakeven ----------
+if strategy.position_size > 0 and not beDone
+    riskLong = entryPrice - slPrice
+    oneRLong = entryPrice + riskLong
+    if high >= oneRLong
+        beDone := true
+        slPrice := entryPrice
+        strategy.exit("Long Exit", from_entry="Long", stop=slPrice, limit=tpPrice)
+
+if strategy.position_size < 0 and not beDone
+    riskShort = slPrice - entryPrice
+    oneRShort = entryPrice - riskShort
+    if low <= oneRShort
+        beDone := true
+        slPrice := entryPrice
+        strategy.exit("Short Exit", from_entry="Short", stop=slPrice, limit=tpPrice)
+
+// ---------- EMA exit ----------
+if emaExitEnabled and strategy.position_size > 0 and close < ema21
+    strategy.close("Long", comment="EMA EXIT")
+
+if emaExitEnabled and strategy.position_size < 0 and close > ema21
+    strategy.close("Short", comment="EMA EXIT")
