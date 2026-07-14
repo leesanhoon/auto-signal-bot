@@ -1,0 +1,118 @@
+//@version=6
+strategy("Volman BB/RB Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10, pyramiding=0, process_orders_on_close=true)
+
+// NOTE: Core detection logic (EMA/ATR/trend/BB/RB) below must be kept in sync with volman-bb-rb-indicator.pine
+
+// ---------- Inputs ----------
+emaPeriod           = input.int(21, "EMA Period", minval=1, group="Core")
+atrPeriod           = input.int(14, "ATR Period", minval=1, group="Core")
+trendSlopeThreshold = input.float(0.15, "Trend Slope Threshold", minval=0.0, step=0.01, group="Trend")
+trendCandleWindow   = input.int(10, "Trend Candle Window", minval=1, group="Trend")
+trendCandleMinCount = input.int(6, "Trend Candle Min Count", minval=1, group="Trend")
+bbWindow            = input.int(5, "BB Compression Window", minval=2, group="BB")
+bbKBlock            = input.float(1.2, "BB kBlock", minval=0.1, step=0.1, group="BB")
+bbNearEmaAtrMult    = input.float(1.0, "BB Block-to-EMA Max Distance (x ATR)", minval=0.1, step=0.1, group="BB")
+rbWindow            = input.int(8, "RB Compression Window", minval=2, group="RB")
+rbKBlock            = input.float(2.0, "RB kBlock", minval=0.1, step=0.1, group="RB")
+rbMinTouches        = input.int(2, "RB Min Boundary Touches", minval=1, group="RB")
+rbTouchAtrMult      = input.float(0.1, "RB Touch Tolerance (x ATR)", minval=0.01, step=0.01, group="RB")
+tpRMultiple         = input.float(2.0, "TP R Multiple", minval=0.1, step=0.1, group="Exit")
+emaExitEnabled      = input.bool(true, "Enable EMA Exit", group="Exit")
+enableBB            = input.bool(true, "Enable BB Setup", group="Setups")
+enableRB            = input.bool(true, "Enable RB Setup", group="Setups")
+
+// ---------- Core indicators ----------
+ema21 = ta.ema(close, emaPeriod)
+tr    = ta.tr(true)
+atr14 = ta.ema(tr, atrPeriod)
+
+slope      = (ema21 - ema21[5]) / atr14
+aboveCount = math.sum(close > ema21 ? 1.0 : 0.0, trendCandleWindow)
+belowCount = math.sum(close < ema21 ? 1.0 : 0.0, trendCandleWindow)
+isUptrend   = slope > trendSlopeThreshold and aboveCount >= trendCandleMinCount
+isDowntrend = slope < -trendSlopeThreshold and belowCount >= trendCandleMinCount
+
+plot(ema21, "EMA21", color=color.orange, linewidth=2)
+
+// ---------- BB compression + entry ----------
+blockHigh    = ta.highest(high[1], bbWindow)
+blockLow     = ta.lowest(low[1], bbWindow)
+blockRange   = blockHigh - blockLow
+isTightBlock = blockRange <= bbKBlock * atr14
+blockMid     = (blockHigh + blockLow) / 2
+nearEma      = math.abs(blockMid - ema21) <= bbNearEmaAtrMult * atr14
+
+bbLongCond  = enableBB and isUptrend   and isTightBlock and nearEma and close > blockHigh and close[1] <= blockHigh
+bbShortCond = enableBB and isDowntrend and isTightBlock and nearEma and close < blockLow  and close[1] >= blockLow
+
+// ---------- RB compression + entry ----------
+rbHigh       = ta.highest(high[1], rbWindow)
+rbLow        = ta.lowest(low[1], rbWindow)
+rbRange      = rbHigh - rbLow
+isTightRange = rbRange <= rbKBlock * atr14
+flatBefore   = math.abs(slope[1]) <= trendSlopeThreshold
+
+touchTolerance  = rbTouchAtrMult * atr14
+touchHighSeries = (rbHigh - high) <= touchTolerance ? 1.0 : 0.0
+touchLowSeries  = (low - rbLow)  <= touchTolerance ? 1.0 : 0.0
+touchesHigh = math.sum(touchHighSeries[1], rbWindow)
+touchesLow  = math.sum(touchLowSeries[1], rbWindow)
+
+rbLongBreak  = close > rbHigh and close[1] <= rbHigh
+rbShortBreak = close < rbLow  and close[1] >= rbLow
+
+rbLongCond  = enableRB and isTightRange and flatBefore and touchesHigh >= rbMinTouches and rbLongBreak  and slope > 0
+rbShortCond = enableRB and isTightRange and flatBefore and touchesLow  >= rbMinTouches and rbShortBreak and slope < 0
+
+longSignal  = bbLongCond or rbLongCond
+shortSignal = bbShortCond or rbShortCond
+signalSL_long  = bbLongCond ? blockLow : rbLow
+signalSL_short = bbShortCond ? blockHigh : rbHigh
+
+// ---------- Trade state ----------
+var float entryPrice = na
+var float slPrice    = na
+var float tpPrice    = na
+var bool  beDone     = false
+
+if strategy.position_size == 0 and longSignal
+    riskEntry = close - signalSL_long
+    entryPrice := close
+    slPrice    := signalSL_long
+    tpPrice    := close + tpRMultiple * riskEntry
+    beDone     := false
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Long Exit", from_entry="Long", stop=slPrice, limit=tpPrice)
+
+if strategy.position_size == 0 and shortSignal
+    riskEntry = signalSL_short - close
+    entryPrice := close
+    slPrice    := signalSL_short
+    tpPrice    := close - tpRMultiple * riskEntry
+    beDone     := false
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Short Exit", from_entry="Short", stop=slPrice, limit=tpPrice)
+
+// ---------- Breakeven ----------
+if strategy.position_size > 0 and not beDone
+    riskLong = entryPrice - slPrice
+    oneRLong = entryPrice + riskLong
+    if high >= oneRLong
+        beDone := true
+        slPrice := entryPrice
+        strategy.exit("Long Exit", from_entry="Long", stop=slPrice, limit=tpPrice)
+
+if strategy.position_size < 0 and not beDone
+    riskShort = slPrice - entryPrice
+    oneRShort = entryPrice - riskShort
+    if low <= oneRShort
+        beDone := true
+        slPrice := entryPrice
+        strategy.exit("Short Exit", from_entry="Short", stop=slPrice, limit=tpPrice)
+
+// ---------- EMA exit ----------
+if emaExitEnabled and strategy.position_size > 0 and close < ema21
+    strategy.close("Long", comment="EMA EXIT")
+
+if emaExitEnabled and strategy.position_size < 0 and close > ema21
+    strategy.close("Short", comment="EMA EXIT")

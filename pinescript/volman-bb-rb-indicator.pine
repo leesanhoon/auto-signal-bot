@@ -1,0 +1,144 @@
+//@version=6
+indicator("Volman BB/RB", overlay=true, max_lines_count=200, max_labels_count=200)
+
+// NOTE: Core detection logic (EMA/ATR/trend/BB/RB) below must be kept in sync with volman-bb-rb-strategy.pine
+
+// ---------- Inputs ----------
+emaPeriod           = input.int(21, "EMA Period", minval=1, group="Core")
+atrPeriod           = input.int(14, "ATR Period", minval=1, group="Core")
+trendSlopeThreshold = input.float(0.15, "Trend Slope Threshold", minval=0.0, step=0.01, group="Trend")
+trendCandleWindow   = input.int(10, "Trend Candle Window", minval=1, group="Trend")
+trendCandleMinCount = input.int(6, "Trend Candle Min Count", minval=1, group="Trend")
+bbWindow            = input.int(5, "BB Compression Window", minval=2, group="BB")
+bbKBlock            = input.float(1.2, "BB kBlock", minval=0.1, step=0.1, group="BB")
+bbNearEmaAtrMult    = input.float(1.0, "BB Block-to-EMA Max Distance (x ATR)", minval=0.1, step=0.1, group="BB")
+rbWindow            = input.int(8, "RB Compression Window", minval=2, group="RB")
+rbKBlock            = input.float(2.0, "RB kBlock", minval=0.1, step=0.1, group="RB")
+rbMinTouches        = input.int(2, "RB Min Boundary Touches", minval=1, group="RB")
+rbTouchAtrMult      = input.float(0.1, "RB Touch Tolerance (x ATR)", minval=0.01, step=0.01, group="RB")
+tpRMultiple         = input.float(2.0, "TP R Multiple", minval=0.1, step=0.1, group="Exit")
+emaExitEnabled      = input.bool(true, "Enable EMA Exit", group="Exit")
+enableBB            = input.bool(true, "Enable BB Setup", group="Setups")
+enableRB            = input.bool(true, "Enable RB Setup", group="Setups")
+
+// ---------- Core indicators ----------
+ema21 = ta.ema(close, emaPeriod)
+tr    = ta.tr(true)
+atr14 = ta.ema(tr, atrPeriod)
+
+// ---------- Trend slope classifier ----------
+slope      = (ema21 - ema21[5]) / atr14
+aboveCount = math.sum(close > ema21 ? 1.0 : 0.0, trendCandleWindow)
+belowCount = math.sum(close < ema21 ? 1.0 : 0.0, trendCandleWindow)
+isUptrend   = slope > trendSlopeThreshold and aboveCount >= trendCandleMinCount
+isDowntrend = slope < -trendSlopeThreshold and belowCount >= trendCandleMinCount
+
+plot(ema21, "EMA21", color=color.orange, linewidth=2)
+
+// ---------- BB compression + entry ----------
+blockHigh    = ta.highest(high[1], bbWindow)
+blockLow     = ta.lowest(low[1], bbWindow)
+blockRange   = blockHigh - blockLow
+isTightBlock = blockRange <= bbKBlock * atr14
+blockMid     = (blockHigh + blockLow) / 2
+nearEma      = math.abs(blockMid - ema21) <= bbNearEmaAtrMult * atr14
+
+bbLongCond  = enableBB and isUptrend   and isTightBlock and nearEma and close > blockHigh and close[1] <= blockHigh
+bbShortCond = enableBB and isDowntrend and isTightBlock and nearEma and close < blockLow  and close[1] >= blockLow
+
+// ---------- RB compression + entry ----------
+rbHigh       = ta.highest(high[1], rbWindow)
+rbLow        = ta.lowest(low[1], rbWindow)
+rbRange      = rbHigh - rbLow
+isTightRange = rbRange <= rbKBlock * atr14
+flatBefore   = math.abs(slope[1]) <= trendSlopeThreshold
+
+touchTolerance  = rbTouchAtrMult * atr14
+touchHighSeries = (rbHigh - high) <= touchTolerance ? 1.0 : 0.0
+touchLowSeries  = (low - rbLow)  <= touchTolerance ? 1.0 : 0.0
+touchesHigh = math.sum(touchHighSeries[1], rbWindow)
+touchesLow  = math.sum(touchLowSeries[1], rbWindow)
+
+rbLongBreak  = close > rbHigh and close[1] <= rbHigh
+rbShortBreak = close < rbLow  and close[1] >= rbLow
+
+rbLongCond  = enableRB and isTightRange and flatBefore and touchesHigh >= rbMinTouches and rbLongBreak  and slope > 0
+rbShortCond = enableRB and isTightRange and flatBefore and touchesLow  >= rbMinTouches and rbShortBreak and slope < 0
+
+// ---------- Active trade tracking (single trade at a time) ----------
+var float activeEntry = na
+var float activeSL    = na
+var float activeTP    = na
+var string activeSide = na
+var bool  activeBE    = false
+var line  slLine      = na
+var line  tpLine      = na
+var label entryLabel  = na
+
+canOpenNewTrade = na(activeEntry)
+
+longSignal  = bbLongCond or rbLongCond
+shortSignal = bbShortCond or rbShortCond
+
+if canOpenNewTrade and longSignal
+    isBB  = bbLongCond
+    slLevel = isBB ? blockLow : rbLow
+    risk = close - slLevel
+    activeEntry := close
+    activeSL    := slLevel
+    activeTP    := close + tpRMultiple * risk
+    activeSide  := "long"
+    activeBE    := false
+    entryLabel := label.new(bar_index, low, (isBB ? "BB" : "RB") + " LONG", style=label.style_label_up, color=color.green, textcolor=color.white, yloc=yloc.belowbar)
+    slLine := line.new(bar_index, activeSL, bar_index, activeSL, extend=extend.right, color=color.red, width=1)
+    tpLine := line.new(bar_index, activeTP, bar_index, activeTP, extend=extend.right, color=color.green, width=1)
+
+if canOpenNewTrade and shortSignal and na(activeEntry)
+    isBB  = bbShortCond
+    slLevel = isBB ? blockHigh : rbHigh
+    risk = slLevel - close
+    activeEntry := close
+    activeSL    := slLevel
+    activeTP    := close - tpRMultiple * risk
+    activeSide  := "short"
+    activeBE    := false
+    entryLabel := label.new(bar_index, high, (isBB ? "BB" : "RB") + " SHORT", style=label.style_label_down, color=color.red, textcolor=color.white, yloc=yloc.abovebar)
+    slLine := line.new(bar_index, activeSL, bar_index, activeSL, extend=extend.right, color=color.red, width=1)
+    tpLine := line.new(bar_index, activeTP, bar_index, activeTP, extend=extend.right, color=color.green, width=1)
+
+// ---------- Alerts ----------
+alertcondition(bbLongCond,  title="BB Long",  message="Volman BB Long signal")
+alertcondition(bbShortCond, title="BB Short", message="Volman BB Short signal")
+alertcondition(rbLongCond,  title="RB Long",  message="Volman RB Long signal")
+alertcondition(rbShortCond, title="RB Short", message="Volman RB Short signal")
+
+// ---------- Breakeven + EMA exit + TP/SL exit management ----------
+if not na(activeEntry)
+    riskMgmt  = activeSide == "long" ? activeEntry - activeSL : activeSL - activeEntry
+    oneRLevel = activeSide == "long" ? activeEntry + riskMgmt : activeEntry - riskMgmt
+
+    if not activeBE
+        beHit = activeSide == "long" ? high >= oneRLevel : low <= oneRLevel
+        if beHit
+            activeBE := true
+            activeSL := activeEntry
+            line.set_y1(slLine, activeEntry)
+            line.set_y2(slLine, activeEntry)
+            label.new(bar_index, activeSide == "long" ? low : high, "BE", style=label.style_label_up, color=color.blue, textcolor=color.white, size=size.small)
+
+    emaExitHit = emaExitEnabled and ((activeSide == "long" and close < ema21) or (activeSide == "short" and close > ema21))
+    tpHit = activeSide == "long" ? high >= activeTP : low <= activeTP
+    slHit = activeSide == "long" ? low <= activeSL : high >= activeSL
+
+    if emaExitHit or tpHit or slHit
+        exitReason = emaExitHit ? "EMA EXIT" : tpHit ? "TP" : "SL"
+        label.new(bar_index, close, exitReason, style=label.style_label_down, color=color.gray, textcolor=color.white, size=size.small)
+        line.set_extend(slLine, extend.none)
+        line.set_x2(slLine, bar_index)
+        line.set_extend(tpLine, extend.none)
+        line.set_x2(tpLine, bar_index)
+        activeEntry := na
+        activeSL    := na
+        activeTP    := na
+        activeSide  := na
+        activeBE    := false
