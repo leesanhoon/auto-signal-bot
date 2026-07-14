@@ -109,3 +109,34 @@ alertcondition(bbLongCond,  title="BB Long",  message="Volman BB Long signal")
 alertcondition(bbShortCond, title="BB Short", message="Volman BB Short signal")
 alertcondition(rbLongCond,  title="RB Long",  message="Volman RB Long signal")
 alertcondition(rbShortCond, title="RB Short", message="Volman RB Short signal")
+
+// ---------- Breakeven + EMA exit + TP/SL exit management ----------
+if not na(activeEntry)
+    riskMgmt  = activeSide == "long" ? activeEntry - activeSL : activeSL - activeEntry
+    oneRLevel = activeSide == "long" ? activeEntry + riskMgmt : activeEntry - riskMgmt
+
+    if not activeBE
+        beHit = activeSide == "long" ? high >= oneRLevel : low <= oneRLevel
+        if beHit
+            activeBE := true
+            activeSL := activeEntry
+            line.set_y1(slLine, activeEntry)
+            line.set_y2(slLine, activeEntry)
+            label.new(bar_index, activeSide == "long" ? low : high, "BE", style=label.style_label_up, color=color.blue, textcolor=color.white, size=size.small)
+
+    emaExitHit = emaExitEnabled and ((activeSide == "long" and close < ema21) or (activeSide == "short" and close > ema21))
+    tpHit = activeSide == "long" ? high >= activeTP : low <= activeTP
+    slHit = activeSide == "long" ? low <= activeSL : high >= activeSL
+
+    if emaExitHit or tpHit or slHit
+        exitReason = emaExitHit ? "EMA EXIT" : tpHit ? "TP" : "SL"
+        label.new(bar_index, close, exitReason, style=label.style_label_down, color=color.gray, textcolor=color.white, size=size.small)
+        line.set_extend(slLine, extend.none)
+        line.set_x2(slLine, bar_index)
+        line.set_extend(tpLine, extend.none)
+        line.set_x2(tpLine, bar_index)
+        activeEntry := na
+        activeSL    := na
+        activeTP    := na
+        activeSide  := na
+        activeBE    := false
