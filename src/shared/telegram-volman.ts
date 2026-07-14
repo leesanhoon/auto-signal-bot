@@ -11,8 +11,12 @@ import {
   getConfiguredChartSignalConfidenceThreshold,
   getConfiguredTpRMultiple,
 } from "../charts/volman-config-env.js";
-import { sendMessage, telegramNotifier } from "./telegram-client.js";
-import { renderSetupChartsBatch, type SetupChartInput } from "../charts/setup-chart-renderer.js";
+import { sendMessage, telegramNotifier, notifyError } from "./telegram-client.js";
+import {
+  renderSetupChartsBatch,
+  getPlaywrightDiagnostics,
+  type SetupChartInput,
+} from "../charts/setup-chart-renderer.js";
 
 const logger = createLogger("shared:telegram-volman");
 
@@ -470,9 +474,13 @@ export async function sendAllAnalysesVolman(
   try {
     chartBuffers = await renderSetupChartsBatch(chartInputs.map((c) => c.input));
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const diagnostics = getPlaywrightDiagnostics();
     logger.warn("Render chart batch failed, fallback to text-only", {
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage,
+      diagnostics,
     });
+    await notifyError("Render chart batch (Volman)", `${errorMessage}\n\n${diagnostics}`);
     chartBuffers = [];
   }
 

@@ -1,4 +1,29 @@
 import { describe, test, expect, vi } from "vitest";
+
+const shouldFailRender = vi.hoisted(() => ({ value: false }));
+
+vi.mock("../../src/charts/setup-chart-renderer.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/charts/setup-chart-renderer.js")>();
+  return {
+    ...actual,
+    renderSetupChartsBatch: vi.fn(async (...args: Parameters<typeof actual.renderSetupChartsBatch>) => {
+      if (shouldFailRender.value) {
+        throw new Error("browserType.launch: Executable doesn't exist at /fake/chromium");
+      }
+      return actual.renderSetupChartsBatch(...args);
+    }),
+  };
+});
+
+const notifyErrorMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock("../../src/shared/telegram-client.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/shared/telegram-client.js")>();
+  return { ...actual, notifyError: notifyErrorMock };
+});
+
 import {
   sendAllAnalysesVolman,
   buildPositionClosedMessage,
@@ -290,6 +315,36 @@ describe("sendAllAnalysesVolman", () => {
     expect(eurusdMsg).toBeDefined();
     expect(gbpusdMsg).toBeDefined();
     expect(mockNotifier.sendPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  test("gửi notifyError kèm diagnostics khi renderSetupChartsBatch throw", async () => {
+    const setupWithChart: TradeSetup = {
+      ...minimalSetup,
+      chartContext: {
+        candles: [],
+        ma21: [],
+        triggerIndex: 10,
+        sliceStartIndex: 0,
+        geometry: { boxes: [], markers: [] },
+      },
+    };
+    const resultWithChart: AnalysisResult = { ...result, setups: [setupWithChart] };
+    const mockNotifier = createMockNotifier();
+
+    shouldFailRender.value = true;
+    try {
+      await sendAllAnalysesVolman(resultWithChart, mockNotifier);
+    } finally {
+      shouldFailRender.value = false;
+    }
+
+    expect(notifyErrorMock).toHaveBeenCalledTimes(1);
+    const [scope, message] = notifyErrorMock.mock.calls[0];
+    expect(scope).toBe("Render chart batch (Volman)");
+    expect(String(message)).toContain("Executable doesn't exist");
+    expect(String(message)).toContain("PLAYWRIGHT_BROWSERS_PATH=");
+    // Fallback to text-only must still happen — the setup message is still sent.
+    expect(mockNotifier.sentMessages.some((m) => m.includes("EURUSD"))).toBe(true);
   });
 });
 
