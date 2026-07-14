@@ -198,6 +198,40 @@ describe("Chart renderer", () => {
 
       expect(svg).not.toContain("Giá hiện tại");
     });
+
+    test("label giá Entry/SL/TP bên phải có đủ chỗ ngang, không bị cắt ở mép 900px", () => {
+      const candles = buildTrendingCandles(25);
+      const ma21 = calculateEma(candles, 21);
+      const svg = buildSetupChartSvg({
+        pair: "BTC/USDT",
+        setup: "BB",
+        direction: "LONG",
+        entry: 64210,
+        stopLoss: 64020,
+        takeProfit: 64590,
+        chartContext: {
+          candles,
+          ma21,
+          triggerIndex: 24,
+          sliceStartIndex: 0,
+        },
+      });
+
+      // Bắt đúng 3 label Entry (vàng #FFFF00), SL (đỏ #FF0000), TP (xanh #00AA00)
+      const labelMatches = [
+        ...svg.matchAll(
+          /<text x="([\d.]+)" y="[\d.-]+" font-size="10" fill="(#FFFF00|#FF0000|#00AA00)">/g,
+        ),
+      ];
+      expect(labelMatches).toHaveLength(3);
+
+      for (const match of labelMatches) {
+        const x = Number(match[1]);
+        // Chuỗi dài nhất "Entry 64210.00000" = 17 ký tự × ~5.6px (Arial 10px) ≈ 95px.
+        // Yêu cầu tối thiểu 100px từ vị trí label tới mép phải 900px.
+        expect(900 - x).toBeGreaterThanOrEqual(100);
+      }
+    });
   });
 
   describe("renderSetupChartPng", () => {

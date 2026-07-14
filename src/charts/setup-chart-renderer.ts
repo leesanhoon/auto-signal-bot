@@ -50,7 +50,9 @@ function buildCoordMap(
   livePrice: number | null,
 ): CoordMap {
   const marginLeft = 40;
-  const marginRight = 40;
+  // 110px để label giá bên phải (font-size 10, dài nhất ~"Entry 64210.00000" ≈ 95px)
+  // nằm trọn trong viewBox 900px — 40px cũ làm chữ bị cắt ở mép phải.
+  const marginRight = 110;
   const marginTop = 40;
   const marginBottom = 40;
   const chartWidth = 900 - marginLeft - marginRight;
