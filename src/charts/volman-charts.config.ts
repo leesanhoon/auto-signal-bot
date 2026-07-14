@@ -27,10 +27,21 @@ function chart(
   };
 }
 
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+
 let cachedCharts: ChartConfig[] | undefined;
+let cachedAt: number | undefined;
+
+function isCacheFresh(): boolean {
+  return (
+    cachedCharts !== undefined &&
+    cachedAt !== undefined &&
+    Date.now() - cachedAt < CACHE_TTL_MS
+  );
+}
 
 export async function getCharts(): Promise<ChartConfig[]> {
-  if (cachedCharts) return cachedCharts;
+  if (isCacheFresh()) return cachedCharts as ChartConfig[];
 
   const baseSymbols = await loadActiveChartSymbols();
   const dayOfWeek = new Date().getDay();
@@ -43,6 +54,7 @@ export async function getCharts(): Promise<ChartConfig[]> {
         chart(base.name, base.symbol, timeframe.timeframe, timeframe.interval),
       ),
     );
+  cachedAt = Date.now();
 
   return cachedCharts;
 }

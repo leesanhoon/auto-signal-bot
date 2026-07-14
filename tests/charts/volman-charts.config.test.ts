@@ -71,6 +71,23 @@ describe("charts/volman-charts.config", () => {
     expect(repoState.loadActiveChartSymbols).toHaveBeenCalledTimes(1);
   });
 
+  test("cache hết hạn sau TTL — gọi lại getCharts() sẽ query DB thêm 1 lần", async () => {
+    vi.setSystemTime(new Date("2024-01-17T12:00:00Z"));
+    repoState.loadActiveChartSymbols.mockResolvedValue([
+      { name: "BTC/USDT", symbol: "BINANCE:BTCUSDT" },
+    ]);
+
+    const { getCharts } = await import("../../src/charts/volman-charts.config.js");
+    await getCharts();
+    expect(repoState.loadActiveChartSymbols).toHaveBeenCalledTimes(1);
+
+    // Advance quá TTL 5 phút
+    vi.setSystemTime(new Date("2024-01-17T12:05:01Z"));
+    await getCharts();
+
+    expect(repoState.loadActiveChartSymbols).toHaveBeenCalledTimes(2);
+  });
+
   test("getChartsForTimeframeMode('single', 'H4') chỉ trả chart H4", async () => {
     vi.setSystemTime(new Date("2024-01-17T12:00:00Z"));
     repoState.loadActiveChartSymbols.mockResolvedValue([
