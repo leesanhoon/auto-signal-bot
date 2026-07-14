@@ -1,5 +1,7 @@
 //@version=6
-strategy("Volman BB/RB Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10, pyramiding=0)
+strategy("Volman BB/RB Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10, pyramiding=0, process_orders_on_close=true)
+
+// NOTE: Core detection logic (EMA/ATR/trend/BB/RB) below must be kept in sync with volman-bb-rb-indicator.pine
 
 // ---------- Inputs ----------
 emaPeriod           = input.int(21, "EMA Period", minval=1, group="Core")

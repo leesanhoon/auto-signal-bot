@@ -1,6 +1,8 @@
 //@version=6
 indicator("Volman BB/RB", overlay=true, max_lines_count=200, max_labels_count=200)
 
+// NOTE: Core detection logic (EMA/ATR/trend/BB/RB) below must be kept in sync with volman-bb-rb-strategy.pine
+
 // ---------- Inputs ----------
 emaPeriod           = input.int(21, "EMA Period", minval=1, group="Core")
 atrPeriod           = input.int(14, "ATR Period", minval=1, group="Core")
