@@ -183,9 +183,11 @@ describe("BB — Block Break", () => {
   test("classifies a block as LOOSE using the block's own ATR, not the breakout candle's inflated ATR", () => {
     // A gentle uptrend (drift 0.0046/candle) keeps EMA21 close to price (BB requires
     // block.distanceToEma <= 0.35 ATR) while |slope| still clears the 0.15 threshold.
-    // The block (index 41-44) has range 0.1538, which is LOOSE relative to its own
-    // ATR (atr14[44] = 0.14) but would misclassify as TIGHT if the breakout candle's
-    // inflated ATR (atr14[45], driven by a large high-low wick) were used instead.
+    // BB.windows is tried widest-first ([10,8,6,5,4]); windows 10 and 8 fail the
+    // compression check here, so window=6 (index 39-44) is the widest that passes,
+    // with range 0.1630 — LOOSE relative to its own ATR (atr14[44] = 0.14) but would
+    // misclassify as TIGHT if the breakout candle's inflated ATR (atr14[45], driven
+    // by a large high-low wick) were used instead.
     const drift = 0.0046;
     const candles: Candle[] = [];
     for (let i = 0; i < 40; i++) {
@@ -205,7 +207,7 @@ describe("BB — Block Break", () => {
 
     expect(signal).not.toBeNull();
     expect(signal!.ruleTrace.find((t) => t.startsWith("Nen "))).toBe(
-      "Nen LOOSE (range=0.15380, max=0.16800)",
+      "Nen LOOSE (range=0.16300, max=0.16800)",
     );
     expect(signal!.confidence).toBe(65);
   });

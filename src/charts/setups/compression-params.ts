@@ -8,11 +8,19 @@
 export const COMPRESSION_PARAMS = {
   /**
    * BB — Block Break
-   * Window [4,5,6], kBlock=1.2
+   * Window [10,8,6,5,4] (thứ tự GIẢM DẦN), kBlock=1.2.
    * Trend market, tight block near MA21, breakout in trend direction.
    * kBlock=1.2: phát hiện block chặt hơn (yêu cầu range nhỏ hơn).
+   *
+   * Thứ tự giảm dần là chủ đích: bb.ts lặp qua `windows` và dừng ở window
+   * ĐẦU TIÊN thỏa `range <= kBlock * ATR`, nên đảo thứ tự này tương đương
+   * "ưu tiên chọn window nhiều nến nhất (block/vùng nén rộng nhất) mà vẫn
+   * còn thỏa điều kiện nén, fallback dần xuống window nhỏ hơn nếu không có
+   * vùng nén rộng hơn". Window gốc 4-6 đã backup-test validate; 8 và 10 mở
+   * rộng thêm để bắt vùng nén hình thành qua nhiều nến hơn — không đổi
+   * kBlock để không nới lỏng tiêu chuẩn nén chỉ vì window lớn hơn.
    */
-  BB: { windows: [4, 5, 6], kBlock: 1.2 },
+  BB: { windows: [10, 8, 6, 5, 4], kBlock: 1.2 },
 
   /**
    * RB — Range Break
