@@ -436,6 +436,46 @@ describe("ARB — Advanced Range Break", () => {
     expect(signal!.geometry!.boxes[0].low).toBeCloseTo(99.88);
     expect(signal!.geometry!.markers).toHaveLength(2);
   });
+
+  test("classifies an ARB range as LOOSE using the range's own ATR, not the breakout candle's inflated ATR", () => {
+    // 7 flat warm-up candles, 2 upper-edge false-break probes (needed for the >=2
+    // edge-test gate), 16 flat candles forming a wide range (width 2.0), then a
+    // breakout candle whose large high-low wick inflates atr14 at the breakout
+    // (2.073) relative to the range's own last candle (1.776) — range=2.00 is LOOSE
+    // against the range's own ATR but would misclassify as TIGHT against the inflated one.
+    const flatW = 2.0;
+    const candles: Candle[] = [];
+    for (let i = 0; i < 7; i++) {
+      candles.push({ time: 1700000000000 + i * 3600000, open: 100, high: 100.05, low: 99.95, close: 100.0, volume: 100 });
+    }
+    candles.push(
+      { time: 1700000000000 + 7 * 3600000, open: 100, high: 100 + flatW / 2 + 0.08, low: 99.97, close: 100.0, volume: 100 },
+      { time: 1700000000000 + 8 * 3600000, open: 100, high: 100 + flatW / 2 + 0.06, low: 99.98, close: 100.0, volume: 100 },
+    );
+    for (let i = 9; i < 25; i++) {
+      candles.push({ time: 1700000000000 + i * 3600000, open: 100, high: 100 + flatW / 2, low: 100 - flatW / 2, close: 100.01, volume: 100 });
+    }
+    candles.push({
+      time: 1700000000000 + 25 * 3600000,
+      open: 100.1,
+      high: 103.0,
+      low: 100 - flatW / 2,
+      close: 100 + flatW / 2 + 0.4,
+      volume: 120,
+    });
+
+    const ctx = buildContext(candles);
+    const last = candles.length - 1;
+    const signal = detectArb(candles, last, ctx);
+
+    expect(signal).not.toBeNull();
+    expect(signal!.setup).toBe("ARB");
+    expect(signal!.direction).toBe("LONG");
+    expect(signal!.ruleTrace.find((t) => t.startsWith("Nen "))).toBe(
+      "Nen LOOSE (range=2.00000, max=3.55276)",
+    );
+    expect(signal!.confidence).toBe(70);
+  });
 });
 
 // ---------------------------------------------------------------------------

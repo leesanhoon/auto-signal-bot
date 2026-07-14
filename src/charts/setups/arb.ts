@@ -43,8 +43,9 @@ export function detectArb(
   }
 
   // Classify compression tightness
-  const tightness = classifyCompressionTightness(range, kBlockArb, atr);
-  trace.push(`Nen ${tightness} (range=${range.range.toFixed(5)}, max=${(kBlockArb * atr).toFixed(5)})`)
+  const rangeAtr = ctx.atr14[range.endIndex]!;
+  const tightness = classifyCompressionTightness(range, kBlockArb, rangeAtr);
+  trace.push(`Nen ${tightness} (range=${range.range.toFixed(5)}, max=${(kBlockArb * rangeAtr).toFixed(5)})`)
 
   // Check breakout direction
   const breaksUp = candles[index].close > range.high;
@@ -91,7 +92,7 @@ export function detectArb(
   const emaDistance = direction === "LONG"
     ? Math.max(0, range.low - ema)
     : Math.max(0, ema - range.high);
-  const maxEmaDistance = 0.5 * atr;
+  const maxEmaDistance = 0.5 * rangeAtr;
   if (emaDistance > maxEmaDistance) {
     trace.push(`Range qua xa EMA21 (khoang cach=${emaDistance.toFixed(5)} > ${maxEmaDistance.toFixed(5)}) -> gia khong con ton trong EMA`);
     return null;
