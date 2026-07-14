@@ -50,8 +50,9 @@ export function detectRb(
   }
 
   // Classify compression tightness
-  const tightness = classifyCompressionTightness(range, kBlockRb, atr);
-  trace.push(`Nen ${tightness} (range=${range.range.toFixed(5)}, max=${(kBlockRb * atr).toFixed(5)})`)
+  const rangeAtr = ctx.atr14[range.endIndex]!;
+  const tightness = classifyCompressionTightness(range, kBlockRb, rangeAtr);
+  trace.push(`Nen ${tightness} (range=${range.range.toFixed(5)}, max=${(kBlockRb * rangeAtr).toFixed(5)})`)
 
   // Check EMA21 transitioning from FLAT to sloping in breakout direction
   // Look at slope progression: 5 candles ago was near FLAT, now sloping

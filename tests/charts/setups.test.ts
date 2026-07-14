@@ -265,6 +265,44 @@ describe("RB — Range Break", () => {
     expect(signal!.geometry!.boxes[0].high).toBeLessThanOrEqual(101.2);
     expect(signal!.geometry!.boxes[0].low).toBeCloseTo(98.9, 1);
   });
+
+  test("classifies a range as LOOSE using the range's own ATR, not the breakout candle's inflated ATR", () => {
+    // Same base setup as the existing RB fixture above, but with a much larger breakout
+    // wick (high=103 instead of 101.45) that inflates atr14 at the breakout candle
+    // (2.220) relative to the range's own last candle (2.085) — range=2.20 is LOOSE
+    // against the range's own ATR but would misclassify as TIGHT against the inflated one.
+    const candles: Candle[] = [];
+    for (let i = 0; i < 24; i++) {
+      const base = 100;
+      candles.push({ time: 1700000000000 + i * 3600000, open: base, high: base + 1.1, low: base - 1.1, close: base, volume: 100 });
+    }
+    candles.push(
+      { time: 1700000000000 + 24 * 3600000, open: 100, high: 101.0, low: 99.0, close: 100.0, volume: 90 },
+      { time: 1700000000000 + 24 * 3600000, open: 100.0, high: 101.1, low: 99.1, close: 100.05, volume: 90 },
+      { time: 1700000000000 + 25 * 3600000, open: 100.05, high: 101.05, low: 99.05, close: 100.02, volume: 90 },
+      { time: 1700000000000 + 26 * 3600000, open: 100.02, high: 101.0, low: 99.0, close: 100.03, volume: 90 },
+      { time: 1700000000000 + 27 * 3600000, open: 100.03, high: 101.08, low: 99.08, close: 100.04, volume: 90 },
+      { time: 1700000000000 + 28 * 3600000, open: 100.04, high: 101.1, low: 99.1, close: 100.01, volume: 90 },
+    );
+    candles.push({
+      time: 1700000000000 + 29 * 3600000,
+      open: 100.3,
+      high: 103,
+      low: 99.9,
+      close: 102.9,
+      volume: 120,
+    });
+
+    const ctx = buildContext(candles);
+    const last = candles.length - 1;
+    const signal = detectRb(candles, last, ctx);
+
+    expect(signal).not.toBeNull();
+    expect(signal!.ruleTrace.find((t) => t.startsWith("Nen "))).toBe(
+      "Nen LOOSE (range=2.20000, max=4.16950)",
+    );
+    expect(signal!.confidence).toBe(50);
+  });
 });
 
 // ---------------------------------------------------------------------------
