@@ -32,3 +32,52 @@ isUptrend   = slope > trendSlopeThreshold and aboveCount >= trendCandleMinCount
 isDowntrend = slope < -trendSlopeThreshold and belowCount >= trendCandleMinCount
 
 plot(ema21, "EMA21", color=color.orange, linewidth=2)
+
+// ---------- BB compression + entry ----------
+blockHigh    = ta.highest(high[1], bbWindow)
+blockLow     = ta.lowest(low[1], bbWindow)
+blockRange   = blockHigh - blockLow
+isTightBlock = blockRange <= bbKBlock * atr14
+blockMid     = (blockHigh + blockLow) / 2
+nearEma      = math.abs(blockMid - ema21) <= bbNearEmaAtrMult * atr14
+
+bbLongCond  = enableBB and isUptrend   and isTightBlock and nearEma and close > blockHigh and close[1] <= blockHigh
+bbShortCond = enableBB and isDowntrend and isTightBlock and nearEma and close < blockLow  and close[1] >= blockLow
+
+// ---------- Active trade tracking (single trade at a time) ----------
+var float activeEntry = na
+var float activeSL    = na
+var float activeTP    = na
+var string activeSide = na
+var bool  activeBE    = false
+var line  slLine      = na
+var line  tpLine      = na
+var label entryLabel  = na
+
+canOpenNewTrade = na(activeEntry)
+
+if canOpenNewTrade and bbLongCond
+    risk = close - blockLow
+    activeEntry := close
+    activeSL    := blockLow
+    activeTP    := close + tpRMultiple * risk
+    activeSide  := "long"
+    activeBE    := false
+    entryLabel := label.new(bar_index, low, "BB LONG", style=label.style_label_up, color=color.green, textcolor=color.white, yloc=yloc.belowbar)
+    slLine := line.new(bar_index, activeSL, bar_index, activeSL, extend=extend.right, color=color.red, width=1)
+    tpLine := line.new(bar_index, activeTP, bar_index, activeTP, extend=extend.right, color=color.green, width=1)
+
+if canOpenNewTrade and bbShortCond and na(activeEntry)
+    risk = blockHigh - close
+    activeEntry := close
+    activeSL    := blockHigh
+    activeTP    := close - tpRMultiple * risk
+    activeSide  := "short"
+    activeBE    := false
+    entryLabel := label.new(bar_index, high, "BB SHORT", style=label.style_label_down, color=color.red, textcolor=color.white, yloc=yloc.abovebar)
+    slLine := line.new(bar_index, activeSL, bar_index, activeSL, extend=extend.right, color=color.red, width=1)
+    tpLine := line.new(bar_index, activeTP, bar_index, activeTP, extend=extend.right, color=color.green, width=1)
+
+// ---------- Alerts ----------
+alertcondition(bbLongCond,  title="BB Long",  message="Volman BB Long signal")
+alertcondition(bbShortCond, title="BB Short", message="Volman BB Short signal")
