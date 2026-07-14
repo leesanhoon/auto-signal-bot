@@ -209,6 +209,41 @@ describe("BB — Block Break", () => {
     );
     expect(signal!.confidence).toBe(65);
   });
+
+  test("prefers the widest compression window that still satisfies the threshold", () => {
+    // Same style fixture as the LOOSE test above, but with a much smaller drift
+    // (0.001 instead of 0.0046) so windows up to 10 candles still satisfy
+    // range <= kBlock * ATR. With BB.windows tried in descending order, the
+    // detector must pick window=10 (the widest), not window=4.
+    const drift = 0.001;
+    const candles: Candle[] = [];
+    for (let i = 0; i < 40; i++) {
+      const base = 100 + i * drift;
+      candles.push({ time: 1700000000000 + i * 3600000, open: base, high: base + 0.08, low: base - 0.06, close: base + 0.02, volume: 100 });
+    }
+    for (let i = 40; i < 45; i++) {
+      const base = 100 + i * drift;
+      candles.push({ time: 1700000000000 + i * 3600000, open: base, high: base + 0.08, low: base - 0.06, close: base + 0.02, volume: 90 });
+    }
+    const base45 = 100 + 45 * drift;
+    candles.push({ time: 1700000000000 + 45 * 3600000, open: base45, high: 101.0, low: base45 - 0.3, close: 100.95, volume: 120 });
+
+    const ctx = buildContext(candles);
+    const last = candles.length - 1;
+    const signal = detectBb(candles, last, ctx);
+
+    expect(signal).not.toBeNull();
+    expect(signal!.setup).toBe("BB");
+    expect(signal!.geometry).toBeDefined();
+    expect(signal!.geometry!.boxes).toHaveLength(1);
+    // window=10 spans candles 35-44 (endIndex=44, startIndex=44-10+1=35).
+    // The old ascending-order config picks window=4 (startIndex=41) instead.
+    expect(signal!.geometry!.boxes[0].startIndex).toBe(35);
+    expect(signal!.geometry!.boxes[0].endIndex).toBe(44);
+    expect(signal!.geometry!.boxes[0].range).toBeCloseTo(0.149, 3);
+    expect(signal!.geometry!.boxes[0].high).toBeCloseTo(100.124, 3);
+    expect(signal!.geometry!.boxes[0].low).toBeCloseTo(99.975, 3);
+  });
 });
 
 // ---------------------------------------------------------------------------
