@@ -70,23 +70,6 @@ export function detectRb(
       const absSlopeBefore = Math.abs(slopeBefore);
       const absSlopeNow = Math.abs(slopeNow);
 
-      // Breakout direction: which side of range did close break?
-      const breaksUp = candles[index].close > range.high;
-      const breaksDown = candles[index].close < range.low;
-
-      if (!breaksUp && !breaksDown) {
-        trace.push(`Gia chua pha range boundary (close=${candles[index].close.toFixed(5)})`);
-        return null;
-      }
-
-      const direction = breaksUp ? "LONG" : "SHORT";
-      const slopeAligned = direction === "LONG" ? slopeNow > 0 : slopeNow < 0;
-
-      if (!slopeAligned) {
-        trace.push(`EMA21 slope=${slopeNow.toFixed(2)} khong cung huong breakout ${direction}`);
-        return null;
-      }
-
       // Bối cảnh Range theo tài liệu Bob Volman BẮT BUỘC "MA21 nằm phẳng" trước khi
       // phá vỡ — đây là điều kiện định nghĩa, không phải gợi ý phụ. Nếu EMA21 đã dốc
       // sẵn TRƯỚC breakout thì đây không phải bối cảnh Range thật, phải loại.
@@ -96,32 +79,69 @@ export function detectRb(
       }
       trace.push(`EMA21 phang truoc breakout (slopeBefore=${slopeBefore.toFixed(2)}), chuyen sang doc (slopeNow=${slopeNow.toFixed(2)})`);
 
-      // Tài liệu yêu cầu hộp Range phải có "ít nhất 2 lần chạm bật" ở đường biên quan
-      // trọng (biên bị phá vỡ) trước khi được coi là Range hợp lệ — nến chỉ chạm gần
-      // biên rồi đóng cửa lại bên trong hộp (không phải nến phá vỡ thật).
+      // Dem doc lap so lan cham bat o CA 2 bien (tren/duoi) cua range, roi suy ra
+      // direction tu canh nao da duoc cham bat >=2 lan — thay vi cho gia da dong cua
+      // vuot bien (qua tre). Day la thay doi chinh de RB ban signal som hon.
       const touchTolerance = 0.15 * atr;
-      const boundaryLevel = direction === "LONG" ? range.high : range.low;
-      let touchCount = 0;
-      const touchMarkers: ChartMarker[] = [];
+      let upperTouchCount = 0;
+      let lowerTouchCount = 0;
+      const upperTouchMarkers: ChartMarker[] = [];
+      const lowerTouchMarkers: ChartMarker[] = [];
       for (let i = range.startIndex; i <= range.endIndex; i++) {
         const c = candles[i];
-        if (direction === "LONG") {
-          if (c.high >= boundaryLevel - touchTolerance && c.close <= boundaryLevel) {
-            touchCount++;
-            touchMarkers.push({ index: i, price: c.high, label: `Touch #${touchCount}` });
-          }
-        } else {
-          if (c.low <= boundaryLevel + touchTolerance && c.close >= boundaryLevel) {
-            touchCount++;
-            touchMarkers.push({ index: i, price: c.low, label: `Touch #${touchCount}` });
-          }
+        if (c.high >= range.high - touchTolerance && c.close <= range.high) {
+          upperTouchCount++;
+          upperTouchMarkers.push({ index: i, price: c.high, label: `Touch #${upperTouchCount}` });
+        }
+        if (c.low <= range.low + touchTolerance && c.close >= range.low) {
+          lowerTouchCount++;
+          lowerTouchMarkers.push({ index: i, price: c.low, label: `Touch #${lowerTouchCount}` });
         }
       }
-      if (touchCount < 2) {
-        trace.push(`Chi ${touchCount} lan cham bat bien ${direction === "LONG" ? "tren" : "duoi"} (can >=2) -> chua du xac nhan Range`);
+
+      const upperReady = upperTouchCount >= 2;
+      const lowerReady = lowerTouchCount >= 2;
+
+      if (!upperReady && !lowerReady) {
+        trace.push(`Chua bien nao du 2 lan cham bat (tren=${upperTouchCount}, duoi=${lowerTouchCount}) -> chua ready`);
         return null;
       }
-      trace.push(`${touchCount} lan cham bat bien ${direction === "LONG" ? "tren" : "duoi"} (>=2, dat)`);
+
+      let direction: "LONG" | "SHORT";
+      let touchCount: number;
+      let touchMarkers: ChartMarker[];
+
+      if (upperReady && lowerReady) {
+        // Ca 2 bien deu du >=2 lan cham bat (binh thuong voi 1 range/box that) — dung
+        // slopeNow (EMA21 dang nghieng huong nao) de phan xu huong du kien, thay vi bo
+        // qua signal. Day la dung dinh nghia goc cua RB: "EMA21 chuyen tu phang sang doc
+        // theo huong breakout".
+        if (slopeNow > 0) {
+          direction = "LONG";
+          touchCount = upperTouchCount;
+          touchMarkers = upperTouchMarkers;
+          trace.push(`Ca 2 bien deu co >=2 lan cham bat -> dung EMA21 slopeNow=${slopeNow.toFixed(2)} (>0) de chon huong LONG`);
+        } else if (slopeNow < 0) {
+          direction = "SHORT";
+          touchCount = lowerTouchCount;
+          touchMarkers = lowerTouchMarkers;
+          trace.push(`Ca 2 bien deu co >=2 lan cham bat -> dung EMA21 slopeNow=${slopeNow.toFixed(2)} (<0) de chon huong SHORT`);
+        } else {
+          trace.push(`Ca 2 bien deu co >=2 lan cham bat va slopeNow=0 -> khong ro huong, bo qua`);
+          return null;
+        }
+      } else {
+        direction = upperReady ? "LONG" : "SHORT";
+        touchCount = upperReady ? upperTouchCount : lowerTouchCount;
+        touchMarkers = upperReady ? upperTouchMarkers : lowerTouchMarkers;
+        trace.push(`Direction du kien ${direction} tu ${touchCount} lan cham bat bien ${direction === "LONG" ? "tren" : "duoi"} (>=2, dat)`);
+      }
+
+      const slopeAligned = direction === "LONG" ? slopeNow > 0 : slopeNow < 0;
+      if (!slopeAligned) {
+        trace.push(`EMA21 slope=${slopeNow.toFixed(2)} khong cung huong du kien ${direction}`);
+        return null;
+      }
 
       // Entry/Stop/Target
       const entry = direction === "LONG" ? range.high : range.low;

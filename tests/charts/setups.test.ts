@@ -441,9 +441,9 @@ describe("ARB — Advanced Range Break", () => {
     expect(signal!.setup).toBe("ARB");
     expect(signal!.direction).toBe("LONG");
     expect(signal!.triggerIndex).toBe(last);
-    expect(signal!.ruleTrace.join("\n")).toContain("Breakout LONG phat hien");
-    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #1");
-    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #2");
+    expect(signal!.ruleTrace.join("\n")).toContain("Direction du kien LONG tu edge-test side");
+    expect(signal!.ruleTrace.join("\n")).toContain("Upper edge test #1");
+    expect(signal!.ruleTrace.join("\n")).toContain("Upper edge test #2");
     expect(signal!.geometry).toBeDefined();
     expect(signal!.geometry!.boxes).toHaveLength(1);
     expect(signal!.geometry!.boxes[0].high).toBeCloseTo(100.12);
@@ -520,9 +520,9 @@ describe("ARB — Advanced Range Break", () => {
     expect(signal!.setup).toBe("ARB");
     expect(signal!.direction).toBe("SHORT");
     expect(signal!.triggerIndex).toBe(last);
-    expect(signal!.ruleTrace.join("\n")).toContain("Breakout SHORT phat hien");
-    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #1");
-    expect(signal!.ruleTrace.join("\n")).toContain("Edge test #2");
+    expect(signal!.ruleTrace.join("\n")).toContain("Direction du kien SHORT tu edge-test side");
+    expect(signal!.ruleTrace.join("\n")).toContain("Lower edge test #1");
+    expect(signal!.ruleTrace.join("\n")).toContain("Lower edge test #2");
     expect(signal!.geometry).toBeDefined();
     expect(signal!.geometry!.boxes).toHaveLength(1);
     expect(signal!.geometry!.boxes[0].high).toBeCloseTo(100.12);

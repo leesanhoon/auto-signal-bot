@@ -1,6 +1,6 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind, ChartMarker } from "../setup-types.js";
-import { detectCompression, isFalseBreak, classifyCompressionTightness } from "../indicators.js";
+import { detectCompression, classifyCompressionTightness } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";
 
@@ -47,17 +47,57 @@ export function detectArb(
   const tightness = classifyCompressionTightness(range, kBlockArb, rangeAtr);
   trace.push(`Nen ${tightness} (range=${range.range.toFixed(5)}, max=${(kBlockArb * rangeAtr).toFixed(5)})`)
 
-  // Check breakout direction
-  const breaksUp = candles[index].close > range.high;
-  const breaksDown = candles[index].close < range.low;
+  // Count edge tests independently for both sides — determine direction from
+  // WHICH edge has been tested (>=2 lan) truoc khi breakout xay ra, thay vi cho
+  // gia da dong cua vuot bien (qua tre). Day la thay doi chinh de ARB ban signal
+  // som hon, tuong tu cach BB da lam (xem bb.ts:104-118).
+  const testLookback = Math.max(0, range.startIndex - 15);
+  const levelHigh = range.high;
+  const levelLow = range.low;
 
-  if (!breaksUp && !breaksDown) {
-    trace.push(`Gia chua pha range (close=${candles[index].close.toFixed(5)})`);
+  let upperEdgeCount = 0;
+  let lowerEdgeCount = 0;
+  const upperMarkers: ChartMarker[] = [];
+  const lowerMarkers: ChartMarker[] = [];
+
+  for (let i = testLookback; i < index; i++) {
+    const candle = candles[i];
+    // Upper edge test: gia probe len tren levelHigh roi dong cua lai trong range.
+    if (candle.high > levelHigh && candle.close >= levelLow && candle.close <= levelHigh) {
+      upperEdgeCount++;
+      upperMarkers.push({ index: i, price: candle.high, label: `Edge test #${upperEdgeCount}` });
+      trace.push(`Upper edge test #${upperEdgeCount} at index ${i}: high=${candle.high.toFixed(5)}, close=${candle.close.toFixed(5)}`);
+    }
+    // Lower edge test: gia probe xuong duoi levelLow roi dong cua lai trong range.
+    if (candle.low < levelLow && candle.close >= levelLow && candle.close <= levelHigh) {
+      lowerEdgeCount++;
+      lowerMarkers.push({ index: i, price: candle.low, label: `Edge test #${lowerEdgeCount}` });
+      trace.push(`Lower edge test #${lowerEdgeCount} at index ${i}: low=${candle.low.toFixed(5)}, close=${candle.close.toFixed(5)}`);
+    }
+  }
+
+  const upperReady = upperEdgeCount >= 2;
+  const lowerReady = lowerEdgeCount >= 2;
+
+  if (upperReady && lowerReady) {
+    trace.push(`Ca 2 canh deu co >=2 edge test (upper=${upperEdgeCount}, lower=${lowerEdgeCount}) -> khong ro huong, bo qua`);
+    return null;
+  }
+  if (!upperReady && !lowerReady) {
+    trace.push(`Chua canh nao du edge test (upper=${upperEdgeCount}, lower=${lowerEdgeCount}) -> chua ready`);
     return null;
   }
 
-  const direction = breaksUp ? "LONG" : "SHORT";
-  trace.push(`Breakout ${direction} phat hien`);
+  const direction = upperReady ? "LONG" : "SHORT";
+  const edgeTestCount = upperReady ? upperEdgeCount : lowerEdgeCount;
+  const edgeTestMarkers = upperReady ? upperMarkers : lowerMarkers;
+  trace.push(`Direction du kien ${direction} tu edge-test side (count=${edgeTestCount})`);
+
+  // Invalidation: 3rd failure = range da het hieu luc o canh nay
+  if (edgeTestCount >= 3) {
+    trace.push(`edgeTestCount=${edgeTestCount} >= 3 -> range da het hieu luc`);
+    return null;
+  }
 
   // ARB la setup Range (giong RB/IRB trong tai lieu, cung hang "MA21 nam phang"),
   // KHONG phai Trend — boi canh dung phai la MA phang TRUOC breakout, khong chi la
@@ -98,64 +138,6 @@ export function detectArb(
     return null;
   }
   trace.push(`Range gan EMA21 (khoang cach=${emaDistance.toFixed(5)} <= ${maxEmaDistance.toFixed(5)})`);
-
-  // Count edge tests: scan back from range start for false breaks at the same edge
-  let edgeTestCount = 0;
-  const edgeTestMarkers: ChartMarker[] = [];
-  const testLookback = Math.max(0, range.startIndex - 15);
-  const levelHigh = range.high;
-  const levelLow = range.low;
-
-  // Include failed edge tests that happened shortly before the detected range.
-  for (let i = testLookback; i < index; i++) {
-    // Check if candle i tried to break but failed (false break)
-    const candle = candles[i];
-    if (direction === "LONG") {
-      // For LONG: a failed test means price probed above the upper boundary, then closed back inside.
-      if (candle.high > levelHigh && candle.close >= levelLow && candle.close <= levelHigh) {
-        edgeTestCount++;
-        const price = candle.high;
-        edgeTestMarkers.push({ index: i, price, label: `Edge test #${edgeTestCount}` });
-        trace.push(`Edge test #${edgeTestCount} at index ${i}: high=${candle.high.toFixed(5)}, close=${candle.close.toFixed(5)}`);
-      }
-    } else {
-      // For SHORT: a failed test means price probed below the lower boundary, then closed back inside.
-      if (candle.low < levelLow && candle.close >= levelLow && candle.close <= levelHigh) {
-        edgeTestCount++;
-        const price = candle.low;
-        edgeTestMarkers.push({ index: i, price, label: `Edge test #${edgeTestCount}` });
-        trace.push(`Edge test #${edgeTestCount} at index ${i}: low=${candle.low.toFixed(5)}, close=${candle.close.toFixed(5)}`);
-      }
-    }
-  }
-
-  if (edgeTestCount < 2) {
-    trace.push(`edgeTestCount=${edgeTestCount} < 2 -> khong du test bien cho ARB`);
-    return null;
-  }
-  trace.push(`edgeTestCount=${edgeTestCount} (can >=2)`);
-
-  // Invalidation: 3rd failure = range is exhausted
-  if (edgeTestCount >= 3) {
-    trace.push(`edgeTestCount=${edgeTestCount} >= 3 -> range da het hieu luc`);
-    return null;
-  }
-
-  // Verify current breakout is not false
-  if (isFalseBreak(candles, index, levelHigh, levelLow, direction, 2)) {
-    // Count this as another failure
-    edgeTestCount++;
-    trace.push(`Current breakout is false (edgeTestCount now ${edgeTestCount})`);
-    if (edgeTestCount >= 3) {
-      trace.push(`Lan that bai thu 3 -> range het hieu luc`);
-    }
-    return null;
-  }
-  trace.push(`Current breakout khong bi false`);
-
-  const breakoutLevel = direction === "LONG" ? levelHigh : levelLow;
-  const gap = Math.abs(candles[index].close - breakoutLevel);
-  trace.push(`Pha vo muc moi tai gia ${breakoutLevel.toFixed(5)}, gap=${gap.toFixed(5)}`);
 
   // Entry/Stop/Target (same as RB)
   const entry = direction === "LONG" ? range.high : range.low;

@@ -282,14 +282,6 @@ describe("runSetupBacktest — pending fill mode", () => {
         close: 99.5,
         volume: 100,
       },
-      ...Array.from({ length: 5 }, (_, i) => ({
-        time: 1700000000000 + (33 + i) * 3600000,
-        open: 100.0,
-        high: 101.0,
-        low: 99.0,
-        close: 100.0,
-        volume: 100,
-      })),
     ];
 
     const report = runSetupBacktest(
@@ -338,14 +330,6 @@ describe("runSetupBacktest — pending fill mode", () => {
         close: 100.0,
         volume: 100,
       },
-      ...Array.from({ length: 3 }, (_, i) => ({
-        time: 1700000000000 + (34 + i) * 3600000,
-        open: 100.5,
-        high: 101.0,
-        low: 99.9,
-        close: 100.0,
-        volume: 100,
-      })),
     ];
 
     const report = runSetupBacktest(
@@ -385,14 +369,6 @@ describe("runSetupBacktest — pending fill mode", () => {
         close: 100.5,
         volume: 100,
       },
-      ...Array.from({ length: 5 }, (_, i) => ({
-        time: 1700000000000 + (33 + i) * 3600000,
-        open: 100.0,
-        high: 101.0,
-        low: 99.0,
-        close: 100.0,
-        volume: 100,
-      })),
     ];
 
     const report = runSetupBacktest(
