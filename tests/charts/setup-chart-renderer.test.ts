@@ -7,6 +7,7 @@ import {
   buildSetupChartSvg,
   renderSetupChartPng,
   renderSetupChartsBatch,
+  getPlaywrightDiagnostics,
 } from "../../src/charts/setup-chart-renderer.js";
 
 function buildTrendingCandles(count: number): Candle[] {
@@ -23,6 +24,15 @@ function buildTrendingCandles(count: number): Candle[] {
   }
   return candles;
 }
+
+describe("getPlaywrightDiagnostics", () => {
+  test("trả về chuỗi chứa PLAYWRIGHT_BROWSERS_PATH và chromium.executablePath", () => {
+    const result = getPlaywrightDiagnostics();
+
+    expect(result).toContain("PLAYWRIGHT_BROWSERS_PATH=");
+    expect(result).toContain("chromium.executablePath=");
+  });
+});
 
 describe("Chart renderer", () => {
   describe("buildSetupChartSvg", () => {

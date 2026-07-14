@@ -5,6 +5,20 @@ import { createLogger } from "../shared/logger.js";
 
 const logger = createLogger("charts:setup-chart-renderer");
 
+export function getPlaywrightDiagnostics(): string {
+  const browsersPath =
+    process.env.PLAYWRIGHT_BROWSERS_PATH ?? "(không set — dùng default cache path)";
+
+  let executablePath: string;
+  try {
+    executablePath = chromium.executablePath();
+  } catch (error) {
+    executablePath = `lỗi lấy path: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  return `PLAYWRIGHT_BROWSERS_PATH=${browsersPath}\nchromium.executablePath=${executablePath}`;
+}
+
 export type SetupChartInput = {
   pair: string;
   setup: string;
