@@ -16,6 +16,7 @@
     "backtest:setups": "tsx src/charts/setup-backtest-runner.ts",
     "backtest:compare": "tsx src/charts/setup-backtest-compare-runner.ts",
     "preflight:fetch": "tsx src/scripts/preflight-fetch.ts",
+    "verify:chart-symbols": "tsx src/scripts/verify-chart-symbols.ts",
     "verify:testnet-order-types": "tsx src/scripts/verify-testnet-order-types.ts",
     "setup:telegram-menu": "tsx src/scripts/setup-telegram-menu-v2.ts",
     "match-odds": "tsx src/betting/controller/betting-index.ts",
