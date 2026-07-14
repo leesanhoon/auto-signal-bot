@@ -1,0 +1,34 @@
+//@version=6
+indicator("Volman BB/RB", overlay=true, max_lines_count=200, max_labels_count=200)
+
+// ---------- Inputs ----------
+emaPeriod           = input.int(21, "EMA Period", minval=1, group="Core")
+atrPeriod           = input.int(14, "ATR Period", minval=1, group="Core")
+trendSlopeThreshold = input.float(0.15, "Trend Slope Threshold", minval=0.0, step=0.01, group="Trend")
+trendCandleWindow   = input.int(10, "Trend Candle Window", minval=1, group="Trend")
+trendCandleMinCount = input.int(6, "Trend Candle Min Count", minval=1, group="Trend")
+bbWindow            = input.int(5, "BB Compression Window", minval=2, group="BB")
+bbKBlock            = input.float(1.2, "BB kBlock", minval=0.1, step=0.1, group="BB")
+bbNearEmaAtrMult    = input.float(1.0, "BB Block-to-EMA Max Distance (x ATR)", minval=0.1, step=0.1, group="BB")
+rbWindow            = input.int(8, "RB Compression Window", minval=2, group="RB")
+rbKBlock            = input.float(2.0, "RB kBlock", minval=0.1, step=0.1, group="RB")
+rbMinTouches        = input.int(2, "RB Min Boundary Touches", minval=1, group="RB")
+rbTouchAtrMult      = input.float(0.1, "RB Touch Tolerance (x ATR)", minval=0.01, step=0.01, group="RB")
+tpRMultiple         = input.float(2.0, "TP R Multiple", minval=0.1, step=0.1, group="Exit")
+emaExitEnabled      = input.bool(true, "Enable EMA Exit", group="Exit")
+enableBB            = input.bool(true, "Enable BB Setup", group="Setups")
+enableRB            = input.bool(true, "Enable RB Setup", group="Setups")
+
+// ---------- Core indicators ----------
+ema21 = ta.ema(close, emaPeriod)
+tr    = ta.tr(true)
+atr14 = ta.ema(tr, atrPeriod)
+
+// ---------- Trend slope classifier ----------
+slope      = (ema21 - ema21[5]) / atr14
+aboveCount = math.sum(close > ema21 ? 1.0 : 0.0, trendCandleWindow)
+belowCount = math.sum(close < ema21 ? 1.0 : 0.0, trendCandleWindow)
+isUptrend   = slope > trendSlopeThreshold and aboveCount >= trendCandleMinCount
+isDowntrend = slope < -trendSlopeThreshold and belowCount >= trendCandleMinCount
+
+plot(ema21, "EMA21", color=color.orange, linewidth=2)
