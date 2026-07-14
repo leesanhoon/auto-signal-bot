@@ -6,6 +6,8 @@ import { getChartScannerErrorScope } from "../../src/charts/index.js";
 // ============================================================
 const mocks = vi.hoisted(() => ({
   captureAllCharts: vi.fn(),
+  getCharts: vi.fn(),
+  getChartsForTimeframeMode: vi.fn(),
   buildChartAnalysisCacheKey: vi.fn(
     (
       candleKey: string,
@@ -128,6 +130,11 @@ vi.mock("../../src/charts/deterministic-pipeline.js", () => ({
   analyzeAllChartsDeterministic: mocks.analyzeAllChartsDeterministic,
 }));
 
+vi.mock("../../src/charts/volman-charts.config.js", () => ({
+  getCharts: mocks.getCharts,
+  getChartsForTimeframeMode: mocks.getChartsForTimeframeMode,
+}));
+
 vi.mock("../../src/charts/binance-execution-volman.js", () => ({
   openBinanceFuturesPosition: mocks.openBinanceFuturesPosition,
   pollPendingEntryOrders: mocks.pollPendingEntryOrders,
@@ -219,6 +226,8 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.saveOpenPosition.mockResolvedValue(true);
     mocks.loadOpenPairs.mockResolvedValue(new Set());
     mocks.captureAllCharts.mockResolvedValue([{ filepath: "/tmp/chart.png" }]);
+    mocks.getCharts.mockResolvedValue([]);
+    mocks.getChartsForTimeframeMode.mockResolvedValue([]);
     mocks.analyzeAllChartsDeterministic.mockResolvedValue(MOCK_RESULT);
     mocks.runCheckOpenTrades.mockResolvedValue(0);
     mocks.pollPendingEntryOrders.mockResolvedValue(undefined);

@@ -8,7 +8,7 @@ import {
 import { validateTradeSetupForOpen } from "./position-engine-volman.js";
 import { createLogger } from "../shared/logger.js";
 import { sendMessage } from "../shared/telegram-client.js";
-import { CHARTS } from "./volman-charts.config.js";
+import { getCharts } from "./volman-charts.config.js";
 import type { PendingOrder } from "./chart-types-common.js";
 import type { TradeSetup } from "./chart-types-volman.js";
 import { resolvePendingOrderDecision } from "./position-decision-volman.js";
@@ -39,7 +39,7 @@ function toTradeSetup(order: PendingOrder): TradeSetup {
 }
 
 async function reviewPendingOrder(order: PendingOrder): Promise<{ status: "TRIGGERED" | "CANCELLED" | "PENDING"; confidence: number; comment: string }> {
-  const chart = findChartForPair(CHARTS, order.pair, order.primaryTimeframe ?? "H4");
+  const chart = findChartForPair(await getCharts(), order.pair, order.primaryTimeframe ?? "H4");
   if (!chart) {
     logger.warn("No chart configuration found; sending explicit warning", { pair: order.pair, id: order.id });
     await sendMessage(

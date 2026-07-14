@@ -22,7 +22,9 @@ vi.mock("../../src/charts/positions-repository-volman.js", () => repository);
 vi.mock("../../src/shared/telegram-volman.js", () => telegram);
 vi.mock("../../src/shared/telegram-client.js", () => telegramClient);
 vi.mock("../../src/charts/candle-range-stats.js", () => candles);
-vi.mock("../../src/charts/volman-charts.config.js", () => ({ CHARTS: [] }));
+vi.mock("../../src/charts/volman-charts.config.js", () => ({
+  getCharts: vi.fn().mockResolvedValue([]),
+}));
 vi.mock("../../src/charts/position-decision-volman.js", () => decisions);
 vi.mock("../../src/charts/binance-execution-volman.js", () => binance);
 

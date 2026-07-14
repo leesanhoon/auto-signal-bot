@@ -1,5 +1,5 @@
 import { fetchCandleRangeStats, findChartForPair } from "./candle-range-stats.js";
-import { CHARTS } from "./volman-charts.config.js";
+import { getCharts } from "./volman-charts.config.js";
 import { buildPositionManagementPatch, closePosition, loadOpenPositions, updatePositionDecision } from "./positions-repository-volman.js";
 import { buildPositionDecisionMessage, buildPositionClosedMessage } from "../shared/telegram-volman.js";
 import { sendMessage } from "../shared/telegram-client.js";
@@ -24,7 +24,7 @@ async function evaluateOpenPosition(
     return reconcileBinancePosition(position);
   }
 
-  const chart = findChartForPair(CHARTS, position.pair, position.primaryTimeframe ?? "H4");
+  const chart = findChartForPair(await getCharts(), position.pair, position.primaryTimeframe ?? "H4");
   if (!chart) {
     logger.warn("No chart configuration found; sending explicit warning", { pair: position.pair, id: position.id });
     await sendMessage(

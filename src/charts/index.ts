@@ -35,7 +35,7 @@ import {
   saveChartAnalysisCache,
 } from "./chart-cache-repository-volman.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
-import { CHARTS, getChartsForTimeframeMode } from "./volman-charts.config.js";
+import { getCharts, getChartsForTimeframeMode } from "./volman-charts.config.js";
 import {
   openBinanceFuturesPosition,
   pollPendingEntryOrders,
@@ -60,9 +60,9 @@ function shouldAutoTrackAsOpen(setup: TradeSetup, threshold: number): boolean {
   return (setup.confidence ?? 0) >= threshold;
 }
 
-function getPairs(): Array<{ pair: string; symbol: string }> {
+async function getPairs(): Promise<Array<{ pair: string; symbol: string }>> {
   const seen = new Map<string, string>();
-  for (const chart of CHARTS) {
+  for (const chart of await getCharts()) {
     const pair = chart.name.replace(` ${chart.timeframe}`, "");
     if (!seen.has(pair)) seen.set(pair, chart.symbol);
   }
@@ -78,7 +78,7 @@ async function analyzeCurrentWindow(
   timeframeMode: ReturnType<typeof getConfiguredChartTimeframeMode>,
   primaryTimeframe: ReturnType<typeof getConfiguredChartPrimaryTimeframe>,
 ): Promise<AnalysisResult> {
-  const runtimeCharts = getChartsForTimeframeMode(
+  const runtimeCharts = await getChartsForTimeframeMode(
     timeframeMode,
     primaryTimeframe,
   );
@@ -89,7 +89,7 @@ async function analyzeCurrentWindow(
       new Set(runtimeCharts.map((chart) => chart.timeframe)),
     ),
   });
-  const result = await analyzeAllChartsDeterministic(getPairs(), {
+  const result = await analyzeAllChartsDeterministic(await getPairs(), {
     timeframeMode,
     primaryTimeframe,
   });
@@ -179,7 +179,7 @@ async function handleAnalysisResult(
 
   // Apply freshness guard BEFORE auto-track to prevent saving stale positions
   const symbolByPair = new Map<string, string>();
-  for (const chart of CHARTS) {
+  for (const chart of await getCharts()) {
     const pair = chart.name.replace(/ [A-Z0-9]+$/, ""); // Remove timeframe suffix
     if (!symbolByPair.has(pair)) symbolByPair.set(pair, chart.symbol);
   }

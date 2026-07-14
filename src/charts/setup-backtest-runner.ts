@@ -1,6 +1,6 @@
 import "../shared/env.js";
 import { createLogger } from "../shared/logger.js";
-import { CHARTS } from "./volman-charts.config.js";
+import { getCharts } from "./volman-charts.config.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { runSetupBacktest, DEFAULT_FEE_SLIPPAGE_CONFIG, ZERO_FEE_SLIPPAGE_CONFIG } from "./setup-backtest.js";
 import type { Candle } from "./ohlc-provider.js";
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
 
   // Collect unique pairs
   const pairMap = new Map<string, { pair: string; symbol: string }>();
-  for (const chart of CHARTS) {
+  for (const chart of await getCharts()) {
     const pairName = chart.name.replace(` ${chart.timeframe}`, "");
     if (!pairMap.has(pairName)) {
       pairMap.set(pairName, { pair: pairName, symbol: chart.symbol });
