@@ -2,7 +2,7 @@ import "../shared/infra/env.js";
 import { runLotteryPredict } from "./lottery-predict-runner.js";
 import { notifyError } from "../shared/notification/telegram-client.js";
 import { createLogger } from "../shared/infra/logger.js";
-import type { LotteryRegion } from "./lottery-types.js";
+import type { LotteryRegion } from "./model/lottery-types.js";
 
 const logger = createLogger("lottery:lottery-predict-index");
 

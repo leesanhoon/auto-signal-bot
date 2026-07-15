@@ -16,7 +16,7 @@ vi.mock("../../src/shared/infra/db.js", () => ({
 }));
 
 const lotteryRepo = await import(
-  "../../src/lottery/lottery-draw-status-repository.js"
+  "../../src/lottery/repository/lottery-draw-status-repository.js"
 );
 
 // ── Tests ────────────────────────────────────────────────────────────

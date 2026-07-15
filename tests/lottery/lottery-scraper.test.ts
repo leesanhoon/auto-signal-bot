@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseWeekdayPage } from "../../src/lottery/lottery-scraper.js";
+import { parseWeekdayPage } from "../../src/lottery/client/lottery-scraper.js";
 
 vi.mock("../../src/lottery/lottery-schedule.js");
 

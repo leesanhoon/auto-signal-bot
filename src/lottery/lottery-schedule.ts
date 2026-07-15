@@ -1,4 +1,4 @@
-import type { LotteryRegion } from "./lottery-types.js";
+import type { LotteryRegion } from "./model/lottery-types.js";
 
 /** Mã miền dùng trong URL xoso.com.vn (xsmb/xsmt/xsmn). */
 export const REGION_URL_CODE: Record<LotteryRegion, string> = {

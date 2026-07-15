@@ -1,5 +1,5 @@
 import { extractNums } from "./lottery-format.js";
-import type { LotteryDrawRecord } from "./lottery-types.js";
+import type { LotteryDrawRecord } from "./model/lottery-types.js";
 
 export const EXPECTED_GAP = 10;
 

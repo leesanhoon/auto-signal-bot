@@ -9,16 +9,16 @@ const state = vi.hoisted(() => ({
   sendMessage: vi.fn(async () => undefined),
 }));
 
-vi.mock("../../src/lottery/lottery-scraper.js", () => ({
+vi.mock("../../src/lottery/client/lottery-scraper.js", () => ({
   fetchActualRecords: state.fetchActualRecords,
 }));
-vi.mock("../../src/lottery/lottery-repository.js", () => ({
+vi.mock("../../src/lottery/repository/lottery-repository.js", () => ({
   loadWeekdayHistory: state.loadWeekdayHistory,
 }));
 vi.mock("../../src/lottery/lottery-ensemble-predict.js", () => ({
   predictTopNumbersEnsemble: state.predictTopNumbersEnsemble,
 }));
-vi.mock("../../src/lottery/lottery-predictions-repository.js", () => ({
+vi.mock("../../src/lottery/repository/lottery-predictions-repository.js", () => ({
   loadCachedPredictions: state.loadCachedPredictions,
   savePredictions: state.savePredictions,
 }));

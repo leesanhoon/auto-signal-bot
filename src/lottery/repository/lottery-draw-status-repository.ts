@@ -1,5 +1,5 @@
-import { getDb } from "../shared/infra/db.js";
-import type { LotteryRegion } from "./lottery-types.js";
+import { getDb } from "../../shared/infra/db.js";
+import type { LotteryRegion } from "../model/lottery-types.js";
 
 /** Đọc cache "đã quay chưa" cho 1 ngày + miền. Trả null nếu chưa có cache hoặc lỗi DB. */
 export async function loadDrawStatus(

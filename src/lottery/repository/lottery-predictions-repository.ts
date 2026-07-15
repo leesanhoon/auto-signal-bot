@@ -1,7 +1,7 @@
-import { getDb } from "../shared/infra/db.js";
-import { ENSEMBLE_METHOD_VERSION } from "./lottery-ensemble-predict.js";
-import type { EnsembleNumberPrediction, MethodBreakdown } from "./lottery-ensemble-predict.js";
-import type { LotteryRegion } from "./lottery-types.js";
+import { getDb } from "../../shared/infra/db.js";
+import { ENSEMBLE_METHOD_VERSION } from "../lottery-ensemble-predict.js";
+import type { EnsembleNumberPrediction, MethodBreakdown } from "../lottery-ensemble-predict.js";
+import type { LotteryRegion } from "../model/lottery-types.js";
 
 export type PredictionRow = {
   date: string;

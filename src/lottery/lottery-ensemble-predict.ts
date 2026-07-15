@@ -1,4 +1,4 @@
-import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
+import type { LotteryDrawRecord, LotteryRegion } from "./model/lottery-types.js";
 import type { StatNumberPrediction } from "./lottery-stats-predict.js";
 import { predictTopNumbersStats } from "./lottery-stats-predict.js";
 import type { RegressionNumberPrediction } from "./lottery-regression-predict.js";

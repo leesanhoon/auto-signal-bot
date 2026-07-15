@@ -1,6 +1,6 @@
-import { fetchDayPage, parseWeekdayPage } from "./lottery-scraper.js";
-import { appendWeekdayHistory, loadWeekdayHistory } from "./lottery-repository.js";
-import type { LotteryRegion } from "./lottery-types.js";
+import { fetchDayPage, parseWeekdayPage } from "./client/lottery-scraper.js";
+import { appendWeekdayHistory, loadWeekdayHistory } from "./repository/lottery-repository.js";
+import type { LotteryRegion } from "./model/lottery-types.js";
 import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-backfill-runner");

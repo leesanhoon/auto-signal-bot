@@ -1,5 +1,5 @@
-import type { CompactPrizes, LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
-import { REGION_URL_CODE, weekdayPageUrl } from "./lottery-schedule.js";
+import type { CompactPrizes, LotteryDrawRecord, LotteryRegion } from "../model/lottery-types.js";
+import { REGION_URL_CODE, weekdayPageUrl } from "../lottery-schedule.js";
 
 /** Nhãn giải (thứ tự xuất hiện trên xoso.com.vn) → key trong CompactPrizes. */
 const LABEL_TO_KEY: Record<string, keyof CompactPrizes> = {

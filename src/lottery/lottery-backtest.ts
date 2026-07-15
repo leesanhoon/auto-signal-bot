@@ -2,7 +2,7 @@ import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
 import { extractNums, extractNums2 } from "./lottery-format.js";
 import { predictTopNumbersRegression } from "./lottery-regression-predict.js";
 import { predictTopNumbersStats } from "./lottery-stats-predict.js";
-import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
+import type { LotteryDrawRecord, LotteryRegion } from "./model/lottery-types.js";
 
 export type BacktestMethod = "stats" | "regression" | "ensemble" | "random-baseline";
 

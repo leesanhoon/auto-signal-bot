@@ -1,5 +1,5 @@
-import { getDb } from "../shared/infra/db.js";
-import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
+import { getDb } from "../../shared/infra/db.js";
+import type { LotteryDrawRecord, LotteryRegion } from "../model/lottery-types.js";
 
 /** Giữ lịch sử 3 năm để đủ mẫu cho thống kê, không quá phình theo thời gian. */
 const HISTORY_RETENTION_DAYS = 1095;

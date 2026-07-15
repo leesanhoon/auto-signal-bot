@@ -1,10 +1,10 @@
 import "../shared/infra/env.js";
 import { getDb } from "../shared/infra/db.js";
-import { loadWeekdayHistory } from "./lottery-repository.js";
+import { loadWeekdayHistory } from "./repository/lottery-repository.js";
 import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
-import { savePredictions } from "./lottery-predictions-repository.js";
+import { savePredictions } from "./repository/lottery-predictions-repository.js";
 import { sendMessage, notifyError } from "../shared/notification/telegram-client.js";
-import type { LotteryRegion } from "./lottery-types.js";
+import type { LotteryRegion } from "./model/lottery-types.js";
 import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-predict-resync-index");

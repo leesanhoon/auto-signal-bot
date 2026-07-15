@@ -1,5 +1,5 @@
 import { getDb } from "../shared/infra/db.js";
-import type { LotteryRegion } from "./lottery-types.js";
+import type { LotteryRegion } from "./model/lottery-types.js";
 
 export type HitRateStat = {
   region: LotteryRegion;
