@@ -1,4 +1,4 @@
-import { getDb } from "../shared/infra/db.js";
+import { getDb } from "../../shared/infra/db.js";
 
 // Factory shared cho cac repository entry-order —
 // logic pending-entry-order tracking giống hệt nhau, chỉ khác tên bảng.

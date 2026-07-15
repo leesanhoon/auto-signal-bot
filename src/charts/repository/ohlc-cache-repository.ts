@@ -1,6 +1,6 @@
-import { getDb } from "../shared/infra/db.js";
-import { createLogger } from "../shared/infra/logger.js";
-import type { Candle } from "./ohlc-provider.js";
+import { getDb } from "../../shared/infra/db.js";
+import { createLogger } from "../../shared/infra/logger.js";
+import type { Candle } from "../client/ohlc-provider.js";
 
 const logger = createLogger("ohlc-cache-repository");
 

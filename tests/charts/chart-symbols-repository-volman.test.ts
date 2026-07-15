@@ -10,7 +10,7 @@ vi.mock("../../src/shared/infra/db.js", () => ({
 }));
 
 const { loadActiveChartSymbols } = await import(
-  "../../src/charts/chart-symbols-repository-volman.js"
+  "../../src/charts/repository/chart-symbols-repository-volman.js"
 );
 
 describe("charts/chart-symbols-repository-volman", () => {

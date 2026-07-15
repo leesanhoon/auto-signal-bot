@@ -1,8 +1,8 @@
-import { getDb } from "../shared/infra/db.js";
-import { createLogger } from "../shared/infra/logger.js";
-import type { ChartEngineMode, ChartTimeframeMode } from "./volman-config-env.js";
-import type { ChartTimeframe } from "./chart-types-common.js";
-import type { AnalysisResult, AnalysisStats, TradeSetup } from "./chart-types-volman.js";
+import { getDb } from "../../shared/infra/db.js";
+import { createLogger } from "../../shared/infra/logger.js";
+import type { ChartEngineMode, ChartTimeframeMode } from "../model/volman-config-env.js";
+import type { ChartTimeframe } from "../model/chart-types-common.js";
+import type { AnalysisResult, AnalysisStats, TradeSetup } from "../model/chart-types-volman.js";
 
 const logger = createLogger("chart-cache-repository");
 

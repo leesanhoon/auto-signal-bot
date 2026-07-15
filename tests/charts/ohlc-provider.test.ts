@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 import { resetRateLimitStateForTests } from "../../src/shared/infra/rate-limit.js";
 
-vi.mock("../../src/charts/ohlc-cache-repository.js", () => ({
+vi.mock("../../src/charts/repository/ohlc-cache-repository.js", () => ({
   loadOhlcCandleCache: vi.fn(),
   saveOhlcCandleCache: vi.fn(),
 }));
 
-const ohlc = await import("../../src/charts/ohlc-provider.js");
-const ohlcCacheRepo = await import("../../src/charts/ohlc-cache-repository.js");
+const ohlc = await import("../../src/charts/client/ohlc-provider.js");
+const ohlcCacheRepo = await import("../../src/charts/repository/ohlc-cache-repository.js");
 
 describe("toTwelveDataSymbol", () => {
   test("maps EUR/USD correctly", () => {

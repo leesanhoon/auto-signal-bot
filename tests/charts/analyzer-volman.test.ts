@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { TradeSetup } from "../../src/charts/chart-types-volman.js";
+import type { TradeSetup } from "../../src/charts/model/chart-types-volman.js";
 import {
   applyPriceSanityChecks,
   buildPendingOrderCheckPrompt,

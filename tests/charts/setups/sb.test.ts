@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import type { Candle } from "../../../src/charts/ohlc-provider.js";
-import type { DetectionContext } from "../../../src/charts/setup-types.js";
+import type { Candle } from "../../../src/charts/client/ohlc-provider.js";
+import type { DetectionContext } from "../../../src/charts/model/setup-types.js";
 import { detectSb } from "../../../src/charts/setups/sb.js";
 
 function candle(index: number, open: number, high: number, low: number, close: number): Candle {

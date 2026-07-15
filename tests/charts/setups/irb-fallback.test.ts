@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Candle } from "../../../src/charts/ohlc-provider.js";
+import type { Candle } from "../../../src/charts/client/ohlc-provider.js";
 import { calculateAtr, calculateEma, detectCompression } from "../../../src/charts/indicators.js";
 import { detectIrb } from "../../../src/charts/setups/irb.js";
-import type { DetectionContext } from "../../../src/charts/setup-types.js";
+import type { DetectionContext } from "../../../src/charts/model/setup-types.js";
 
 // IRB đòi hỏi RangeInner nằm GẦN CHÍNH GIỮA RangeOuter (theo tài liệu Bob Volman —
 // xem irb.ts), không phải sát biên như bản cũ. Toàn bộ block "compression" +

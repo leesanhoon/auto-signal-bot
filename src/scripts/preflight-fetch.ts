@@ -1,7 +1,7 @@
 import "../shared/infra/env.js";
 import { formatFetchErrorDetails } from "../shared/infra/fetch-diagnostics.js";
 import { chromium } from "playwright";
-import { getPlaywrightDiagnostics } from "../charts/setup-chart-renderer.js";
+import { getPlaywrightDiagnostics } from "../charts/client/setup-chart-renderer.js";
 
 type CheckResult = {
   name: string;

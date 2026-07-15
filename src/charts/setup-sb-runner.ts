@@ -1,5 +1,5 @@
-import type { Candle } from "./ohlc-provider.js";
-import type { DetectedSignal, DetectionContext } from "./setup-types.js";
+import type { Candle } from "./client/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext } from "./model/setup-types.js";
 import { isFalseBreak } from "./indicators.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
 import { createLogger } from "../shared/infra/logger.js";

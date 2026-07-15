@@ -1,5 +1,5 @@
 import "../shared/infra/env.js";
-import { loadClosedPositions } from "./positions-repository-volman.js";
+import { loadClosedPositions } from "./repository/positions-repository-volman.js";
 import { runForexBacktest } from "./forex-backtest.js";
 import { createLogger } from "../shared/infra/logger.js";
 

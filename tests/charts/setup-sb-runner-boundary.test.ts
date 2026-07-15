@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
-import type { DetectedSignal, DetectionContext } from "../../src/charts/setup-types.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext } from "../../src/charts/model/setup-types.js";
 
 const { detectSbMock } = vi.hoisted(() => ({
   detectSbMock: vi.fn(),

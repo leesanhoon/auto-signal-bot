@@ -1,6 +1,6 @@
-import type { Candle } from "./ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "./setup-types.js";
-import type { ChartTimeframe } from "./chart-types-common.js";
+import type { Candle } from "./client/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext, SetupKind } from "./model/setup-types.js";
+import type { ChartTimeframe } from "./model/chart-types-common.js";
 import { calculateEma, calculateAtr, isFalseBreak, averageAtr } from "./indicators.js";
 import { detectDdb } from "./setups/ddb.js";
 import { detectFb } from "./setups/fb.js";

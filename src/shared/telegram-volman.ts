@@ -2,21 +2,21 @@ import type {
   AnalysisResult,
   TradeSetup,
   PairSummary,
-} from "../charts/chart-types-volman.js";
-import type { ChartTimeframe } from "../charts/chart-types-common.js";
+} from "../charts/model/chart-types-volman.js";
+import type { ChartTimeframe } from "../charts/model/chart-types-common.js";
 import type { Notifier } from "./notifier.js";
 import { createLogger } from "./infra/logger.js";
 import type { PerformanceReport, ClosedPositionSnapshot } from "../charts/performance-tracking-volman.js";
 import {
   getConfiguredChartSignalConfidenceThreshold,
   getConfiguredTpRMultiple,
-} from "../charts/volman-config-env.js";
+} from "../charts/model/volman-config-env.js";
 import { sendMessage, telegramNotifier, notifyError } from "./notification/telegram-client.js";
 import {
   renderSetupChartsBatch,
   getPlaywrightDiagnostics,
   type SetupChartInput,
-} from "../charts/setup-chart-renderer.js";
+} from "../charts/client/setup-chart-renderer.js";
 
 const logger = createLogger("shared:telegram-volman");
 

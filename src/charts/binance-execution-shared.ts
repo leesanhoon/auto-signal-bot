@@ -15,26 +15,26 @@ import {
   placeStopMarketEntryOrder,
   getRegularOrderStatus,
   cancelRegularOrder,
-} from "./binance-futures-client.js";
+} from "./client/binance-futures-client.js";
 import {
   getConfiguredBinanceLeverage,
   getConfiguredBinanceMarginType,
   getConfiguredBinanceRiskPercentPerTrade,
   getConfiguredBinanceWorkingType,
   getConfiguredBinanceMaxConcurrentPositionsVolman,
-} from "./binance-futures-config-env.js";
+} from "./model/binance-futures-config-env.js";
 import {
   computeOrderQuantity,
   roundToTickSize,
   computeRequiredLeverage,
   type LeverageComputationInput,
 } from "./binance-position-sizing.js";
-import { toBinanceSymbol, fetchOhlcHistory } from "./ohlc-provider.js";
+import { toBinanceSymbol, fetchOhlcHistory } from "./client/ohlc-provider.js";
 import { fetchCandleRangeStats } from "./candle-range-stats.js";
 import { sendMessage } from "../shared/notification/telegram-client.js";
 import { createLogger } from "../shared/infra/logger.js";
-import type { ChartTimeframe } from "./chart-types-common.js";
-import { isEmaExitEnabled, getEmaExitPeriod } from "./volman-config-env.js";
+import type { ChartTimeframe } from "./model/chart-types-common.js";
+import { isEmaExitEnabled, getEmaExitPeriod } from "./model/volman-config-env.js";
 import { calculateLatestEma, resolveEmaExitDecision } from "./position-ema-exit.js";
 
 // -4509 "TIF GTE can only be used with open positions" xay ra khi dat SL (closePosition:true,

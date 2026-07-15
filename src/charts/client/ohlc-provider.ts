@@ -1,9 +1,9 @@
-import type { ChartTimeframe } from "./chart-types-common.js";
-import { withRetry } from "../shared/retry.js";
-import { withConfiguredRateLimit } from "../shared/infra/rate-limit.js";
-import { createLogger } from "../shared/infra/logger.js";
-import { formatFetchErrorDetails } from "../shared/infra/fetch-diagnostics.js";
-import { loadOhlcCandleCache, saveOhlcCandleCache } from "./ohlc-cache-repository.js";
+import type { ChartTimeframe } from "../model/chart-types-common.js";
+import { withRetry } from "../../shared/retry.js";
+import { withConfiguredRateLimit } from "../../shared/infra/rate-limit.js";
+import { createLogger } from "../../shared/infra/logger.js";
+import { formatFetchErrorDetails } from "../../shared/infra/fetch-diagnostics.js";
+import { loadOhlcCandleCache, saveOhlcCandleCache } from "../repository/ohlc-cache-repository.js";
 
 const logger = createLogger("charts:ohlc-provider");
 

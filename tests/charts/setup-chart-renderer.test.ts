@@ -1,14 +1,14 @@
 import { describe, expect, test } from "vitest";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 import { calculateEma } from "../../src/charts/indicators.js";
 import {
   buildSetupChartSvg,
   renderSetupChartPng,
   renderSetupChartsBatch,
   getPlaywrightDiagnostics,
-} from "../../src/charts/setup-chart-renderer.js";
+} from "../../src/charts/client/setup-chart-renderer.js";
 
 function buildTrendingCandles(count: number): Candle[] {
   const candles: Candle[] = [];

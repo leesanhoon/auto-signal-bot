@@ -32,8 +32,8 @@ vi.mock("../../src/shared/infra/db.js", () => ({
   }),
 }));
 
-const repository = await import("../../src/charts/positions-repository-volman.js");
-type OpenPosition = import("../../src/charts/positions-repository-volman.js").OpenPosition;
+const repository = await import("../../src/charts/repository/positions-repository-volman.js");
+type OpenPosition = import("../../src/charts/repository/positions-repository-volman.js").OpenPosition;
 
 const position: OpenPosition = {
   id: 1,

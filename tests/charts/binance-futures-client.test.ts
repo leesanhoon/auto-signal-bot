@@ -7,7 +7,7 @@ import {
   placeTrailingStopMarketOrder,
   placeStopMarketOrder,
   placeTakeProfitMarketOrder,
-} from "../../src/charts/binance-futures-client.js";
+} from "../../src/charts/client/binance-futures-client.js";
 
 describe("charts/binance-futures-client", () => {
   beforeEach(() => {

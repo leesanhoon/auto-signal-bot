@@ -1,13 +1,13 @@
 import "../shared/infra/env.js";
 import { writeFile } from "node:fs/promises";
-import type { Candle } from "../charts/ohlc-provider.js";
-import type { ChartContext } from "../charts/chart-types-volman.js";
-import type { SetupChartGeometry } from "../charts/setup-types.js";
+import type { Candle } from "../charts/client/ohlc-provider.js";
+import type { ChartContext } from "../charts/model/chart-types-volman.js";
+import type { SetupChartGeometry } from "../charts/model/setup-types.js";
 import { calculateEma } from "../charts/indicators.js";
 import {
   renderSetupChartsBatch,
   type SetupChartInput,
-} from "../charts/setup-chart-renderer.js";
+} from "../charts/client/setup-chart-renderer.js";
 import { telegramNotifier } from "../shared/notification/telegram-client.js";
 
 // Script demo: dựng chart mẫu cho 6 setup còn lại (RB, ARB, IRB, FB, SB, DDB)

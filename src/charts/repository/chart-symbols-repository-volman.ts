@@ -1,4 +1,4 @@
-import { getDb } from "../shared/infra/db.js";
+import { getDb } from "../../shared/infra/db.js";
 
 export type ChartSymbolRow = {
   name: string;

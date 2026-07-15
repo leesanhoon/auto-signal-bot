@@ -20,7 +20,7 @@ const candles = vi.hoisted(() => ({
   findChartForPair: vi.fn(),
 }));
 
-vi.mock("../../src/charts/positions-repository-volman.js", () => repository);
+vi.mock("../../src/charts/repository/positions-repository-volman.js", () => repository);
 vi.mock("../../src/shared/telegram-volman.js", () => telegram);
 vi.mock("../../src/shared/notification/telegram-client.js", () => telegramClient);
 vi.mock("../../src/charts/candle-range-stats.js", () => candles);

@@ -1,7 +1,7 @@
 import "../shared/infra/env.js";
 import { getDb } from "../shared/infra/db.js";
-import { toBinanceSymbol } from "../charts/ohlc-provider.js";
-import { getExchangeInfoFilters } from "../charts/binance-futures-client.js";
+import { toBinanceSymbol } from "../charts/client/ohlc-provider.js";
+import { getExchangeInfoFilters } from "../charts/client/binance-futures-client.js";
 
 type SeedSymbol = {
   name: string;

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 
 const repoState = vi.hoisted(() => ({
   selectResult: { data: null, error: null },
@@ -25,7 +25,7 @@ vi.mock("../../src/shared/infra/logger.js", () => ({
   createLogger: () => loggerState,
 }));
 
-const ohlcCacheRepository = await import("../../src/charts/ohlc-cache-repository.js");
+const ohlcCacheRepository = await import("../../src/charts/repository/ohlc-cache-repository.js");
 
 const CACHE_KEY = "OANDA:EURUSD:H4";
 

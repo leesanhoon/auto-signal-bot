@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 
 const mocks = vi.hoisted(() => ({
   fetchOhlcHistory: vi.fn(),
@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   resolveSetupConflicts: vi.fn(),
 }));
 
-vi.mock("../../src/charts/ohlc-provider.js", () => ({
+vi.mock("../../src/charts/client/ohlc-provider.js", () => ({
   fetchOhlcHistory: mocks.fetchOhlcHistory,
 }));
 

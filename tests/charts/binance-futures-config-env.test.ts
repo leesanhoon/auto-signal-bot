@@ -3,7 +3,7 @@ import {
   isBinanceHonorOrderTypeEnabledVolman,
   getConfiguredBinanceEntryOrderExpiryMinutes,
   getConfiguredBinanceWorkingType,
-} from "../../src/charts/binance-futures-config-env.js";
+} from "../../src/charts/model/binance-futures-config-env.js";
 
 describe("binance-futures-config-env — entry order type flags", () => {
   const originalEnv = process.env;

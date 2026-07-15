@@ -4,13 +4,13 @@ import {
   loadPendingOrders,
   saveOpenPosition,
   updatePendingOrder,
-} from "./positions-repository-volman.js";
+} from "./repository/positions-repository-volman.js";
 import { validateTradeSetupForOpen } from "./position-engine-volman.js";
 import { createLogger } from "../shared/infra/logger.js";
 import { sendMessage } from "../shared/notification/telegram-client.js";
 import { getCharts } from "./volman-charts.config.js";
-import type { PendingOrder } from "./chart-types-common.js";
-import type { TradeSetup } from "./chart-types-volman.js";
+import type { PendingOrder } from "./model/chart-types-common.js";
+import type { TradeSetup } from "./model/chart-types-volman.js";
 import { resolvePendingOrderDecision } from "./position-decision-volman.js";
 
 const logger = createLogger("charts:check-pending-orders-volman");

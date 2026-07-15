@@ -69,7 +69,7 @@ vi.mock("../../src/charts/analyzer-common.js", () => ({
   buildChartAnalysisCacheKey: mocks.buildChartAnalysisCacheKey,
 }));
 
-vi.mock("../../src/charts/chart-cache-repository-volman.js", () => ({
+vi.mock("../../src/charts/repository/chart-cache-repository-volman.js", () => ({
   loadChartAnalysisCache: mocks.loadChartAnalysisCache,
   loadLatestChartAnalysisCache: mocks.loadLatestChartAnalysisCache,
   saveChartAnalysisCache: mocks.saveChartAnalysisCache,
@@ -108,7 +108,7 @@ vi.mock("../../src/shared/infra/logger.js", () => ({
   createLogger: () => mocks.logger,
 }));
 
-vi.mock("../../src/charts/positions-repository-volman.js", () => ({
+vi.mock("../../src/charts/repository/positions-repository-volman.js", () => ({
   saveOpenPosition: mocks.saveOpenPosition,
   savePendingOrder: mocks.savePendingOrder,
   findOpenPositionIdByPair: mocks.findOpenPositionIdByPair,
@@ -140,7 +140,7 @@ vi.mock("../../src/charts/binance-execution-volman.js", () => ({
   pollPendingEntryOrders: mocks.pollPendingEntryOrders,
 }));
 
-vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
+vi.mock("../../src/charts/model/binance-futures-config-env.js", () => ({
   isBinanceLiveTradingEnabled: mocks.isBinanceLiveTradingEnabled,
   isBinanceLiveTradingEnabledVolman: mocks.isBinanceLiveTradingEnabledVolman,
   isBinanceHonorOrderTypeEnabledVolman: () => false,
@@ -148,7 +148,7 @@ vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
   getConfiguredBinanceWorkingType: () => undefined,
 }));
 
-vi.mock("../../src/charts/volman-config-env.js", () => ({
+vi.mock("../../src/charts/model/volman-config-env.js", () => ({
   getConfiguredChartSignalConfidenceThreshold:
     mocks.getConfiguredChartSignalConfidenceThreshold,
   getConfiguredChartEngineMode: mocks.getConfiguredChartEngineMode,

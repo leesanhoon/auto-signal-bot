@@ -1,5 +1,5 @@
 import "../shared/infra/env.js";
-import { loadClosedPositions } from "./positions-repository-volman.js";
+import { loadClosedPositions } from "./repository/positions-repository-volman.js";
 import { summarizeClosedPositionsPerformance } from "./performance-tracking-volman.js";
 import { buildPerformanceReportMessage } from "../shared/telegram-volman.js";
 import { sendMessage } from "../shared/notification/telegram-client.js";

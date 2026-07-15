@@ -33,10 +33,10 @@ const sendMessage = vi.hoisted(() => vi.fn());
 const fetchOhlcHistory = vi.hoisted(() => vi.fn());
 const fetchCandleRangeStats = vi.hoisted(() => vi.fn());
 
-vi.mock("../../src/charts/binance-futures-client.js", () => client);
-vi.mock("../../src/charts/positions-repository-volman.js", () => repository);
+vi.mock("../../src/charts/client/binance-futures-client.js", () => client);
+vi.mock("../../src/charts/repository/positions-repository-volman.js", () => repository);
 vi.mock("../../src/shared/notification/telegram-client.js", () => ({ sendMessage }));
-vi.mock("../../src/charts/ohlc-provider.js", () => ({
+vi.mock("../../src/charts/client/ohlc-provider.js", () => ({
   toBinanceSymbol: (value: string) => value.replace("BINANCE:", ""),
   fetchOhlcHistory,
 }));
@@ -52,7 +52,7 @@ vi.mock("../../src/shared/telegram-volman.js", async (importOriginal) => {
     ),
   };
 });
-vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
+vi.mock("../../src/charts/model/binance-futures-config-env.js", () => ({
   getConfiguredBinanceLeverage: () => 5,
   getConfiguredBinanceMarginType: () => "ISOLATED",
   getConfiguredBinanceRiskPercentPerTrade: () => 1,

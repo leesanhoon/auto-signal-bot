@@ -1,5 +1,5 @@
-import { getDb } from "../shared/infra/db.js";
-import { createLogger } from "../shared/infra/logger.js";
+import { getDb } from "../../shared/infra/db.js";
+import { createLogger } from "../../shared/infra/logger.js";
 
 const logger = createLogger("charts:scanner-health-repository");
 

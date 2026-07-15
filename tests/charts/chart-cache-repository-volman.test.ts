@@ -27,7 +27,7 @@ vi.mock("../../src/shared/infra/logger.js", () => ({
   createLogger: () => loggerState,
 }));
 
-const chartCacheRepository = await import("../../src/charts/chart-cache-repository-volman.js");
+const chartCacheRepository = await import("../../src/charts/repository/chart-cache-repository-volman.js");
 
 const CANDLE_KEY = "2026-07-03T12";
 

@@ -3,7 +3,7 @@ import type {
   ChartOrderType,
   ChartAnalysisSource,
 } from "./chart-types-common.js";
-import type { Candle } from "./ohlc-provider.js";
+import type { Candle } from "../client/ohlc-provider.js";
 import type { SetupChartGeometry } from "./setup-types.js";
 
 export type {

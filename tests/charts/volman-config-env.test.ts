@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach } from "vitest";
-import { getConfiguredSignalMaxEntryDistancePercent } from "../../src/charts/volman-config-env.js";
+import { getConfiguredSignalMaxEntryDistancePercent } from "../../src/charts/model/volman-config-env.js";
 
 describe("getConfiguredSignalMaxEntryDistancePercent", () => {
   beforeEach(() => {

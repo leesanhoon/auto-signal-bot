@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     "../charts/binance-execution-shared.js"
   );
   const { getExchangeInfoFilters, getPositionAmount, placeMarketOrder, cancelOrder } =
-    await import("../charts/binance-futures-client.js");
+    await import("../charts/client/binance-futures-client.js");
   const { roundToTickSize } = await import("../charts/binance-position-sizing.js");
 
   // --- in-memory "DB" (no Supabase writes) ---
@@ -279,7 +279,7 @@ async function main(): Promise<void> {
       // Verify the real order no longer exists as an open algo order on testnet.
       // Testnet has read-after-write lag on cancel confirmation — retry once before
       // failing (observed: "NEW" immediately after cancel, "CANCELED" ~1s later).
-      const { getOrderStatus } = await import("../charts/binance-futures-client.js");
+      const { getOrderStatus } = await import("../charts/client/binance-futures-client.js");
       let liveStatus = await getOrderStatus(symbol, pending.binanceEntryOrderId);
       if (!(liveStatus instanceof Error) && liveStatus.status !== "CANCELED") {
         await new Promise((r) => setTimeout(r, 2000));

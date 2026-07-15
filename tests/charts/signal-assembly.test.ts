@@ -1,6 +1,6 @@
 ﻿import { describe, expect, test } from "vitest";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
-import type { DetectedSignal, SetupKind } from "../../src/charts/setup-types.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
+import type { DetectedSignal, SetupKind } from "../../src/charts/model/setup-types.js";
 import { calculateEma, calculateAtr } from "../../src/charts/indicators.js";
 import { detectArb } from "../../src/charts/setups/arb.js";
 import { detectBb } from "../../src/charts/setups/bb.js";

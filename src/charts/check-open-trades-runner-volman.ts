@@ -9,7 +9,7 @@ import {
   loadOpenPositions,
   updatePositionDecision,
   applyBreakevenStopLoss,
-} from "./positions-repository-volman.js";
+} from "./repository/positions-repository-volman.js";
 import {
   buildPositionClosedMessage,
   buildBreakevenReminderMessage,
@@ -19,9 +19,9 @@ import { createLogger } from "../shared/infra/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
 import { resolveOpenPositionDecision } from "./position-decision-volman.js";
 import { reconcileBinancePosition } from "./binance-execution-volman.js";
-import { isEmaExitEnabled, getEmaExitPeriod } from "./volman-config-env.js";
+import { isEmaExitEnabled, getEmaExitPeriod } from "./model/volman-config-env.js";
 import { calculateLatestEma } from "./position-ema-exit.js";
-import { fetchOhlcHistory } from "./ohlc-provider.js";
+import { fetchOhlcHistory } from "./client/ohlc-provider.js";
 
 const logger = createLogger("charts:check-open-trades-volman");
 

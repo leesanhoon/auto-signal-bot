@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 
 // ---------------------------------------------------------------------------
 // chart-config-env
@@ -11,7 +11,7 @@ describe("getConfiguredChartEngineMode", () => {
   });
 
   test("defaults to deterministic when env is not set", async () => {
-    const mod = await import("../../src/charts/volman-config-env.js");
+    const mod = await import("../../src/charts/model/volman-config-env.js");
     expect(mod.getConfiguredChartEngineMode()).toBe("deterministic");
   });
 
@@ -19,7 +19,7 @@ describe("getConfiguredChartEngineMode", () => {
     "returns deterministic for %s values",
     async (value) => {
       process.env.CHART_ENGINE_MODE = value;
-      const mod = await import("../../src/charts/volman-config-env.js");
+      const mod = await import("../../src/charts/model/volman-config-env.js");
       expect(mod.getConfiguredChartEngineMode()).toBe("deterministic");
     },
   );
@@ -35,19 +35,19 @@ describe("getEmaExitPeriod", () => {
   });
 
   test("defaults to EMA21 when env is not set", async () => {
-    const mod = await import("../../src/charts/volman-config-env.js");
+    const mod = await import("../../src/charts/model/volman-config-env.js");
     expect(mod.getEmaExitPeriod()).toBe(21);
   });
 
   test("falls back to EMA21 when env is invalid", async () => {
     process.env.EMA_EXIT_PERIOD = "invalid";
-    const mod = await import("../../src/charts/volman-config-env.js");
+    const mod = await import("../../src/charts/model/volman-config-env.js");
     expect(mod.getEmaExitPeriod()).toBe(21);
   });
 
   test("uses a valid configured period", async () => {
     process.env.EMA_EXIT_PERIOD = "34";
-    const mod = await import("../../src/charts/volman-config-env.js");
+    const mod = await import("../../src/charts/model/volman-config-env.js");
     expect(mod.getEmaExitPeriod()).toBe(34);
   });
 });
@@ -82,7 +82,7 @@ describe("analyzeAllChartsDeterministic", () => {
 
   test("handles OHLC fetch error gracefully (skips pair)", async () => {
     // Mock fetchOhlcHistory to return Error
-    const ohlcMod = await import("../../src/charts/ohlc-provider.js");
+    const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(
       new Error("API error"),
     );
@@ -115,7 +115,7 @@ describe("analyzeAllChartsDeterministic", () => {
     }
 
     // Mock fetchOhlcHistory to return our fixture
-    const ohlcMod = await import("../../src/charts/ohlc-provider.js");
+    const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
     const detMod = await import("../../src/charts/deterministic-pipeline.js");
@@ -143,7 +143,7 @@ describe("analyzeAllChartsDeterministic", () => {
       });
     }
 
-    const ohlcMod = await import("../../src/charts/ohlc-provider.js");
+    const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     const fetchSpy = vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
     const detMod = await import("../../src/charts/deterministic-pipeline.js");
@@ -180,7 +180,7 @@ describe("analyzeAllChartsDeterministic", () => {
       });
     }
 
-    const ohlcMod = await import("../../src/charts/ohlc-provider.js");
+    const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     const fetchSpy = vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
     const detMod = await import("../../src/charts/deterministic-pipeline.js");
@@ -218,7 +218,7 @@ describe("analyzeAllChartsDeterministic", () => {
       });
     }
 
-    const ohlcMod = await import("../../src/charts/ohlc-provider.js");
+    const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
     const detMod = await import("../../src/charts/deterministic-pipeline.js");
@@ -246,7 +246,7 @@ describe("analyzeAllChartsDeterministic", () => {
       });
     }
 
-    const ohlcMod = await import("../../src/charts/ohlc-provider.js");
+    const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     const fetchSpy = vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
     const detMod = await import("../../src/charts/deterministic-pipeline.js");

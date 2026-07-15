@@ -1,9 +1,9 @@
-import type { DetectedSignal, SetupKind } from "./setup-types.js";
-import type { TradeSetup, PairSummary, ChartTimeframe, ChartOrderType } from "./chart-types-volman.js";
-import type { Candle } from "./ohlc-provider.js";
+import type { DetectedSignal, SetupKind } from "./model/setup-types.js";
+import type { TradeSetup, PairSummary, ChartTimeframe, ChartOrderType } from "./model/chart-types-volman.js";
+import type { Candle } from "./client/ohlc-provider.js";
 import type { TrendState } from "./indicators.js";
 import { formatPrice, applyPriceSanityChecks } from "./analyzer-volman.js";
-import { getConfiguredTpRMultiple } from "./volman-config-env.js";
+import { getConfiguredTpRMultiple } from "./model/volman-config-env.js";
 
 // ---------------------------------------------------------------------------
 // Rule-to-Vietnamese mapping for reasons

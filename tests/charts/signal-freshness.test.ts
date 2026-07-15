@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { TradeSetup } from "../../src/charts/chart-types-volman.js";
+import type { TradeSetup } from "../../src/charts/model/chart-types-volman.js";
 import { applySignalFreshnessGuard } from "../../src/charts/signal-freshness.js";
-import * as ohlcProvider from "../../src/charts/ohlc-provider.js";
+import * as ohlcProvider from "../../src/charts/client/ohlc-provider.js";
 
-vi.mock("../../src/charts/ohlc-provider.js");
+vi.mock("../../src/charts/client/ohlc-provider.js");
 
 const mockFetchLastPrice = vi.mocked(ohlcProvider.fetchLastPrice);
 

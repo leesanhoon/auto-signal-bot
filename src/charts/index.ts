@@ -3,7 +3,7 @@ import {
   saveOpenPosition,
   findOpenPositionIdByPair,
   loadOpenPairs,
-} from "./positions-repository-volman.js";
+} from "./repository/positions-repository-volman.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
 import { sendMessage, notifyError } from "../shared/notification/telegram-client.js";
 import { sendAllAnalysesVolman } from "../shared/telegram-volman.js";
@@ -11,7 +11,7 @@ import { createLogger } from "../shared/infra/logger.js";
 import {
   recordScannerRunOutcome,
   checkAndMaybeSendErrorStreakAlert,
-} from "./scanner-health-repository-volman.js";
+} from "./repository/scanner-health-repository-volman.js";
 import { validateTradeSetupForOpen } from "./position-engine-volman.js";
 import {
   getConfiguredChartPrimaryTimeframe,
@@ -22,9 +22,9 @@ import {
   shouldSendHeartbeatOnManualRun,
   shouldSendHeartbeatOutsideCloseWindow,
   shouldUseLatestCacheForManualRun,
-} from "./volman-config-env.js";
-import type { AnalysisResult, TradeSetup } from "./chart-types-volman.js";
-import type { ChartTimeframe } from "./chart-types-common.js";
+} from "./model/volman-config-env.js";
+import type { AnalysisResult, TradeSetup } from "./model/chart-types-volman.js";
+import type { ChartTimeframe } from "./model/chart-types-common.js";
 import { applySignalFreshnessGuard } from "./signal-freshness.js";
 import {
   getLastClosedCandleKey,
@@ -34,7 +34,7 @@ import {
   loadChartAnalysisCache,
   loadLatestChartAnalysisCache,
   saveChartAnalysisCache,
-} from "./chart-cache-repository-volman.js";
+} from "./repository/chart-cache-repository-volman.js";
 import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
 import { getCharts, getChartsForTimeframeMode } from "./volman-charts.config.js";
 import {
@@ -44,7 +44,7 @@ import {
 import {
   isBinanceLiveTradingEnabled,
   isBinanceLiveTradingEnabledVolman,
-} from "./binance-futures-config-env.js";
+} from "./model/binance-futures-config-env.js";
 import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
 
 const logger = createLogger("charts:index");

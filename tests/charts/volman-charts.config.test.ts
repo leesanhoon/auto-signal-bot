@@ -4,7 +4,7 @@ const repoState = vi.hoisted(() => ({
   loadActiveChartSymbols: vi.fn(),
 }));
 
-vi.mock("../../src/charts/chart-symbols-repository-volman.js", () => repoState);
+vi.mock("../../src/charts/repository/chart-symbols-repository-volman.js", () => repoState);
 
 describe("charts/volman-charts.config", () => {
   beforeEach(() => {

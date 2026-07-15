@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     getOrderStatus,
     cancelRegularOrder,
     cancelOrder,
-  } = await import("../charts/binance-futures-client.js");
+  } = await import("../charts/client/binance-futures-client.js");
   const { roundToTickSize } = await import("../charts/binance-position-sizing.js");
 
   const filters = await getExchangeInfoFilters(symbol);

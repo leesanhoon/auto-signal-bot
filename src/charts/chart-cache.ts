@@ -1,4 +1,4 @@
-import type { ChartTimeframe } from "./chart-types-common.js";
+import type { ChartTimeframe } from "./model/chart-types-common.js";
 
 const TIMEFRAME_INTERVAL_MS: Record<ChartTimeframe, number> = {
   M15: 15 * 60 * 1000,

@@ -1,10 +1,10 @@
 import "../shared/infra/env.js";
 import { createLogger } from "../shared/infra/logger.js";
 import { getCharts } from "./volman-charts.config.js";
-import { fetchOhlcHistory } from "./ohlc-provider.js";
+import { fetchOhlcHistory } from "./client/ohlc-provider.js";
 import { runSetupBacktest, DEFAULT_FEE_SLIPPAGE_CONFIG, ZERO_FEE_SLIPPAGE_CONFIG } from "./setup-backtest.js";
-import type { Candle } from "./ohlc-provider.js";
-import type { ChartTimeframe } from "./chart-types-common.js";
+import type { Candle } from "./client/ohlc-provider.js";
+import type { ChartTimeframe } from "./model/chart-types-common.js";
 import type { ExitMode, FillMode, FeeSlippageConfig } from "./setup-backtest.js";
 
 const logger = createLogger("charts:setup-backtest");

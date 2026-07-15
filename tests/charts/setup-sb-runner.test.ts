@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import type { Candle } from "../../src/charts/ohlc-provider.js";
-import type { DetectedSignal, DetectionContext } from "../../src/charts/setup-types.js";
+import type { Candle } from "../../src/charts/client/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext } from "../../src/charts/model/setup-types.js";
 import { runSbDetection } from "../../src/charts/setup-sb-runner.js";
 
 describe("setup-sb-runner: runSbDetection", () => {

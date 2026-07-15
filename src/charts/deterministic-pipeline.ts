@@ -1,6 +1,6 @@
-import type { AnalysisResult, ChartTimeframe } from "./chart-types-volman.js";
-import type { Candle } from "./ohlc-provider.js";
-import { fetchOhlcHistory } from "./ohlc-provider.js";
+import type { AnalysisResult, ChartTimeframe } from "./model/chart-types-volman.js";
+import type { Candle } from "./client/ohlc-provider.js";
+import { fetchOhlcHistory } from "./client/ohlc-provider.js";
 import { calculateEma, calculateAtr, classifyTrend, averageAtr } from "./indicators.js";
 import { detectDdb } from "./setups/ddb.js";
 import { detectFb } from "./setups/fb.js";
@@ -11,7 +11,7 @@ import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
 import { runSbDetection } from "./setup-sb-runner.js";
 import { buildTradeSetupFromSignal, buildPairSummaryFromContext } from "./signal-assembly.js";
-import type { DetectedSignal } from "./setup-types.js";
+import type { DetectedSignal } from "./model/setup-types.js";
 import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("charts:deterministic-pipeline");

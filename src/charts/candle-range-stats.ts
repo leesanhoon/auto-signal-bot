@@ -1,6 +1,6 @@
-import type { CandleRangeStats, ChartTimeframe, ChartConfig } from "./chart-types-common.js";
+import type { CandleRangeStats, ChartTimeframe, ChartConfig } from "./model/chart-types-common.js";
 import { createLogger } from "../shared/infra/logger.js";
-import { toBinanceSymbol } from "./ohlc-provider.js";
+import { toBinanceSymbol } from "./client/ohlc-provider.js";
 import { withRetry } from "../shared/retry.js";
 import { withConfiguredRateLimit } from "../shared/infra/rate-limit.js";
 

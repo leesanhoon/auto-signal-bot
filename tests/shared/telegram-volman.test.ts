@@ -2,9 +2,9 @@ import { describe, test, expect, vi } from "vitest";
 
 const shouldFailRender = vi.hoisted(() => ({ value: false }));
 
-vi.mock("../../src/charts/setup-chart-renderer.js", async (importOriginal) => {
+vi.mock("../../src/charts/client/setup-chart-renderer.js", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../src/charts/setup-chart-renderer.js")>();
+    await importOriginal<typeof import("../../src/charts/client/setup-chart-renderer.js")>();
   return {
     ...actual,
     renderSetupChartsBatch: vi.fn(async (...args: Parameters<typeof actual.renderSetupChartsBatch>) => {
@@ -33,7 +33,7 @@ import {
 import type {
   AnalysisResult,
   TradeSetup,
-} from "../../src/charts/chart-types-volman.js";
+} from "../../src/charts/model/chart-types-volman.js";
 import type { Notifier } from "../../src/shared/notifier.js";
 
 function createMockNotifier(): Notifier & { sentMessages: string[] } {
