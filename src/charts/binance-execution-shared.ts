@@ -189,6 +189,9 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   // Max concurrent positions gate
   getOpenPositionCount?: () => Promise<number>;
   maxConcurrentPositions?: number;
+  // Equity-curve risk multiplier (optional, mac dinh TAT qua isEquityCurveSizingEnabled
+  // phia config Volman). Tra ve 1 neu tat hoac chua du du lieu — KHONG anh huong risk mac dinh.
+  getEquityCurveRiskMultiplier?: () => Promise<number>;
   // 1R breakeven support (subtask 03) — lay OHLC/gia tri cao-thap ke tu luc mo vi the de kiem tra 1R
   fetchPriceStatsSinceOpen?: (position: any) => Promise<{ high: number; low: number; lastClose: number | null } | Error>;
   // Cap nhat DB: dat SL order moi tren san + update DB (stop_loss VA binance_sl_order_id).
@@ -321,6 +324,19 @@ export function createOpenBinanceFuturesPosition<
     const marginType = getConfiguredBinanceMarginType();
     const riskPercent = getConfiguredBinanceRiskPercentPerTrade();
     const riskUsdt = config.getConfiguredRiskUsdt?.();
+    const equityCurveMultiplier = config.getEquityCurveRiskMultiplier
+      ? await config.getEquityCurveRiskMultiplier()
+      : 1;
+    const effectiveRiskPercent = riskPercent * equityCurveMultiplier;
+    const effectiveRiskUsdt = riskUsdt !== undefined ? riskUsdt * equityCurveMultiplier : undefined;
+    if (equityCurveMultiplier !== 1) {
+      logger.info("Equity-curve risk multiplier ap dung", {
+        pair: setup.pair,
+        multiplier: equityCurveMultiplier,
+        effectiveRiskPercent,
+        effectiveRiskUsdt,
+      });
+    }
     const side: "BUY" | "SELL" = setup.direction === "LONG" ? "BUY" : "SELL";
     const closeSide: "BUY" | "SELL" = side === "BUY" ? "SELL" : "BUY";
 
@@ -395,8 +411,8 @@ export function createOpenBinanceFuturesPosition<
       // Tinh sizing TRUOC voi leverage placeholder (maxLeverage) de lay notional
       const sizingWithPlaceholder = computeOrderQuantity({
         balanceUsdt: balance,
-        riskPercent,
-        riskUsdt,
+        riskPercent: effectiveRiskPercent,
+        riskUsdt: effectiveRiskUsdt,
         entry: plan.entry,
         stopLoss: plan.stopLoss,
         leverage: maxLeverage,
@@ -419,8 +435,8 @@ export function createOpenBinanceFuturesPosition<
       // Tinh lai sizing voi leverage thuc te (quantity khong doi, chi marginRequired thay doi)
       const sizing = computeOrderQuantity({
         balanceUsdt: balance,
-        riskPercent,
-        riskUsdt,
+        riskPercent: effectiveRiskPercent,
+        riskUsdt: effectiveRiskUsdt,
         entry: plan.entry,
         stopLoss: plan.stopLoss,
         leverage,

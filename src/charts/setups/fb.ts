@@ -1,7 +1,7 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../setup-types.js";
 import { classifyTrend } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback, applyPriorConsolidationPenalty } from "./shared.js";
 
 /**
  * Tìm điểm bắt đầu pullback: nến cực trị của trend (đỉnh cao nhất với LONG,
@@ -166,6 +166,7 @@ export function detectFb(
   let confidence = baseConfidence;
   const slope = computeSlope(ctx.ma21, ctx.atr14, index);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
+  confidence = applyPriorConsolidationPenalty(candles, entry, atr, trendStartIndex - 1, confidence, trace);
 
   // Đường pullback vẽ từ CỰC TRỊ trend (đỉnh/đáy) về nến chạm EMA21, không phải
   // từ điểm bắt đầu trend — trước đây line đè lên toàn bộ con sóng trend.

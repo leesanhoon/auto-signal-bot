@@ -79,3 +79,28 @@ export function getConfiguredBinanceWorkingType(): "MARK_PRICE" | "CONTRACT_PRIC
   const raw = process.env.BINANCE_WORKING_TYPE?.trim().toUpperCase();
   return raw === "MARK_PRICE" || raw === "CONTRACT_PRICE" ? raw : undefined;
 }
+
+export function isBinanceEquityCurveSizingEnabledVolman(): boolean {
+  return readBooleanEnv("BINANCE_EQUITY_CURVE_SIZING_ENABLED_VOLMAN", false); // MAC DINH TAT
+}
+
+export function getConfiguredEquityCurveStreakCount(): number {
+  const raw = process.env.BINANCE_EQUITY_CURVE_STREAK_COUNT?.trim();
+  if (!raw) return 2;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 2;
+}
+
+export function getConfiguredEquityCurveWinMultiplier(): number {
+  const raw = process.env.BINANCE_EQUITY_CURVE_WIN_MULTIPLIER?.trim();
+  if (!raw) return 2;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2;
+}
+
+export function getConfiguredEquityCurveLossMultiplier(): number {
+  const raw = process.env.BINANCE_EQUITY_CURVE_LOSS_MULTIPLIER?.trim();
+  if (!raw) return 0.25;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0.25;
+}

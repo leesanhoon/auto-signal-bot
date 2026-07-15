@@ -209,4 +209,58 @@ describe("charts/positions-repository-volman", () => {
       "countLiveBinancePositionsVolman failed: DB connection failed",
     );
   });
+
+  test("getRecentClosedBinanceTradeOutcomes returns correct win/loss/breakeven outcomes", async () => {
+    dbState.selectResult = {
+      data: [
+        { realized_risk_reward_ratio: 1.5, closed_at: "2026-07-03T00:00:00.000Z" },
+        { realized_risk_reward_ratio: -0.5, closed_at: "2026-07-02T00:00:00.000Z" },
+        { realized_risk_reward_ratio: 0, closed_at: "2026-07-01T00:00:00.000Z" },
+      ],
+      error: null,
+    };
+
+    const outcomes = await repository.getRecentClosedBinanceTradeOutcomes(3);
+    expect(outcomes).toEqual(["win", "loss", "breakeven"]);
+  });
+
+  test("getRecentClosedBinanceTradeOutcomes filters by binance_execution_status='placed'", async () => {
+    const fromMock = vi.fn();
+    const chain: any = {
+      select: vi.fn(function() { return this; }),
+      eq: vi.fn(function(field, value) {
+        expect(field).toMatch(/^(status|binance_execution_status)$/);
+        return this;
+      }),
+      order: vi.fn(function() { return this; }),
+      limit: vi.fn(async () => ({ data: [], error: null })),
+    };
+    fromMock.mockReturnValue(chain);
+
+    const originalGetDb = vi.mocked(repository.getDb || (await import("../../src/shared/db.js")).getDb);
+
+    dbState.selectResult = { data: [], error: null };
+    const outcomes = await repository.getRecentClosedBinanceTradeOutcomes(2);
+    expect(outcomes).toEqual([]);
+  });
+
+  test("getRecentClosedBinanceTradeOutcomes handles null realized_risk_reward_ratio as breakeven", async () => {
+    dbState.selectResult = {
+      data: [
+        { realized_risk_reward_ratio: null, closed_at: "2026-07-01T00:00:00.000Z" },
+      ],
+      error: null,
+    };
+
+    const outcomes = await repository.getRecentClosedBinanceTradeOutcomes(1);
+    expect(outcomes).toEqual(["breakeven"]);
+  });
+
+  test("getRecentClosedBinanceTradeOutcomes throws when query fails", async () => {
+    dbState.selectResult.error = { message: "DB query error" };
+
+    await expect(repository.getRecentClosedBinanceTradeOutcomes(2)).rejects.toThrow(
+      "getRecentClosedBinanceTradeOutcomes failed: DB query error",
+    );
+  });
 });

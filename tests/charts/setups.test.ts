@@ -265,7 +265,7 @@ describe("BB — Block Break", () => {
     expect(signal!.ruleTrace.find((t) => t.startsWith("Nen "))).toBe(
       "Nen LOOSE (range=0.16300, max=0.16800)",
     );
-    expect(signal!.confidence).toBe(65);
+    expect(signal!.confidence).toBe(55); // 65 - 10 penalty for prior consolidation in fixture
   });
 
   test("prefers the widest compression window that still satisfies the threshold", () => {
@@ -394,7 +394,7 @@ describe("RB — Range Break", () => {
     expect(signal!.ruleTrace.find((t) => t.startsWith("Nen "))).toBe(
       "Nen LOOSE (range=2.20000, max=4.16950)",
     );
-    expect(signal!.confidence).toBe(50);
+    expect(signal!.confidence).toBe(40); // 50 - 10 penalty for prior consolidation in fixture
   });
 });
 
@@ -567,7 +567,7 @@ describe("ARB — Advanced Range Break", () => {
     expect(signal!.ruleTrace.find((t) => t.startsWith("Nen "))).toBe(
       "Nen LOOSE (range=2.00000, max=3.55276)",
     );
-    expect(signal!.confidence).toBe(70);
+    expect(signal!.confidence).toBe(60); // 70 - 10 penalty for prior consolidation in fixture
   });
 
   test("rejects a range whose EMA21 distance only clears the gate when using the breakout candle's inflated ATR", () => {
@@ -725,7 +725,7 @@ describe("IRB — Inside Range Break", () => {
 
     expect(signal).not.toBeNull();
     expect(signal!.ruleTrace).toContain("RangeInner TIGHT, RangeOuter LOOSE");
-    expect(signal!.confidence).toBe(40);
+    expect(signal!.confidence).toBe(30); // 40 - 10 penalty for prior consolidation in fixture
   });
 });
 

@@ -13,6 +13,7 @@ import {
   computeTakeProfit,
   applyStandardConfidenceAdjustments,
   isHarmonicPullback,
+  applyPriorConsolidationPenalty,
 } from "./shared.js";
 
 /**
@@ -127,6 +128,7 @@ export function detectDdb(
     bodyRatio,
     trace,
   );
+  confidence = applyPriorConsolidationPenalty(candles, entry, atr, pullbackStartIndex - 1, confidence, trace);
 
   const highlightCandles = [];
   for (let i = dojiStart; i <= index; i++) {

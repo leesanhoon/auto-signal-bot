@@ -1,7 +1,7 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../setup-types.js";
 import { classifyTrend, isFalseBreak } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback } from "./shared.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback, applyPriorConsolidationPenalty } from "./shared.js";
 
 /**
  * SB — Second Break
@@ -137,6 +137,7 @@ export function detectSb(
     const slope = computeSlope(ctx.ma21, ctx.atr14, index);
     const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
     confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
+    confidence = applyPriorConsolidationPenalty(candles, entry, atr, pullbackStart - 1, confidence, trace);
 
     const geometry: SetupChartGeometry = {
       boxes: [],
@@ -269,6 +270,7 @@ export function detectSb(
     const slope = computeSlope(ctx.ma21, ctx.atr14, index);
     const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
     confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
+    confidence = applyPriorConsolidationPenalty(candles, entry, atr, pullbackStartShort - 1, confidence, trace);
 
     const geometry: SetupChartGeometry = {
       boxes: [],

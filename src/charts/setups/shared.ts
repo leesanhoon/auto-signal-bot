@@ -1,3 +1,4 @@
+import type { Candle } from "../ohlc-provider.js";
 import { getConfiguredTpRMultiple } from "../volman-config-env.js";
 
 /**
@@ -80,6 +81,46 @@ export function applyCompressionTightnessBonus(
     ruleTrace.push("Bonus confidence: nen chặt, phá vỡ đáng tin cậy (+5)");
   }
   return Math.max(0, Math.min(100, confidence));
+}
+
+/**
+ * Phạt confidence nếu tìm thấy vùng giá đã bị "dằn co" (test ≥2 lần) gần mức entry,
+ * trong lịch sử NGAY TRƯỚC vùng nén của setup — vùng này đóng vai trò kháng cự/hỗ trợ
+ * cũ, cản trở đà đi của giá sau khi vào lệnh (tài liệu Bob Volman — Bốn Cách Tăng
+ * Winrate, "Lỗi 4"). Chỉ nhìn "gần" (30 nến ngay trước), không lục lọi quá xa.
+ */
+export function applyPriorConsolidationPenalty(
+  candles: Candle[],
+  entry: number,
+  atr: number,
+  lookbackEndIndex: number,
+  confidence: number,
+  ruleTrace: string[],
+): number {
+  if (lookbackEndIndex < 2 || atr <= 0) return confidence;
+
+  const LOOKBACK_CANDLES = 30;
+  const TOLERANCE_ATR = 0.3;
+  const startIndex = Math.max(0, lookbackEndIndex - LOOKBACK_CANDLES);
+  const tolerance = TOLERANCE_ATR * atr;
+
+  let touchCount = 0;
+  for (let i = startIndex; i <= lookbackEndIndex; i++) {
+    const c = candles[i];
+    if (!c) continue;
+    if (Math.abs(c.high - entry) <= tolerance || Math.abs(c.low - entry) <= tolerance) {
+      touchCount++;
+    }
+  }
+
+  if (touchCount >= 2) {
+    ruleTrace.push(
+      `Penalty: vung dan co gan entry (${touchCount} lan cham trong ${lookbackEndIndex - startIndex + 1} nen truoc do) -> can tro da gia (-10)`,
+    );
+    return Math.max(0, Math.min(100, confidence - 10));
+  }
+
+  return confidence;
 }
 
 /**

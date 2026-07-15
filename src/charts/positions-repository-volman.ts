@@ -364,6 +364,26 @@ export async function loadClosedPositions(since?: string): Promise<ClosedPositio
   }));
 }
 
+export type TradeOutcome = "win" | "loss" | "breakeven";
+
+export async function getRecentClosedBinanceTradeOutcomes(limit: number): Promise<TradeOutcome[]> {
+  const { data, error } = await (getDb().from("open_positions_volman") as any)
+    .select("realized_risk_reward_ratio, closed_at")
+    .eq("status", "closed")
+    .eq("binance_execution_status", "placed")
+    .order("closed_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`getRecentClosedBinanceTradeOutcomes failed: ${error.message}`);
+
+  return (data ?? []).map((row: { realized_risk_reward_ratio: number | null }) => {
+    const r = row.realized_risk_reward_ratio ?? 0;
+    if (r > 0) return "win";
+    if (r < 0) return "loss";
+    return "breakeven";
+  });
+}
+
 export async function updatePositionDecision(
   id: number,
   decision: PositionDecisionOutcome,

@@ -9,8 +9,13 @@ import {
   isBinanceHonorOrderTypeEnabledVolman,
   getConfiguredBinanceEntryOrderExpiryMinutes,
   getConfiguredBinanceMaxConcurrentPositionsVolman,
+  isBinanceEquityCurveSizingEnabledVolman,
+  getConfiguredEquityCurveStreakCount,
+  getConfiguredEquityCurveWinMultiplier,
+  getConfiguredEquityCurveLossMultiplier,
 } from "./binance-futures-config-env.js";
 import { calculateRiskRewardPlan } from "./position-engine-volman.js";
+import { computeEquityCurveMultiplier } from "./binance-position-sizing.js";
 import {
   saveBinanceExecutionDetails,
   saveBinanceExecutionFailure,
@@ -20,6 +25,7 @@ import {
   closeExpiredEntryOrderPosition,
   countLiveBinancePositionsVolman,
   applyBinanceBreakevenStopLoss,
+  getRecentClosedBinanceTradeOutcomes,
 } from "./positions-repository-volman.js";
 import { fetchCandleRangeStats } from "./candle-range-stats.js";
 import { buildBreakevenReminderMessage } from "../shared/telegram-volman.js";
@@ -59,6 +65,16 @@ const config = {
   getEmaExitTimeframe: (position: OpenPosition) => position.primaryTimeframe ?? "H4",
   getOpenPositionCount: () => countLiveBinancePositionsVolman(),
   maxConcurrentPositions: getConfiguredBinanceMaxConcurrentPositionsVolman(),
+  getEquityCurveRiskMultiplier: async () => {
+    if (!isBinanceEquityCurveSizingEnabledVolman()) return 1;
+    const outcomes = await getRecentClosedBinanceTradeOutcomes(getConfiguredEquityCurveStreakCount());
+    return computeEquityCurveMultiplier(
+      outcomes,
+      getConfiguredEquityCurveStreakCount(),
+      getConfiguredEquityCurveWinMultiplier(),
+      getConfiguredEquityCurveLossMultiplier(),
+    );
+  },
   // 1R breakeven support (subtask 03)
   fetchPriceStatsSinceOpen: (position: OpenPosition) =>
     fetchCandleRangeStats(position.binanceSymbol as string, new Date(position.openedAt).getTime()),

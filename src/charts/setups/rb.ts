@@ -1,7 +1,7 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind, ChartMarker } from "../setup-types.js";
 import { detectCompression, classifyCompressionTightness } from "../indicators.js";
-import { baseConfidence, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
+import { baseConfidence, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus, applyPriorConsolidationPenalty } from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";
 
 /**
@@ -165,6 +165,7 @@ export function detectRb(
       // Reuse slopeNow (already calculated above) instead of recalculating
       confidence = applyStandardConfidenceAdjustments(confidence, slopeNow, bodyRatio, trace);
       confidence = applyCompressionTightnessBonus(confidence, tightness, trace);
+      confidence = applyPriorConsolidationPenalty(candles, entry, atr, range.startIndex - 1, confidence, trace);
 
       return {
         setup: kind,

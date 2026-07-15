@@ -122,3 +122,21 @@ export function computeRequiredLeverage(
 
   return { leverage };
 }
+
+export function computeEquityCurveMultiplier(
+  outcomes: Array<"win" | "loss" | "breakeven">,
+  streakCount: number,
+  winMultiplier: number,
+  lossMultiplier: number,
+): number {
+  const SAFETY_MIN = 0.1;
+  const SAFETY_MAX = 4;
+  const clamp = (v: number) => Math.max(SAFETY_MIN, Math.min(SAFETY_MAX, v));
+
+  if (outcomes.length < streakCount) return 1;
+
+  const recent = outcomes.slice(0, streakCount);
+  if (recent.every((o) => o === "win")) return clamp(winMultiplier);
+  if (recent.every((o) => o === "loss")) return clamp(lossMultiplier);
+  return 1;
+}

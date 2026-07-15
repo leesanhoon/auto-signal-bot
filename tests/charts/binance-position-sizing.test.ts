@@ -3,6 +3,7 @@ import {
   computeOrderQuantity,
   roundToTickSize,
   computeRequiredLeverage,
+  computeEquityCurveMultiplier,
   type PositionSizingInput,
   type LeverageComputationInput,
 } from "../../src/charts/binance-position-sizing.js";
@@ -292,6 +293,74 @@ describe("charts/binance-position-sizing", () => {
       if (!(result instanceof Error)) {
         expect(result.leverage).toBe(1);
       }
+    });
+  });
+
+  describe("computeEquityCurveMultiplier", () => {
+    it("returns 1 when outcomes length < streakCount", () => {
+      const outcomes = ["win", "loss"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 3, 2, 0.25);
+      expect(result).toBe(1);
+    });
+
+    it("returns winMultiplier when all N recent outcomes are 'win'", () => {
+      const outcomes = ["win", "win", "loss", "win"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 0.25);
+      expect(result).toBe(2);
+    });
+
+    it("returns lossMultiplier when all N recent outcomes are 'loss'", () => {
+      const outcomes = ["loss", "loss", "win", "loss"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 0.25);
+      expect(result).toBe(0.25);
+    });
+
+    it("returns 1 when outcomes are mixed (win and loss in first N)", () => {
+      const outcomes = ["win", "loss", "win"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 0.25);
+      expect(result).toBe(1);
+    });
+
+    it("returns 1 when 'breakeven' is in first N outcomes", () => {
+      const outcomes = ["win", "breakeven", "loss"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 0.25);
+      expect(result).toBe(1);
+    });
+
+    it("clamps winMultiplier to SAFETY_MAX (4) when configured value is too high", () => {
+      const outcomes = ["win", "win"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 100, 0.25);
+      expect(result).toBe(4);
+    });
+
+    it("clamps lossMultiplier to SAFETY_MIN (0.1) when configured value is too low", () => {
+      const outcomes = ["loss", "loss"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 0.001);
+      expect(result).toBe(0.1);
+    });
+
+    it("respects custom valid winMultiplier within clamp range", () => {
+      const outcomes = ["win", "win", "win"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 3, 3.5, 0.25);
+      expect(result).toBe(3.5);
+    });
+
+    it("respects custom valid lossMultiplier within clamp range", () => {
+      const outcomes = ["loss", "loss"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 0.5);
+      expect(result).toBe(0.5);
+    });
+
+    it("clamps lossMultiplier to SAFETY_MAX (4) if improperly configured high", () => {
+      const outcomes = ["loss", "loss"] as const;
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 10);
+      expect(result).toBe(4);
+    });
+
+    it("handles empty outcomes array", () => {
+      const outcomes: Array<"win" | "loss" | "breakeven"> = [];
+      const result = computeEquityCurveMultiplier(outcomes, 2, 2, 0.25);
+      expect(result).toBe(1);
     });
   });
 

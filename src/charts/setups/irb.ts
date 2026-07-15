@@ -1,7 +1,7 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind } from "../setup-types.js";
 import { detectCompression, classifyCompressionTightness } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus, applyPriorConsolidationPenalty } from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";
 
 function checkShiftedFallback(
@@ -179,6 +179,7 @@ export function detectIrb(
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
   // Apply bonus for inner range tightness (inner is what breaks out, so it's more critical)
   confidence = applyCompressionTightnessBonus(confidence, tightnessInner, trace);
+  confidence = applyPriorConsolidationPenalty(candles, entry, atr, rangeOuter.startIndex - 1, confidence, trace);
 
   confidence = Math.max(0, Math.min(100, confidence));
 

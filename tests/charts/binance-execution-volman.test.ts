@@ -27,6 +27,7 @@ const repository = vi.hoisted(() => ({
   closeExpiredEntryOrderPosition: vi.fn(),
   countLiveBinancePositionsVolman: vi.fn(),
   applyBinanceBreakevenStopLoss: vi.fn(),
+  getRecentClosedBinanceTradeOutcomes: vi.fn(),
 }));
 const sendMessage = vi.hoisted(() => vi.fn());
 const fetchOhlcHistory = vi.hoisted(() => vi.fn());
@@ -60,6 +61,10 @@ vi.mock("../../src/charts/binance-futures-config-env.js", () => ({
   isBinanceHonorOrderTypeEnabledVolman: () => false,
   getConfiguredBinanceEntryOrderExpiryMinutes: () => 60,
   getConfiguredBinanceMaxConcurrentPositionsVolman: () => 3,
+  isBinanceEquityCurveSizingEnabledVolman: () => false,
+  getConfiguredEquityCurveStreakCount: () => 2,
+  getConfiguredEquityCurveWinMultiplier: () => 2,
+  getConfiguredEquityCurveLossMultiplier: () => 0.25,
 }));
 vi.mock("../../src/charts/position-engine-volman.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/charts/position-engine-volman.js")>();

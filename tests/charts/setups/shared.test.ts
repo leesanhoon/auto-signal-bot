@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect } from "vitest";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments } from "../../../src/charts/setups/shared.js";
+import type { Candle } from "../../../src/charts/ohlc-provider.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyPriorConsolidationPenalty } from "../../../src/charts/setups/shared.js";
 
 const originalTpRMultiple = process.env.TP_R_MULTIPLE;
 
@@ -168,6 +169,135 @@ describe("shared setup helpers", () => {
       const trace: string[] = [];
       applyStandardConfidenceAdjustments(50, 0.4, 0.25, trace);
       expect(trace.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("applyPriorConsolidationPenalty", () => {
+    const createCandle = (high: number, low: number, close: number = (high + low) / 2): Candle => ({
+      open: close,
+      high,
+      low,
+      close,
+    });
+
+    it("should penalize -10 when >=2 candles touch near entry within lookback window", () => {
+      const candles: Candle[] = [
+        createCandle(100, 95),
+        createCandle(101, 94),
+        createCandle(100.3, 95.1), // touch entry (100.3 near 100)
+        createCandle(102, 93),
+        createCandle(100.2, 95.2), // touch entry again (100.2 near 100)
+      ];
+      const trace: string[] = [];
+      const result = applyPriorConsolidationPenalty(candles, 100, 10, 4, 50, trace);
+      expect(result).toBe(40); // 50 - 10
+      expect(trace).toContainEqual(expect.stringContaining("Penalty"));
+      expect(trace).toContainEqual(expect.stringContaining("vung dan co"));
+    });
+
+    it("should not penalize when only 1 candle touches within lookback window", () => {
+      const candles: Candle[] = [
+        createCandle(110, 105), // no touch (far from entry)
+        createCandle(111, 104), // no touch
+        createCandle(100.2, 99.8), // single touch (high touches)
+      ];
+      const trace: string[] = [];
+      const result = applyPriorConsolidationPenalty(candles, 100, 10, 2, 50, trace);
+      expect(result).toBe(50); // no change
+      expect(trace.length).toBe(0); // no trace added
+    });
+
+    it("should not penalize when no candles touch within lookback window", () => {
+      const candles: Candle[] = [
+        createCandle(110, 105),
+        createCandle(111, 104),
+      ];
+      const trace: string[] = [];
+      const result = applyPriorConsolidationPenalty(candles, 100, 10, 1, 50, trace);
+      expect(result).toBe(50); // no change
+      expect(trace.length).toBe(0);
+    });
+
+    it("should safely return confidence when lookbackEndIndex < 2", () => {
+      const candles: Candle[] = [
+        createCandle(100.2, 99.8), // would touch if checked
+      ];
+      const trace: string[] = [];
+      const result = applyPriorConsolidationPenalty(candles, 100, 10, 0, 50, trace);
+      expect(result).toBe(50); // no penalty for insufficient history
+      expect(trace.length).toBe(0);
+    });
+
+    it("should safely return confidence when atr <= 0", () => {
+      const candles: Candle[] = [
+        createCandle(100.2, 99.8),
+      ];
+      const trace: string[] = [];
+      const result = applyPriorConsolidationPenalty(candles, 100, 0, 0, 50, trace);
+      expect(result).toBe(50); // no penalty for invalid ATR
+      expect(trace.length).toBe(0);
+    });
+
+    it("should respect the 30-candle lookback window (ignore touches outside)", () => {
+      const candles: Candle[] = [];
+      // Create 50 candles, with touches at index 5 and 35
+      for (let i = 0; i < 50; i++) {
+        if (i === 5 || i === 35) {
+          candles.push(createCandle(100.2, 99.8)); // touch at entry
+        } else {
+          candles.push(createCandle(110, 105)); // no touch
+        }
+      }
+      const trace: string[] = [];
+      // lookbackEndIndex = 40, LOOKBACK_CANDLES = 30, so range is [11, 40]
+      // Only touch at index 35 is within range, 5 is outside
+      const result = applyPriorConsolidationPenalty(candles, 100, 10, 40, 50, trace);
+      expect(result).toBe(50); // only 1 touch in window, no penalty
+      expect(trace.length).toBe(0);
+    });
+
+    it("should clamp confidence to 0 when penalty brings it below 0", () => {
+      const candles: Candle[] = [];
+      // Create enough candles with touches at the end of the window
+      for (let i = 0; i < 35; i++) {
+        if (i === 30 || i === 34) {
+          candles.push(createCandle(100.2, 99.8)); // touch entry at specific indices
+        } else {
+          candles.push(createCandle(110, 105)); // no touch elsewhere
+        }
+      }
+      const trace: string[] = [];
+      // lookbackEndIndex = 34, window = [5, 34], touches at 30 and 34 → 2 touches
+      const result = applyPriorConsolidationPenalty(candles, 100, 10, 34, 5, trace);
+      expect(result).toBe(0); // 5 - 10 = -5, clamp to 0
+      expect(trace).toContainEqual(expect.stringContaining("Penalty"));
+    });
+
+    it("should use tolerance of 0.3 * ATR for touch detection", () => {
+      const atr = 10;
+      const tolerance = 0.3 * atr; // 3
+      const candles: Candle[] = [
+        createCandle(100 + tolerance, 100 - tolerance), // just at edge of tolerance
+        createCandle(100 + tolerance + 0.01, 100 - tolerance - 0.01), // just outside tolerance
+      ];
+      const trace: string[] = [];
+      const result = applyPriorConsolidationPenalty(candles, 100, atr, 1, 50, trace);
+      expect(result).toBe(50); // only 1 touch, no penalty
+      expect(trace.length).toBe(0);
+    });
+
+    it("should count touches on both high and low sides separately", () => {
+      const candles: Candle[] = [
+        createCandle(100.2, 99.8), // both high and low touch entry
+        createCandle(110, 105),    // no touch
+      ];
+      const trace: string[] = [];
+      const result = applyPriorConsolidationPenalty(candles, 100, 10, 1, 50, trace);
+      // one candle with both high and low touching counts as separate touches? Actually no—
+      // the logic checks `Math.abs(c.high - entry) <= tolerance OR Math.abs(c.low - entry) <= tolerance`
+      // so it counts as 1 touch per candle, not 2
+      expect(result).toBe(50); // only 1 candle with touch, no penalty
+      expect(trace.length).toBe(0);
     });
   });
 });

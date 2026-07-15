@@ -16,6 +16,7 @@ import {
   computeTakeProfit,
   applyStandardConfidenceAdjustments,
   applyCompressionTightnessBonus,
+  applyPriorConsolidationPenalty,
 } from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";
 
@@ -137,6 +138,7 @@ export function detectBb(
     trace,
   );
   confidence = applyCompressionTightnessBonus(confidence, tightness, trace);
+  confidence = applyPriorConsolidationPenalty(candles, entry, atr, block.startIndex - 1, confidence, trace);
 
   return {
     setup: kind,

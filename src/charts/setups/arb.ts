@@ -1,7 +1,7 @@
 import type { Candle } from "../ohlc-provider.js";
 import type { DetectedSignal, DetectionContext, SetupKind, ChartMarker } from "../setup-types.js";
 import { detectCompression, classifyCompressionTightness } from "../indicators.js";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus } from "./shared.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus, applyPriorConsolidationPenalty } from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";
 
 /**
@@ -160,6 +160,7 @@ export function detectArb(
   const bodyRatio = computeBodyRatio(candles[index].open, candles[index].high, candles[index].low, candles[index].close);
   confidence = applyStandardConfidenceAdjustments(confidence, slope, bodyRatio, trace);
   confidence = applyCompressionTightnessBonus(confidence, tightness, trace);
+  confidence = applyPriorConsolidationPenalty(candles, entry, atr, range.startIndex - 1, confidence, trace);
 
   return {
     setup: kind,
