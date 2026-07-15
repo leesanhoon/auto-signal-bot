@@ -1,6 +1,6 @@
 import { extractNums } from "./lottery-format.js";
 import type { LotteryDrawRecord } from "./lottery-types.js";
-import { linearRegression } from "simple-statistics";
+import { linearRegression, linearRegressionLine, rSquared } from "simple-statistics";
 
 export type DigitPositionProbabilities = {
   hundreds: number[];
@@ -12,6 +12,7 @@ export type RegressionDigitDetail = {
   digit: string;
   slope: number;
   predictedRatio: number;
+  rSquared: number;
 };
 
 export type RegressionNumberPrediction = {
@@ -114,18 +115,29 @@ export function computeRegressionDigitDetails(
 
       // Linear regression: y = m*x + b
       const { m: slope, b: intercept } = linearRegression(points);
+      const regressionLine = linearRegressionLine({ m: slope, b: intercept });
 
-      // Predict for next period
-      const nextPeriodIndex = totalPeriods;
-      let predictedRatio = slope * nextPeriodIndex + intercept;
+      // R² đo mức độ regression giải thích được biến thiên thực tế. Với dữ liệu gần-uniform
+      // (tỉ lệ mỗi digit dao động quanh 0.1), slope phần lớn chỉ là nhiễu — không gate sẽ
+      // ngoại suy từ 1 xu hướng không có thật. Ngưỡng 0.5: chỉ tin slope khi regression giải
+      // thích được từ 50% phương sai trở lên.
+      const r2 = rSquared(points, regressionLine);
+      const trustsSlope = Number.isFinite(r2) && r2 >= 0.5;
 
-      // Clamp to [0, 1]
-      predictedRatio = Math.max(0, Math.min(1, predictedRatio));
+      let predictedRatio: number;
+      if (trustsSlope) {
+        const nextPeriodIndex = totalPeriods;
+        predictedRatio = Math.max(0, Math.min(1, slope * nextPeriodIndex + intercept));
+      } else {
+        // Fallback: trung bình lịch sử của digit này (không ngoại suy khi regression yếu).
+        predictedRatio = ratios.reduce((sum, r) => sum + r, 0) / ratios.length;
+      }
 
       details.push({
         digit,
         slope,
         predictedRatio,
+        rSquared: Number.isFinite(r2) ? r2 : 0,
       });
     }
 
@@ -190,6 +202,7 @@ function getFallbackDetails(
         digit,
         slope: 0,
         predictedRatio: avgRatio,
+        rSquared: 1,
       });
     }
 

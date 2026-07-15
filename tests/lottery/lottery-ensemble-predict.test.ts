@@ -49,8 +49,8 @@ describe("lottery/lottery-ensemble-predict", () => {
       { number: "222", confidence: 0.2, hundredsDetail: { digit: "2", freq: 1, weightedFreq: 0.25, gap: 1, overdueRatio: 0.1 }, tensDetail: { digit: "2", freq: 1, weightedFreq: 0.25, gap: 1, overdueRatio: 0.1 }, unitsDetail: { digit: "2", freq: 1, weightedFreq: 0.25, gap: 1, overdueRatio: 0.1 } },
     ]);
     state.predictRegression.mockReturnValue([
-      { number: "111", confidence: 0.4, hundredsDetail: { digit: "1", slope: 0.1, predictedRatio: 0.4 }, tensDetail: { digit: "1", slope: 0.1, predictedRatio: 0.4 }, unitsDetail: { digit: "1", slope: 0.1, predictedRatio: 0.4 } },
-      { number: "333", confidence: 0.7, hundredsDetail: { digit: "3", slope: 0.2, predictedRatio: 0.7 }, tensDetail: { digit: "3", slope: 0.2, predictedRatio: 0.7 }, unitsDetail: { digit: "3", slope: 0.2, predictedRatio: 0.7 } },
+      { number: "111", confidence: 0.4, hundredsDetail: { digit: "1", slope: 0.1, predictedRatio: 0.4, rSquared: 1 }, tensDetail: { digit: "1", slope: 0.1, predictedRatio: 0.4, rSquared: 1 }, unitsDetail: { digit: "1", slope: 0.1, predictedRatio: 0.4, rSquared: 1 } },
+      { number: "333", confidence: 0.7, hundredsDetail: { digit: "3", slope: 0.2, predictedRatio: 0.7, rSquared: 1 }, tensDetail: { digit: "3", slope: 0.2, predictedRatio: 0.7, rSquared: 1 }, unitsDetail: { digit: "3", slope: 0.2, predictedRatio: 0.7, rSquared: 1 } },
     ]);
 
     const result = await ensemble.predictTopNumbersEnsemble(records, "mien-bac", 3, 3);
@@ -70,7 +70,7 @@ describe("lottery/lottery-ensemble-predict", () => {
       throw new Error("stats down");
     });
     state.predictRegression.mockReturnValue([
-      { number: "123", confidence: 0.9, hundredsDetail: { digit: "1", slope: 0, predictedRatio: 0.9 }, tensDetail: { digit: "2", slope: 0, predictedRatio: 0.9 }, unitsDetail: { digit: "3", slope: 0, predictedRatio: 0.9 } },
+      { number: "123", confidence: 0.9, hundredsDetail: { digit: "1", slope: 0, predictedRatio: 0.9, rSquared: 1 }, tensDetail: { digit: "2", slope: 0, predictedRatio: 0.9, rSquared: 1 }, unitsDetail: { digit: "3", slope: 0, predictedRatio: 0.9, rSquared: 1 } },
     ]);
 
     const result = await ensemble.predictTopNumbersEnsemble(
