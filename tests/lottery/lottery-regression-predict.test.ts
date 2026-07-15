@@ -158,15 +158,10 @@ describe("lottery/lottery-regression-predict", () => {
     const result = computeRegressionDigitDetails(records);
     const digit7 = result.units.find((d) => d.digit === "7");
     expect(digit7).toBeDefined();
-    expect(digit7!.rSquared).toBeDefined();
-
-    if (digit7!.rSquared < 0.5) {
-      // Tính trung bình lịch sử thủ công để so sánh: digit "7" xuất hiện ở units trong
-      // 4/8 lần (period 1: 2 lần "07", period 2: 0, period 3: 1 lần "07", period 4: 2 lần "07")
-      // predictedRatio phải khớp trung bình per-period-ratio, không phải giá trị ngoại suy từ slope.
-      expect(digit7!.predictedRatio).toBeGreaterThanOrEqual(0);
-      expect(digit7!.predictedRatio).toBeLessThanOrEqual(1);
-    }
+    expect(digit7!.rSquared).toBeLessThan(0.5);
+    // Fallback phải trả về trung bình lịch sử (1+0+0.5+0.5)/4 = 0.5, KHÔNG phải giá trị
+    // ngoại suy từ slope (~0.25) — xác nhận gate thực sự chuyển sang nhánh fallback.
+    expect(digit7!.predictedRatio).toBeCloseTo(0.5, 5);
   });
 
   test("computeRegressionDigitDetails handles constant-zero ratio series without NaN", () => {
