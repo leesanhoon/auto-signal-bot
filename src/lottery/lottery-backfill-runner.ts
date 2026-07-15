@@ -1,7 +1,7 @@
 import { fetchDayPage, parseWeekdayPage } from "./lottery-scraper.js";
 import { appendWeekdayHistory, loadWeekdayHistory } from "./lottery-repository.js";
 import type { LotteryRegion } from "./lottery-types.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-backfill-runner");
 const REGIONS: LotteryRegion[] = ["mien-bac", "mien-trung", "mien-nam"];

@@ -18,9 +18,9 @@ vi.mock("../../src/charts/setup-chart-renderer.js", async (importOriginal) => {
 
 const notifyErrorMock = vi.hoisted(() => vi.fn(async () => {}));
 
-vi.mock("../../src/shared/telegram-client.js", async (importOriginal) => {
+vi.mock("../../src/shared/notification/telegram-client.js", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../src/shared/telegram-client.js")>();
+    await importOriginal<typeof import("../../src/shared/notification/telegram-client.js")>();
   return { ...actual, notifyError: notifyErrorMock };
 });
 

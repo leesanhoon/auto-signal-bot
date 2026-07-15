@@ -1,4 +1,4 @@
-import { getDb } from "../shared/db.js";
+import { getDb } from "../shared/infra/db.js";
 import type { LotteryRegion } from "./lottery-types.js";
 
 export type HitRateStat = {

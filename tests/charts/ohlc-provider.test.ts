@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Candle } from "../../src/charts/ohlc-provider.js";
-import { resetRateLimitStateForTests } from "../../src/shared/rate-limit.js";
+import { resetRateLimitStateForTests } from "../../src/shared/infra/rate-limit.js";
 
 vi.mock("../../src/charts/ohlc-cache-repository.js", () => ({
   loadOhlcCandleCache: vi.fn(),

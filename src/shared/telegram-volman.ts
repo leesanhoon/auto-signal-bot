@@ -5,13 +5,13 @@ import type {
 } from "../charts/chart-types-volman.js";
 import type { ChartTimeframe } from "../charts/chart-types-common.js";
 import type { Notifier } from "./notifier.js";
-import { createLogger } from "./logger.js";
+import { createLogger } from "./infra/logger.js";
 import type { PerformanceReport, ClosedPositionSnapshot } from "../charts/performance-tracking-volman.js";
 import {
   getConfiguredChartSignalConfidenceThreshold,
   getConfiguredTpRMultiple,
 } from "../charts/volman-config-env.js";
-import { sendMessage, telegramNotifier, notifyError } from "./telegram-client.js";
+import { sendMessage, telegramNotifier, notifyError } from "./notification/telegram-client.js";
 import {
   renderSetupChartsBatch,
   getPlaywrightDiagnostics,

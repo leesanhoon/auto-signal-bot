@@ -1,8 +1,8 @@
-import "../shared/env.js";
+import "../shared/infra/env.js";
 import { loadActiveChartSymbols } from "../charts/chart-symbols-repository-volman.js";
 import { toBinanceSymbol } from "../charts/ohlc-provider.js";
 import { getExchangeInfoFilters } from "../charts/binance-futures-client.js";
-import { notifyError } from "../shared/telegram-client.js";
+import { notifyError } from "../shared/notification/telegram-client.js";
 
 async function main(): Promise<void> {
   const symbols = await loadActiveChartSymbols();

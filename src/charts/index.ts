@@ -1,13 +1,13 @@
-import "../shared/env.js";
+import "../shared/infra/env.js";
 import {
   saveOpenPosition,
   findOpenPositionIdByPair,
   loadOpenPairs,
 } from "./positions-repository-volman.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
-import { sendMessage, notifyError } from "../shared/telegram-client.js";
+import { sendMessage, notifyError } from "../shared/notification/telegram-client.js";
 import { sendAllAnalysesVolman } from "../shared/telegram-volman.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 import {
   recordScannerRunOutcome,
   checkAndMaybeSendErrorStreakAlert,

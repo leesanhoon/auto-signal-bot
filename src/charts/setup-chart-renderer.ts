@@ -1,7 +1,7 @@
 import type { Candle } from "./ohlc-provider.js";
 import type { ChartContext } from "./chart-types-volman.js";
 import { chromium, type Browser } from "playwright";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("charts:setup-chart-renderer");
 

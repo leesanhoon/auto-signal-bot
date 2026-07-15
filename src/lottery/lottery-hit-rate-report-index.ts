@@ -1,7 +1,7 @@
-import "../shared/env.js";
+import "../shared/infra/env.js";
 import { computeHitRateStats, formatHitRateReport } from "./lottery-hit-rate-report.js";
-import { notifyError, sendMessage } from "../shared/telegram-client.js";
-import { createLogger } from "../shared/logger.js";
+import { notifyError, sendMessage } from "../shared/notification/telegram-client.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-hit-rate-report-index");
 

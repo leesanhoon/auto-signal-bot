@@ -1,4 +1,4 @@
-import "../shared/env.js";
+import "../shared/infra/env.js";
 import { writeFile } from "node:fs/promises";
 import type { Candle } from "../charts/ohlc-provider.js";
 import type { ChartContext } from "../charts/chart-types-volman.js";
@@ -8,7 +8,7 @@ import {
   renderSetupChartsBatch,
   type SetupChartInput,
 } from "../charts/setup-chart-renderer.js";
-import { telegramNotifier } from "../shared/telegram-client.js";
+import { telegramNotifier } from "../shared/notification/telegram-client.js";
 
 // Script demo: dựng chart mẫu cho 6 setup còn lại (RB, ARB, IRB, FB, SB, DDB)
 // bằng nến tổng hợp, render qua đúng renderer production rồi gửi vào Telegram.

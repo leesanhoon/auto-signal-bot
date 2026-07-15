@@ -1,7 +1,7 @@
-import "../shared/env.js";
+import "../shared/infra/env.js";
 import { runLotteryBackfill } from "./lottery-backfill-runner.js";
-import { notifyError } from "../shared/telegram-client.js";
-import { createLogger } from "../shared/logger.js";
+import { notifyError } from "../shared/notification/telegram-client.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-backfill-index");
 const days = Number(process.argv[2] ?? process.env.LOTTERY_BACKFILL_DAYS ?? "365");

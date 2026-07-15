@@ -1,5 +1,5 @@
 import type { DetectedSignal, SetupKind } from "./setup-types.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("charts:setup-resolver");
 

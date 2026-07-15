@@ -6,7 +6,7 @@ import type {
   PredictedScore,
 } from "../model/betting-types.js";
 import { formatOddsAnalysisInput } from "../service/odds-text-format-service.js";
-import { createLogger } from "../../shared/logger.js";
+import { createLogger } from "../../shared/infra/logger.js";
 import { recordOpenRouterUsage } from "../../shared/ai-usage.js";
 import {
   callOpenRouter,

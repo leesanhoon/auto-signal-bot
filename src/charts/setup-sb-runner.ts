@@ -2,7 +2,7 @@ import type { Candle } from "./ohlc-provider.js";
 import type { DetectedSignal, DetectionContext } from "./setup-types.js";
 import { isFalseBreak } from "./indicators.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("charts:setup-sb-runner");
 

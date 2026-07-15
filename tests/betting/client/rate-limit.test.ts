@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { resetRateLimitStateForTests } from "../../../src/shared/rate-limit.js";
+import { resetRateLimitStateForTests } from "../../../src/shared/infra/rate-limit.js";
 
 const state = vi.hoisted(() => ({ retry: vi.fn(async (request: () => Promise<unknown>) => request()) }));
 vi.mock("../../../src/shared/retry.js", () => ({

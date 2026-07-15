@@ -1,8 +1,8 @@
-import "../shared/env.js";
+import "../shared/infra/env.js";
 import { runLotteryVerify } from "./lottery-verify-runner.js";
-import { notifyError } from "../shared/telegram-client.js";
+import { notifyError } from "../shared/notification/telegram-client.js";
 import type { LotteryRegion } from "./lottery-types.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-verify-index");
 const region = process.argv[2] as LotteryRegion | undefined;

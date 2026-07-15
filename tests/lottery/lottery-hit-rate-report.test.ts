@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
   from: vi.fn(),
 }));
 
-vi.mock("../../src/shared/db.js", () => ({
+vi.mock("../../src/shared/infra/db.js", () => ({
   getDb: () => ({ from: state.from }),
 }));
 

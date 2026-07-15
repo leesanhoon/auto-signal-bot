@@ -35,7 +35,7 @@ const fetchCandleRangeStats = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/charts/binance-futures-client.js", () => client);
 vi.mock("../../src/charts/positions-repository-volman.js", () => repository);
-vi.mock("../../src/shared/telegram-client.js", () => ({ sendMessage }));
+vi.mock("../../src/shared/notification/telegram-client.js", () => ({ sendMessage }));
 vi.mock("../../src/charts/ohlc-provider.js", () => ({
   toBinanceSymbol: (value: string) => value.replace("BINANCE:", ""),
   fetchOhlcHistory,

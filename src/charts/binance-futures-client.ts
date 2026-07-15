@@ -1,8 +1,8 @@
 import { createHmac } from "node:crypto";
 import { withRetry } from "../shared/retry.js";
-import { withConfiguredRateLimit } from "../shared/rate-limit.js";
-import { formatFetchErrorDetails } from "../shared/fetch-diagnostics.js";
-import { createLogger } from "../shared/logger.js";
+import { withConfiguredRateLimit } from "../shared/infra/rate-limit.js";
+import { formatFetchErrorDetails } from "../shared/infra/fetch-diagnostics.js";
+import { createLogger } from "../shared/infra/logger.js";
 import {
   getConfiguredBinanceApiKey,
   getConfiguredBinanceApiSecret,

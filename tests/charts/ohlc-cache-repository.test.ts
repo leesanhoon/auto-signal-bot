@@ -15,13 +15,13 @@ const loggerState = vi.hoisted(() => ({
   warn: vi.fn<(msg: string, ctx?: Record<string, unknown>) => void>(),
 }));
 
-vi.mock("../../src/shared/db.js", () => ({
+vi.mock("../../src/shared/infra/db.js", () => ({
   getDb: () => ({
     from: repoState.from,
   }),
 }));
 
-vi.mock("../../src/shared/logger.js", () => ({
+vi.mock("../../src/shared/infra/logger.js", () => ({
   createLogger: () => loggerState,
 }));
 

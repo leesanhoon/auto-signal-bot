@@ -11,7 +11,7 @@ import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
 import { passesDeterministicWindowFilter } from "./deterministic-pipeline.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("charts:setup-backtest");
 

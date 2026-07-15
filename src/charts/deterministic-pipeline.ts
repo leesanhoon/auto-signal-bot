@@ -12,7 +12,7 @@ import { detectIrb } from "./setups/irb.js";
 import { runSbDetection } from "./setup-sb-runner.js";
 import { buildTradeSetupFromSignal, buildPairSummaryFromContext } from "./signal-assembly.js";
 import type { DetectedSignal } from "./setup-types.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("charts:deterministic-pipeline");
 

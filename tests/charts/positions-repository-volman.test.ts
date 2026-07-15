@@ -6,7 +6,7 @@ const dbState = vi.hoisted(() => ({
   selectResult: { data: [] as unknown[], error: null as null | { message: string } },
 }));
 
-vi.mock("../../src/shared/db.js", () => ({
+vi.mock("../../src/shared/infra/db.js", () => ({
   getDb: () => ({
     from: vi.fn(() => {
       const chain: any = {
@@ -237,7 +237,7 @@ describe("charts/positions-repository-volman", () => {
     };
     fromMock.mockReturnValue(chain);
 
-    const originalGetDb = vi.mocked(repository.getDb || (await import("../../src/shared/db.js")).getDb);
+    const originalGetDb = vi.mocked(repository.getDb || (await import("../../src/shared/infra/db.js")).getDb);
 
     dbState.selectResult = { data: [], error: null };
     const outcomes = await repository.getRecentClosedBinanceTradeOutcomes(2);

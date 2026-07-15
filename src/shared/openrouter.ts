@@ -1,5 +1,5 @@
-import { withConfiguredRateLimit } from "./rate-limit.js";
-import { createLogger } from "./logger.js";
+import { withConfiguredRateLimit } from "./infra/rate-limit.js";
+import { createLogger } from "./infra/logger.js";
 
 export type OpenRouterRequest = {
   model: string;

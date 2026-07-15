@@ -14,8 +14,8 @@ import {
   buildPositionClosedMessage,
   buildBreakevenReminderMessage,
 } from "../shared/telegram-volman.js";
-import { sendMessage } from "../shared/telegram-client.js";
-import { createLogger } from "../shared/logger.js";
+import { sendMessage } from "../shared/notification/telegram-client.js";
+import { createLogger } from "../shared/infra/logger.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
 import { resolveOpenPositionDecision } from "./position-decision-volman.js";
 import { reconcileBinancePosition } from "./binance-execution-volman.js";

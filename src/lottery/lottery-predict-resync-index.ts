@@ -1,11 +1,11 @@
-import "../shared/env.js";
-import { getDb } from "../shared/db.js";
+import "../shared/infra/env.js";
+import { getDb } from "../shared/infra/db.js";
 import { loadWeekdayHistory } from "./lottery-repository.js";
 import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
 import { savePredictions } from "./lottery-predictions-repository.js";
-import { sendMessage, notifyError } from "../shared/telegram-client.js";
+import { sendMessage, notifyError } from "../shared/notification/telegram-client.js";
 import type { LotteryRegion } from "./lottery-types.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-predict-resync-index");
 type PredictionGroup = {

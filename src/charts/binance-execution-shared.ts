@@ -31,8 +31,8 @@ import {
 } from "./binance-position-sizing.js";
 import { toBinanceSymbol, fetchOhlcHistory } from "./ohlc-provider.js";
 import { fetchCandleRangeStats } from "./candle-range-stats.js";
-import { sendMessage } from "../shared/telegram-client.js";
-import { createLogger } from "../shared/logger.js";
+import { sendMessage } from "../shared/notification/telegram-client.js";
+import { createLogger } from "../shared/infra/logger.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
 import { isEmaExitEnabled, getEmaExitPeriod } from "./volman-config-env.js";
 import { calculateLatestEma, resolveEmaExitDecision } from "./position-ema-exit.js";

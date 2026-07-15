@@ -1,6 +1,6 @@
-import "../shared/env.js";
-import { setChatMenuButton, setMyCommands } from "../shared/telegram-client.js";
-import { createLogger } from "../shared/logger.js";
+import "../shared/infra/env.js";
+import { setChatMenuButton, setMyCommands } from "../shared/notification/telegram-client.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("scripts:setup-telegram-menu");
 async function main(): Promise<void> {

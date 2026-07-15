@@ -15,7 +15,7 @@ import {
   sortMatchOddsByKickoff,
 } from "../service/odds-text-format-service.js";
 import { vnDateStr } from "../../shared/vn-time.js";
-import { createLogger } from "../../shared/logger.js";
+import { createLogger } from "../../shared/infra/logger.js";
 import type { BettingApiClient } from "../client/betting-api-client.js";
 import type { BettingService } from "../service/betting-service.js";
 

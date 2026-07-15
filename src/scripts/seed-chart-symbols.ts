@@ -1,5 +1,5 @@
-import "../shared/env.js";
-import { getDb } from "../shared/db.js";
+import "../shared/infra/env.js";
+import { getDb } from "../shared/infra/db.js";
 import { toBinanceSymbol } from "../charts/ohlc-provider.js";
 import { getExchangeInfoFilters } from "../charts/binance-futures-client.js";
 

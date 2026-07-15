@@ -1,5 +1,5 @@
-import { getDb } from "../shared/db.js";
-import { createLogger } from "../shared/logger.js";
+import { getDb } from "../shared/infra/db.js";
+import { createLogger } from "../shared/infra/logger.js";
 import type { PendingOrder, PendingOrderStatus } from "./chart-types-common.js";
 import type { TradeSetup } from "./chart-types-volman.js";
 import { getConfiguredPendingOrderExpiryRuns } from "./volman-config-env.js";

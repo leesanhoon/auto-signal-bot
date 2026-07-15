@@ -1,5 +1,5 @@
-import { getDb } from "../shared/db.js";
-import { createLogger } from "../shared/logger.js";
+import { getDb } from "../shared/infra/db.js";
+import { createLogger } from "../shared/infra/logger.js";
 import type { ChartEngineMode, ChartTimeframeMode } from "./volman-config-env.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
 import type { AnalysisResult, AnalysisStats, TradeSetup } from "./chart-types-volman.js";

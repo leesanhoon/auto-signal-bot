@@ -25,7 +25,7 @@ const candleStats = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/charts/binance-futures-client.js", () => client);
-vi.mock("../../src/shared/telegram-client.js", () => ({ sendMessage }));
+vi.mock("../../src/shared/notification/telegram-client.js", () => ({ sendMessage }));
 vi.mock("../../src/charts/ohlc-provider.js", () => ({
   toBinanceSymbol: (value: string) => value.replace("BINANCE:", ""),
   fetchOhlcHistory: vi.fn(),
@@ -38,7 +38,7 @@ import {
   type BinanceExecutionSystemConfig,
   type PendingEntryOrderPosition,
 } from "../../src/charts/binance-execution-shared.js";
-import { createLogger } from "../../src/shared/logger.js";
+import { createLogger } from "../../src/shared/infra/logger.js";
 
 const pending: PendingEntryOrderPosition = {
   id: 1,

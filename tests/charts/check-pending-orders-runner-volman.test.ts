@@ -8,7 +8,7 @@ const telegramClient = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 const decisions = vi.hoisted(() => ({ resolvePendingOrderDecision: vi.fn() }));
 
 vi.mock("../../src/charts/candle-range-stats.js", () => candles);
-vi.mock("../../src/shared/telegram-client.js", () => telegramClient);
+vi.mock("../../src/shared/notification/telegram-client.js", () => telegramClient);
 vi.mock("../../src/charts/volman-charts.config.js", () => ({
   getCharts: vi.fn().mockResolvedValue([]),
 }));

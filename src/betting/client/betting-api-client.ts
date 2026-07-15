@@ -1,4 +1,4 @@
-import { withConfiguredRateLimit } from "../../shared/rate-limit.js";
+import { withConfiguredRateLimit } from "../../shared/infra/rate-limit.js";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 const API_FOOTBALL_RATE_LIMIT = {

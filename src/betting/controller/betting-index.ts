@@ -1,13 +1,13 @@
-import "../../shared/env.js";
+import "../../shared/infra/env.js";
 import { createOddsApplication } from "./odds-application.js";
 import { createBettingApiClient } from "../client/betting-api-client.js";
 import * as bettingAiClient from "../client/betting-ai-client.js";
-import { getDb } from "../../shared/db.js";
+import { getDb } from "../../shared/infra/db.js";
 import { createBettingAnalysisRepository } from "../repository/betting-analysis-repository.js";
 import { createMatchRepository } from "../repository/match-repository.js";
 import { createBettingService } from "../service/betting-service.js";
-import { notifyError } from "../../shared/telegram-client.js";
-import { createLogger } from "../../shared/logger.js";
+import { notifyError } from "../../shared/notification/telegram-client.js";
+import { createLogger } from "../../shared/infra/logger.js";
 import { createTelegramNotifier } from "../../shared/notifier.js";
 
 const logger = createLogger("betting:betting-index");

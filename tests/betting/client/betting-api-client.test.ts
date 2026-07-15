@@ -6,9 +6,9 @@ import {
   fetchLiveFixtures,
   getConfiguredBookmaker,
 } from "../../../src/betting/client/betting-api-client.js";
-import * as rateLimit from "../../../src/shared/rate-limit.js";
+import * as rateLimit from "../../../src/shared/infra/rate-limit.js";
 
-vi.mock("../../../src/shared/rate-limit.js");
+vi.mock("../../../src/shared/infra/rate-limit.js");
 
 describe("betting-api-client", () => {
   beforeEach(() => {

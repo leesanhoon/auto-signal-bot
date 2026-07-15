@@ -1,7 +1,7 @@
-import "../shared/env.js";
+import "../shared/infra/env.js";
 import { loadClosedPositions } from "./positions-repository-volman.js";
 import { runForexBacktest } from "./forex-backtest.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("charts:forex-backtest");
 

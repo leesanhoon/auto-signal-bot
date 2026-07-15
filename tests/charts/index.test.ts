@@ -94,7 +94,7 @@ vi.mock("../../src/charts/check-open-trades-runner-volman.js", () => ({
 //   runCheckPendingOrders: mocks.runCheckPendingOrders,
 // }));
 
-vi.mock("../../src/shared/telegram-client.js", () => ({
+vi.mock("../../src/shared/notification/telegram-client.js", () => ({
   sendMessage: mocks.sendMessage,
   notifyError: mocks.notifyError,
 }));
@@ -104,7 +104,7 @@ vi.mock("../../src/shared/telegram-volman.js", () => ({
   sendAllAnalysesVolman: mocks.sendAllAnalyses,
 }));
 
-vi.mock("../../src/shared/logger.js", () => ({
+vi.mock("../../src/shared/infra/logger.js", () => ({
   createLogger: () => mocks.logger,
 }));
 

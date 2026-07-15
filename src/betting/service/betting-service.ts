@@ -2,7 +2,7 @@ import { extractCorrectScore } from "./correct-score-service.js";
 import type { ApiFootballFixture, MatchInfo, MatchOddsPayload } from "../model/betting-types.js";
 import { compactOdds } from "./odds-compact-service.js";
 import { vnDateStr, vnTimeStr } from "../../shared/vn-time.js";
-import { createLogger } from "../../shared/logger.js";
+import { createLogger } from "../../shared/infra/logger.js";
 import type { BettingApiClient } from "../client/betting-api-client.js";
 
 const logger = createLogger("betting:betting");

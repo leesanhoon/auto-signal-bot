@@ -6,8 +6,8 @@ import {
   updatePendingOrder,
 } from "./positions-repository-volman.js";
 import { validateTradeSetupForOpen } from "./position-engine-volman.js";
-import { createLogger } from "../shared/logger.js";
-import { sendMessage } from "../shared/telegram-client.js";
+import { createLogger } from "../shared/infra/logger.js";
+import { sendMessage } from "../shared/notification/telegram-client.js";
 import { getCharts } from "./volman-charts.config.js";
 import type { PendingOrder } from "./chart-types-common.js";
 import type { TradeSetup } from "./chart-types-volman.js";

@@ -2,9 +2,9 @@ import { fetchActualRecords } from "./lottery-scraper.js";
 import { appendWeekdayHistory, loadWeekdayHistory } from "./lottery-repository.js";
 import { buildLotteryDataset, lotteryFilename } from "./lottery-format.js";
 import { WEEKDAY_LABELS } from "./lottery-schedule.js";
-import { sendDocument, sendMessage } from "../shared/telegram-client.js";
+import { sendDocument, sendMessage } from "../shared/notification/telegram-client.js";
 import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-runner");
 const REGIONS: LotteryRegion[] = ["mien-bac", "mien-trung", "mien-nam"];

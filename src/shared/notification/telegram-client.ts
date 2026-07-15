@@ -1,4 +1,4 @@
-import { createLogger } from "../logger.js";
+import { createLogger } from "../infra/logger.js";
 
 const logger = createLogger("shared:telegram");
 
@@ -191,6 +191,8 @@ export interface TelegramClient {
   notifyError(scope: string, error: unknown): Promise<void>;
   editMessageReplyMarkup(replyMarkup: InlineKeyboardMarkup | undefined, messageId: number): Promise<void>;
 }
+
+export const telegramNotifier = { sendMessage, sendPhoto, sendDocument };
 
 export function createTelegramClient(): TelegramClient {
   return {

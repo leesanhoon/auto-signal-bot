@@ -1,7 +1,7 @@
 import { withRetry } from "./retry.js";
 import type { OpenRouterRequest, OpenRouterResponse } from "./openrouter.js";
 import { callOpenRouter } from "./openrouter.js";
-import { createLogger } from "./logger.js";
+import { createLogger } from "./infra/logger.js";
 
 const logger = createLogger("shared:ai-model-fallback");
 

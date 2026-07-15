@@ -22,7 +22,7 @@ const candles = vi.hoisted(() => ({
 
 vi.mock("../../src/charts/positions-repository-volman.js", () => repository);
 vi.mock("../../src/shared/telegram-volman.js", () => telegram);
-vi.mock("../../src/shared/telegram-client.js", () => telegramClient);
+vi.mock("../../src/shared/notification/telegram-client.js", () => telegramClient);
 vi.mock("../../src/charts/candle-range-stats.js", () => candles);
 vi.mock("../../src/charts/volman-charts.config.js", () => ({
   getCharts: vi.fn().mockResolvedValue([]),

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import "../shared/env.js";
-import { createLogger } from "../shared/logger.js";
+import "../shared/infra/env.js";
+import { createLogger } from "../shared/infra/logger.js";
 import { compareBacktestSummaries, runBacktest, type BacktestMethod, type BacktestSummary } from "./lottery-backtest.js";
 import { loadRegionHistory } from "./lottery-repository.js";
 import type { LotteryRegion } from "./lottery-types.js";

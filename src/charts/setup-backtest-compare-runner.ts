@@ -1,5 +1,5 @@
-import "../shared/env.js";
-import { createLogger } from "../shared/logger.js";
+import "../shared/infra/env.js";
+import { createLogger } from "../shared/infra/logger.js";
 import { getCharts } from "./volman-charts.config.js";
 import { fetchOhlcHistory } from "./ohlc-provider.js";
 import { runSetupBacktest } from "./setup-backtest.js";

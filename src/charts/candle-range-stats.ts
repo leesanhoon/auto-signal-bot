@@ -1,8 +1,8 @@
 import type { CandleRangeStats, ChartTimeframe, ChartConfig } from "./chart-types-common.js";
-import { createLogger } from "../shared/logger.js";
+import { createLogger } from "../shared/infra/logger.js";
 import { toBinanceSymbol } from "./ohlc-provider.js";
 import { withRetry } from "../shared/retry.js";
-import { withConfiguredRateLimit } from "../shared/rate-limit.js";
+import { withConfiguredRateLimit } from "../shared/infra/rate-limit.js";
 
 const logger = createLogger("charts:candle-range-stats");
 

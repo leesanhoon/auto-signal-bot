@@ -1,4 +1,4 @@
-import { getDb } from "../shared/db.js";
+import { getDb } from "../shared/infra/db.js";
 import type { LotteryDrawRecord, LotteryRegion } from "./lottery-types.js";
 
 /** Giữ lịch sử 3 năm để đủ mẫu cho thống kê, không quá phình theo thời gian. */

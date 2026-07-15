@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { resetRateLimitStateForTests } from "../../src/shared/rate-limit.js";
+import { resetRateLimitStateForTests } from "../../src/shared/infra/rate-limit.js";
 import { callOpenRouter } from "../../src/shared/openrouter.js";
 
 describe("shared/openrouter", () => {

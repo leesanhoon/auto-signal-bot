@@ -1,6 +1,6 @@
-import { getDb } from "./db.js";
-import { createLogger } from "./logger.js";
-import { sendMessage } from "./telegram-client.js";
+import { getDb } from "./infra/db.js";
+import { createLogger } from "./infra/logger.js";
+import { sendMessage } from "./notification/telegram-client.js";
 import { vnDateStr } from "./vn-time.js";
 
 const logger = createLogger("shared:ai-usage");
