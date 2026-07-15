@@ -10,15 +10,20 @@ vi.mock("../../src/shared/db.js", () => ({
   getDb: () => ({
     from: vi.fn(() => {
       const chain: any = {
-        select: vi.fn(() => chain),
-        eq: vi.fn(() => chain),
-        gte: vi.fn(() => chain),
-        order: vi.fn(() => chain),
+        select: vi.fn(function() { return this; }),
+        eq: vi.fn(function() { return this; }),
+        gte: vi.fn(function() { return this; }),
+        order: vi.fn(function() { return this; }),
         limit: vi.fn(async () => dbState.selectResult),
         insert: dbState.insert,
         update: dbState.update,
-        then: (resolve: (value: unknown) => unknown) =>
-          Promise.resolve({ data: null, error: null }).then(resolve),
+        then: (resolve: (value: unknown) => unknown, reject?: (error: unknown) => unknown) => {
+          if (dbState.selectResult.error) {
+            const err = new Error(`countLiveBinancePositionsVolman failed: ${dbState.selectResult.error.message}`);
+            return reject ? Promise.resolve().then(() => reject(err)) : Promise.reject(err);
+          }
+          return Promise.resolve(dbState.selectResult).then(resolve);
+        },
       };
       dbState.insert.mockImplementation(async () => ({ error: null }));
       dbState.update.mockImplementation(() => chain);
@@ -163,5 +168,45 @@ describe("charts/positions-repository-volman", () => {
     await repository.applyBreakevenStopLoss(1, "1.1000");
 
     expect(dbState.update).toHaveBeenCalledWith({ stop_loss: "1.1000" });
+  });
+
+  test("applyBinanceBreakevenStopLoss updates stop_loss and binance_sl_order_id", async () => {
+    await repository.applyBinanceBreakevenStopLoss(1, "1.1000", 999);
+
+    expect(dbState.update).toHaveBeenCalledWith({ stop_loss: "1.1000", binance_sl_order_id: 999 });
+  });
+
+  test("countLiveBinancePositionsVolman counts positions with placed or working status", async () => {
+    dbState.selectResult.data = [
+      { id: 1, binance_execution_status: "placed", binance_entry_order_status: null },
+      { id: 2, binance_execution_status: null, binance_entry_order_status: "working" },
+      { id: 3, binance_execution_status: "pending", binance_entry_order_status: null },
+      { id: 4, binance_execution_status: "failed", binance_entry_order_status: null },
+      { id: 5, binance_execution_status: "placed", binance_entry_order_status: "working" },
+      { id: 6, binance_execution_status: null, binance_entry_order_status: "filled" },
+    ];
+
+    const count = await repository.countLiveBinancePositionsVolman();
+    // Should count: id 1 (placed), id 2 (working), id 5 (placed) = 3 total
+    expect(count).toBe(3);
+  });
+
+  test("countLiveBinancePositionsVolman returns 0 when no matching positions", async () => {
+    dbState.selectResult.data = [
+      { id: 1, binance_execution_status: "pending", binance_entry_order_status: null },
+      { id: 2, binance_execution_status: "failed", binance_entry_order_status: "expired" },
+      { id: 3, binance_execution_status: null, binance_entry_order_status: "cancelled" },
+    ];
+
+    const count = await repository.countLiveBinancePositionsVolman();
+    expect(count).toBe(0);
+  });
+
+  test("countLiveBinancePositionsVolman throws when query fails", async () => {
+    dbState.selectResult.error = { message: "DB connection failed" };
+
+    await expect(repository.countLiveBinancePositionsVolman()).rejects.toThrow(
+      "countLiveBinancePositionsVolman failed: DB connection failed",
+    );
   });
 });

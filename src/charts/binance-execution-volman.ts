@@ -8,6 +8,7 @@ import {
   getConfiguredBinanceRiskUsdPerTrade,
   isBinanceHonorOrderTypeEnabledVolman,
   getConfiguredBinanceEntryOrderExpiryMinutes,
+  getConfiguredBinanceMaxConcurrentPositionsVolman,
 } from "./binance-futures-config-env.js";
 import { calculateRiskRewardPlan } from "./position-engine-volman.js";
 import {
@@ -17,7 +18,11 @@ import {
   updateBinanceEntryOrderStatus,
   getPendingEntryOrderPositions,
   closeExpiredEntryOrderPosition,
+  countLiveBinancePositionsVolman,
+  applyBinanceBreakevenStopLoss,
 } from "./positions-repository-volman.js";
+import { fetchCandleRangeStats } from "./candle-range-stats.js";
+import { buildBreakevenReminderMessage } from "../shared/telegram-volman.js";
 import type { PositionDecisionOutcome } from "./position-engine-volman.js";
 import type { OpenPosition } from "./positions-repository-volman.js";
 import type { TradeSetup } from "./chart-types-volman.js";
@@ -42,10 +47,6 @@ const config = {
   // Entry order type support (new in subtask 03, wired in subtask 05)
   entryExecutionMode: (isBinanceHonorOrderTypeEnabledVolman() ? "HONOR_ORDER_TYPE" : "MARKET_ONLY") as "MARKET_ONLY" | "HONOR_ORDER_TYPE",
   entryOrderExpiryMinutes: getConfiguredBinanceEntryOrderExpiryMinutes(),
-  // RB/ARB/IRB khong biet huong lenh truoc khi breakout xay ra (khac BB, huong da xac
-  // dinh tu trend) — neu dat LIMIT/STOP that bai (vd -2021 vi gia da vuot muc), fallback
-  // sang MARKET NOW thay vi bo lo tin hieu hoan toan.
-  entryFallbackToMarketForSetups: ["RB", "ARB", "IRB"],
   saveBinancePendingEntryOrder: (positionId: number, details: any) =>
     saveBinancePendingEntryOrder(positionId, details),
   updateBinanceEntryOrderStatus: (positionId: number, status: any) =>
@@ -56,6 +57,24 @@ const config = {
   isHonorOrderTypeEnabled: () => isBinanceHonorOrderTypeEnabledVolman(),
   entryOrderExpiredPrefix: "*Binance Futures (Volman)*",
   getEmaExitTimeframe: (position: OpenPosition) => position.primaryTimeframe ?? "H4",
+  getOpenPositionCount: () => countLiveBinancePositionsVolman(),
+  maxConcurrentPositions: getConfiguredBinanceMaxConcurrentPositionsVolman(),
+  // 1R breakeven support (subtask 03)
+  fetchPriceStatsSinceOpen: (position: OpenPosition) =>
+    fetchCandleRangeStats(position.binanceSymbol as string, new Date(position.openedAt).getTime()),
+  applyBinanceBreakevenStopLoss: (positionId: number, entry: string, newSlOrderId: number) =>
+    applyBinanceBreakevenStopLoss(positionId, entry, newSlOrderId),
+  buildBreakevenNotifyMessage: (position: OpenPosition, newSlPrice: number) =>
+    buildBreakevenReminderMessage(
+      {
+        id: position.id,
+        pair: position.pair,
+        direction: position.direction,
+        setup: (position as any).setup ?? null,
+        entry: position.entry,
+      },
+      `Giá đã đạt 1R — dời SL về entry ${newSlPrice}.`,
+    ),
 };
 
 export const openBinanceFuturesPosition = createOpenBinanceFuturesPosition<TradeSetup>(config);

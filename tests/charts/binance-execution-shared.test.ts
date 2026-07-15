@@ -20,18 +20,25 @@ const client = vi.hoisted(() => ({
 }));
 const sendMessage = vi.hoisted(() => vi.fn());
 
+const candleStats = vi.hoisted(() => ({
+  fetchCandleRangeStats: vi.fn(),
+}));
+
 vi.mock("../../src/charts/binance-futures-client.js", () => client);
 vi.mock("../../src/shared/telegram-client.js", () => ({ sendMessage }));
 vi.mock("../../src/charts/ohlc-provider.js", () => ({
   toBinanceSymbol: (value: string) => value.replace("BINANCE:", ""),
   fetchOhlcHistory: vi.fn(),
 }));
+vi.mock("../../src/charts/candle-range-stats.js", () => candleStats);
 
 import {
   createPollPendingEntryOrder,
+  checkAndApplyBinanceBreakeven,
   type BinanceExecutionSystemConfig,
   type PendingEntryOrderPosition,
 } from "../../src/charts/binance-execution-shared.js";
+import { createLogger } from "../../src/shared/logger.js";
 
 const pending: PendingEntryOrderPosition = {
   id: 1,
@@ -163,6 +170,193 @@ describe("charts/binance-execution-shared pending entry protection", () => {
     expect(config.saveBinanceExecutionDetails).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ binanceExecutionStatus: "placed" }),
+    );
+  });
+});
+
+describe("charts/binance-execution-shared 1R breakeven", () => {
+  const logger = createLogger("test");
+  const position = {
+    id: 1,
+    pair: "BTC/USDT",
+    direction: "LONG" as const,
+    entry: "50000",
+    stopLoss: "49000",
+    openedAt: new Date().toISOString(),
+    binanceSymbol: "BTCUSDT",
+    binanceSlOrderId: 100,
+    binanceTp1OrderId: 200,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client.getExchangeInfoFilters.mockResolvedValue({
+      stepSize: 0.001,
+      minQty: 0.001,
+      tickSize: 0.1,
+      minNotional: 5,
+    });
+  });
+
+  test("skips if fetchPriceStatsSinceOpen not configured", async () => {
+    const config = makeConfig();
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+    expect(client.cancelOrder).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  test("skips if price not reached 1R", async () => {
+    const applyBreakeven = vi.fn();
+    const stats = { high: 50500, low: 49500, lastClose: 50000 };
+    candleStats.fetchCandleRangeStats.mockResolvedValue(stats);
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+
+    expect(client.cancelOrder).not.toHaveBeenCalled();
+    expect(applyBreakeven).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  test("skips if already at breakeven", async () => {
+    const applyBreakeven = vi.fn();
+    const breakEvenPosition = { ...position, stopLoss: "50000" };
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => ({ high: 51000, low: 49000, lastClose: 50000 })),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+
+    await checkAndApplyBinanceBreakeven(config, breakEvenPosition, logger);
+
+    expect(client.cancelOrder).not.toHaveBeenCalled();
+    expect(applyBreakeven).not.toHaveBeenCalled();
+  });
+
+  test("moves breakeven when 1R reached for LONG", async () => {
+    const applyBreakeven = vi.fn();
+    const stats = { high: 51000, low: 49000, lastClose: 50500 }; // 1R = 51000
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+    client.cancelOrder.mockResolvedValue({});
+    client.placeStopMarketOrder.mockResolvedValue({ orderId: 300 });
+
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+
+    expect(client.cancelOrder).toHaveBeenCalledWith("BTCUSDT", 100);
+    expect(client.placeStopMarketOrder).toHaveBeenCalledWith("BTCUSDT", "SELL", 50000, expect.any(Object));
+    expect(applyBreakeven).toHaveBeenCalledWith(1, "50000", 300);
+    expect(sendMessage).toHaveBeenCalled();
+  });
+
+  test("moves breakeven when 1R reached for SHORT", async () => {
+    const shortPosition = { ...position, direction: "SHORT" as const, stopLoss: "51000" };
+    const applyBreakeven = vi.fn();
+    const stats = { high: 51000, low: 49000, lastClose: 50000 }; // 1R = 49000
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+    client.cancelOrder.mockResolvedValue({});
+    client.placeStopMarketOrder.mockResolvedValue({ orderId: 300 });
+
+    await checkAndApplyBinanceBreakeven(config, shortPosition, logger);
+
+    expect(client.cancelOrder).toHaveBeenCalledWith("BTCUSDT", 100);
+    expect(client.placeStopMarketOrder).toHaveBeenCalledWith("BTCUSDT", "BUY", 50000, expect.any(Object));
+    expect(applyBreakeven).toHaveBeenCalledWith(1, "50000", 300);
+  });
+
+  test("handles cancel old SL failure", async () => {
+    const applyBreakeven = vi.fn();
+    const stats = { high: 51000, low: 49000, lastClose: 50500 };
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+    client.cancelOrder.mockResolvedValue(new Error("Cancel failed"));
+
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("KHÔNG hủy được SL cũ"),
+    );
+    expect(client.placeStopMarketOrder).not.toHaveBeenCalled();
+    expect(applyBreakeven).not.toHaveBeenCalled();
+  });
+
+  test("handles new SL placement failure after cancel", async () => {
+    const applyBreakeven = vi.fn();
+    const stats = { high: 51000, low: 49000, lastClose: 50500 };
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+    client.cancelOrder.mockResolvedValue({});
+    client.placeStopMarketOrder.mockResolvedValue(new Error("Place failed"));
+
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("THẤT BẠI"),
+    );
+    expect(applyBreakeven).not.toHaveBeenCalled();
+  });
+
+  test("handles DB update failure", async () => {
+    const applyBreakeven = vi.fn();
+    applyBreakeven.mockRejectedValue(new Error("DB error"));
+    const stats = { high: 51000, low: 49000, lastClose: 50500 };
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+    client.cancelOrder.mockResolvedValue({});
+    client.placeStopMarketOrder.mockResolvedValue({ orderId: 300 });
+
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("KHÔNG ghi được vào DB"),
+    );
+  });
+
+  test("uses custom buildBreakevenNotifyMessage if provided", async () => {
+    const applyBreakeven = vi.fn();
+    const customMessage = "Custom breakeven message";
+    const stats = { high: 51000, low: 49000, lastClose: 50500 };
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+      buildBreakevenNotifyMessage: vi.fn(() => customMessage),
+    });
+    client.cancelOrder.mockResolvedValue({});
+    client.placeStopMarketOrder.mockResolvedValue({ orderId: 300 });
+
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+
+    expect(config.buildBreakevenNotifyMessage).toHaveBeenCalledWith(position, 50000);
+    expect(sendMessage).toHaveBeenCalledWith(customMessage);
+  });
+
+  test("uses default message if buildBreakevenNotifyMessage not provided", async () => {
+    const applyBreakeven = vi.fn();
+    const stats = { high: 51000, low: 49000, lastClose: 50500 };
+    const config = makeConfig({
+      fetchPriceStatsSinceOpen: vi.fn(async () => stats),
+      applyBinanceBreakevenStopLoss: applyBreakeven,
+    });
+    client.cancelOrder.mockResolvedValue({});
+    client.placeStopMarketOrder.mockResolvedValue({ orderId: 300 });
+
+    await checkAndApplyBinanceBreakeven(config, position, logger);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining("Vị thế #1 BTC/USDT đã cán 1R"),
     );
   });
 });

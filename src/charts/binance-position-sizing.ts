@@ -85,3 +85,40 @@ export function computeOrderQuantity(
 
   return { quantity, notional, marginRequired };
 }
+
+export type LeverageComputationInput = {
+  notional: number;
+  marginBudgetUsdt: number;
+  maxLeverageForSymbol: number;
+};
+
+export type LeverageComputationResult = {
+  leverage: number;
+};
+
+export function computeRequiredLeverage(
+  input: LeverageComputationInput,
+): LeverageComputationResult | Error {
+  const { notional, marginBudgetUsdt, maxLeverageForSymbol } = input;
+
+  if (!(notional > 0)) {
+    return new Error("Notional khong hop le (<= 0)");
+  }
+  if (!(marginBudgetUsdt > 0)) {
+    return new Error("Margin budget khong hop le (<= 0)");
+  }
+  if (!(maxLeverageForSymbol >= 1)) {
+    return new Error("Max leverage cua symbol khong hop le");
+  }
+
+  const requiredLeverage = Math.ceil(notional / marginBudgetUsdt);
+  const leverage = Math.max(1, requiredLeverage);
+
+  if (leverage > maxLeverageForSymbol) {
+    return new Error(
+      `Can leverage ${leverage}x de vao lenh trong margin budget (${marginBudgetUsdt.toFixed(2)} USDT) nhung symbol chi cho phep toi da ${maxLeverageForSymbol}x — bo qua lenh nay`,
+    );
+  }
+
+  return { leverage };
+}

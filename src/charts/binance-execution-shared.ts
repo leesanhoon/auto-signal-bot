@@ -21,12 +21,16 @@ import {
   getConfiguredBinanceMarginType,
   getConfiguredBinanceRiskPercentPerTrade,
   getConfiguredBinanceWorkingType,
+  getConfiguredBinanceMaxConcurrentPositionsVolman,
 } from "./binance-futures-config-env.js";
 import {
   computeOrderQuantity,
   roundToTickSize,
+  computeRequiredLeverage,
+  type LeverageComputationInput,
 } from "./binance-position-sizing.js";
 import { toBinanceSymbol, fetchOhlcHistory } from "./ohlc-provider.js";
+import { fetchCandleRangeStats } from "./candle-range-stats.js";
 import { sendMessage } from "../shared/telegram-client.js";
 import { createLogger } from "../shared/logger.js";
 import type { ChartTimeframe } from "./chart-types-common.js";
@@ -119,6 +123,9 @@ export type OpenPosition = {
   pair: string;
   direction: "LONG" | "SHORT";
   entry: string;
+  stopLoss: string; // MOI
+  openedAt: string; // MOI
+  setup?: string | null;
   binanceSymbol: string | null;
   binanceSlOrderId: number | null;
   binanceTp1OrderId: number | null;
@@ -160,12 +167,6 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   // Cho pollPendingEntryOrders no-op ngay tu dau (khong query DB) khi feature dang tat —
   // tranh 1 Supabase round-trip vo ich moi cron cycle.
   isHonorOrderTypeEnabled?: () => boolean;
-  // Ten cac setup (setup.setup, vd "RB"/"ARB"/"IRB") KHONG the pre-position that su
-  // (huong lenh chi biet duoc luc breakout xay ra) — neu dat LIMIT/STOP that bai (vd
-  // -2021 "Order would immediately trigger" vi gia da vuot muc), tu dong fallback sang
-  // MARKET NOW thay vi bo lo tin hieu. BB KHONG nam trong danh sach nay vi bien
-  // truoc duoc breakout that (setup.direction xac dinh tu trend).
-  entryFallbackToMarketForSetups?: string[];
   // Ghi lai ly do fail khi loi xay ra TRUOC luc dat duoc entry order (hedge mode / guard /
   // filters / balance / sizing / margin / entry order) — cac truong hop nay khong the goi
   // saveBinanceExecutionDetails vi chua co day du entryOrderId/quantity that. Optional de
@@ -185,6 +186,19 @@ export type BinanceExecutionSystemConfig<TSetup, TOpenPosition, TDecisionOutcome
   // he thong nao cung co du lieu timeframe cua position -- neu khong cung cap,
   // EMA-exit se bi bo qua cho he do.
   getEmaExitTimeframe?: (position: TOpenPosition) => ChartTimeframe;
+  // Max concurrent positions gate
+  getOpenPositionCount?: () => Promise<number>;
+  maxConcurrentPositions?: number;
+  // 1R breakeven support (subtask 03) — lay OHLC/gia tri cao-thap ke tu luc mo vi the de kiem tra 1R
+  fetchPriceStatsSinceOpen?: (position: any) => Promise<{ high: number; low: number; lastClose: number | null } | Error>;
+  // Cap nhat DB: dat SL order moi tren san + update DB (stop_loss VA binance_sl_order_id).
+  applyBinanceBreakevenStopLoss?: (
+    positionId: number,
+    entry: string,
+    newSlOrderId: number,
+  ) => Promise<void>;
+  // Build Telegram message khi da doi SL (tai su dung buildBreakevenReminderMessage o phia Volman)
+  buildBreakevenNotifyMessage?: (position: any, newSlPrice: number) => string;
 };
 
 async function recordExecutionFailure(
@@ -205,6 +219,53 @@ async function recordExecutionFailure(
   }
 }
 
+async function handleEntryOrderFullFailure(
+  config: BinanceExecutionSystemConfig<any, any, any>,
+  binanceSymbol: string,
+  setup: { direction: "LONG" | "SHORT"; pair: string },
+  plan: RiskRewardPlan,
+  side: "BUY" | "SELL",
+  stopError: Error,
+  limitError: Error,
+  positionId: number,
+  logger: ReturnType<typeof createLogger>,
+): Promise<void> {
+  logger.error("Ca STOP va LIMIT entry deu that bai", {
+    pair: setup.pair,
+    binanceSymbol,
+    stopError: stopError.message,
+    limitError: limitError.message,
+  });
+
+  const statsResult = await fetchCandleRangeStats(binanceSymbol, Date.now() - 5 * 60 * 1000);
+  let priceCrossedStopLoss = false;
+  if (!(statsResult instanceof Error) && statsResult.lastClose !== null) {
+    priceCrossedStopLoss =
+      setup.direction === "LONG"
+        ? statsResult.lastClose <= plan.stopLoss
+        : statsResult.lastClose >= plan.stopLoss;
+  }
+
+  await recordExecutionFailure(
+    config,
+    positionId,
+    priceCrossedStopLoss
+      ? `price_crossed_stop_loss_before_entry (stop: ${stopError.message}; limit: ${limitError.message})`
+      : `stop_and_limit_entry_both_failed (stop: ${stopError.message}; limit: ${limitError.message})`,
+    logger,
+  );
+
+  if (priceCrossedStopLoss) {
+    await sendMessage(
+      `⚠️ ${config.entryErrorPrefix} — Không thể vào lệnh ${setup.direction} ${binanceSymbol}: giá đã cán qua mức stop loss dự kiến (${plan.stopLoss}) trước khi đặt được lệnh entry. Tín hiệu không còn hợp lệ, bỏ qua.\nLỗi STOP: ${stopError.message}\nLỗi LIMIT: ${limitError.message}`,
+    );
+  } else {
+    await sendMessage(
+      `❌ ${config.entryErrorPrefix} — Không thể vào lệnh ${setup.direction} ${binanceSymbol}: cả lệnh STOP và LIMIT đều thất bại.\nLỗi STOP: ${stopError.message}\nLỗi LIMIT: ${limitError.message}`,
+    );
+  }
+}
+
 export function createOpenBinanceFuturesPosition<
   TSetup extends { pair: string; direction: "LONG" | "SHORT"; orderType?: string },
 >(
@@ -216,6 +277,29 @@ export function createOpenBinanceFuturesPosition<
     chartSymbol: string,
   ): Promise<void> {
     const logger = createLogger(config.loggerName);
+
+    // Gate: max concurrent positions
+    if (config.getOpenPositionCount && config.maxConcurrentPositions) {
+      const openCount = await config.getOpenPositionCount();
+      if (openCount >= config.maxConcurrentPositions) {
+        logger.warn("Bo qua entry Binance — da dat gioi han vi the dong thoi", {
+          pair: setup.pair,
+          openCount,
+          maxConcurrentPositions: config.maxConcurrentPositions,
+        });
+        await recordExecutionFailure(
+          config,
+          positionId,
+          `max_concurrent_positions_reached (${openCount}/${config.maxConcurrentPositions})`,
+          logger,
+        );
+        await sendMessage(
+          `⚠️ ${config.guardFailPrefix} — Đã có ${openCount}/${config.maxConcurrentPositions} vị thế đang mở, không thể đặt thêm lệnh cho ${setup.pair}. Signal vẫn được track trong hệ thống, không có lệnh thật trên sàn.`,
+        );
+        return;
+      }
+    }
+
     const binanceSymbol = toBinanceSymbol(chartSymbol);
     if (!binanceSymbol) {
       logger.warn("Symbol khong phai Binance, bo qua execution", {
@@ -234,7 +318,6 @@ export function createOpenBinanceFuturesPosition<
       return;
     }
 
-    let leverage = getConfiguredBinanceLeverage();
     const marginType = getConfiguredBinanceMarginType();
     const riskPercent = getConfiguredBinanceRiskPercentPerTrade();
     const riskUsdt = config.getConfiguredRiskUsdt?.();
@@ -297,17 +380,9 @@ export function createOpenBinanceFuturesPosition<
       if (filters instanceof Error) throw filters;
 
       // Moi symbol co gioi han leverage rieng tren Binance (altcoin thanh khoan
-      // thap thuong thap hon nhieu so voi cau hinh BINANCE_LEVERAGE chung) — kep
-      // xuong muc toi da san cho phep de tranh loi -4028 "Leverage X is not valid".
+      // thap thuong thap hon nhieu so voi cau hinh BINANCE_LEVERAGE chung).
       const maxLeverage = await getMaxLeverageForSymbol(binanceSymbol);
       if (maxLeverage instanceof Error) throw maxLeverage;
-      if (leverage > maxLeverage) {
-        logger.warn(
-          `Leverage cau hinh (${leverage}x) vuot muc toi da Binance cho phep voi ${binanceSymbol} (${maxLeverage}x) — kep xuong ${maxLeverage}x`,
-          { pair: setup.pair, binanceSymbol },
-        );
-        leverage = maxLeverage;
-      }
 
       // Moi gia stopPrice gui len Binance PHAI lam tron theo tickSize — gia tho tu
       // engine se bi Binance tu choi (loi price precision -1111/-4014).
@@ -317,6 +392,31 @@ export function createOpenBinanceFuturesPosition<
       const balance = await getAvailableBalanceUsdt();
       if (balance instanceof Error) throw balance;
 
+      // Tinh sizing TRUOC voi leverage placeholder (maxLeverage) de lay notional
+      const sizingWithPlaceholder = computeOrderQuantity({
+        balanceUsdt: balance,
+        riskPercent,
+        riskUsdt,
+        entry: plan.entry,
+        stopLoss: plan.stopLoss,
+        leverage: maxLeverage,
+        filters,
+      });
+      if (sizingWithPlaceholder instanceof Error) throw sizingWithPlaceholder;
+
+      // Tinh leverage thuc te tu notional va margin budget
+      const maxConcurrentPositions = config.maxConcurrentPositions ?? 3;
+      const marginBudgetUsdt = balance / maxConcurrentPositions;
+      const leverageComputationResult = computeRequiredLeverage({
+        notional: sizingWithPlaceholder.notional,
+        marginBudgetUsdt,
+        maxLeverageForSymbol: maxLeverage,
+      });
+      if (leverageComputationResult instanceof Error) throw leverageComputationResult;
+
+      const leverage = leverageComputationResult.leverage;
+
+      // Tinh lai sizing voi leverage thuc te (quantity khong doi, chi marginRequired thay doi)
       const sizing = computeOrderQuantity({
         balanceUsdt: balance,
         riskPercent,
@@ -350,54 +450,73 @@ export function createOpenBinanceFuturesPosition<
         return "MARKET";
       })();
 
-      // resolvedEntryType co the khac preferredEntryType neu dat LIMIT/STOP that bai
-      // va setup nam trong danh sach entryFallbackToMarketForSetups (vd RB/ARB/IRB —
-      // huong lenh chi biet duoc luc breakout xay ra nen khong the "cho san" nhu BB,
-      // gia thuong da vuot muc entry -> Binance tu choi lenh dieu kien voi -2021).
       let resolvedEntryType: "MARKET" | "LIMIT" | "STOP_MARKET" = preferredEntryType;
-      let fellBackToMarket = false;
 
-      if (preferredEntryType === "LIMIT" || preferredEntryType === "STOP_MARKET") {
+      if (preferredEntryType === "STOP_MARKET") {
+        let stopError: Error | null = null;
+        const stopPrice = roundToTickSize(plan.entry, filters.tickSize);
+        const workingType = getConfiguredBinanceWorkingType();
+
         try {
-          if (preferredEntryType === "LIMIT") {
-            const entryPrice = roundToTickSize(plan.entry, filters.tickSize);
-            const limitResult = await placeLimitOrder(binanceSymbol, side, entryPrice, sizing.quantity);
-            if (limitResult instanceof Error) throw limitResult;
-            entryOrder = limitResult;
+          const stopResult = await placeStopMarketEntryOrder(
+            binanceSymbol,
+            side,
+            stopPrice,
+            sizing.quantity,
+            workingType ? { workingType } : {},
+          );
+          if (stopResult instanceof Error) {
+            stopError = stopResult;
           } else {
-            const stopPrice = roundToTickSize(plan.entry, filters.tickSize);
-            const workingType = getConfiguredBinanceWorkingType();
-            const stopResult = await placeStopMarketEntryOrder(
-              binanceSymbol,
-              side,
-              stopPrice,
-              sizing.quantity,
-              workingType ? { workingType } : {},
-            );
-            if (stopResult instanceof Error) throw stopResult;
             entryOrder = stopResult;
           }
-        } catch (pendingEntryError) {
-          const setupKind = (setup as any).setup as string | undefined;
-          const fallbackEligible =
-            !!setupKind && !!config.entryFallbackToMarketForSetups?.includes(setupKind);
-          if (!fallbackEligible) throw pendingEntryError;
-
-          logger.warn(
-            `Dat lenh ${preferredEntryType} that bai cho setup ${setupKind} (khong the pre-position that su vi huong lenh chi biet khi breakout xay ra) — fallback sang MARKET`,
-            {
-              pair: setup.pair,
-              binanceSymbol,
-              error:
-                pendingEntryError instanceof Error
-                  ? pendingEntryError.message
-                  : String(pendingEntryError),
-            },
-          );
-          resolvedEntryType = "MARKET";
-          fellBackToMarket = true;
+        } catch (e) {
+          stopError = e instanceof Error ? e : new Error(String(e));
         }
+
+        if (stopError) {
+          logger.warn(
+            "Dat STOP_MARKET entry that bai (co the gia da vuot qua muc trigger) — thu LIMIT thay the",
+            { pair: setup.pair, binanceSymbol, error: stopError.message },
+          );
+          const entryPrice = roundToTickSize(plan.entry, filters.tickSize);
+          let limitError: Error | null = null;
+
+          try {
+            const limitResult = await placeLimitOrder(binanceSymbol, side, entryPrice, sizing.quantity);
+            if (limitResult instanceof Error) {
+              limitError = limitResult;
+            } else {
+              entryOrder = limitResult;
+              resolvedEntryType = "LIMIT";
+            }
+          } catch (e) {
+            limitError = e instanceof Error ? e : new Error(String(e));
+          }
+
+          if (limitError) {
+            // Ca STOP va LIMIT deu fail — khong con lua chon nao khac (chi 2 loai lenh).
+            await handleEntryOrderFullFailure(
+              config,
+              binanceSymbol,
+              setup,
+              plan,
+              side,
+              stopError,
+              limitError,
+              positionId,
+              logger,
+            );
+            return;
+          }
+        }
+      } else if (preferredEntryType === "LIMIT") {
+        const entryPrice = roundToTickSize(plan.entry, filters.tickSize);
+        const limitResult = await placeLimitOrder(binanceSymbol, side, entryPrice, sizing.quantity);
+        if (limitResult instanceof Error) throw limitResult; // giu nguyen hanh vi cu: LIMIT la preferred va la lua chon cuoi, khong con fallback nao khac
+        entryOrder = limitResult;
       }
+      // preferredEntryType === "MARKET" (honor-order-type tat): giu nguyen hanh vi cu, khong doi.
 
       if (resolvedEntryType === "MARKET") {
         if (!entryOrder) {
@@ -421,7 +540,7 @@ export function createOpenBinanceFuturesPosition<
         );
 
         await sendMessage(
-          `✅ ${config.successPrefix} — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}${fellBackToMarket ? " (fallback MARKET — lệnh chờ khớp không đặt được)" : ""}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP: ${tpPrice}`,
+          `✅ ${config.successPrefix} — Đã mở vị thế thật ${setup.direction} ${binanceSymbol}\nQty: ${sizing.quantity} | Leverage: ${leverage}x\nEntry: ${plan.entry} | SL: ${slPrice} | TP: ${tpPrice}`,
         );
       } else if (resolvedEntryType === "LIMIT") {
         const entryPrice = roundToTickSize(plan.entry, filters.tickSize);
@@ -630,6 +749,99 @@ async function placeProtectionOrdersAndFinalize(
   }
 }
 
+export async function checkAndApplyBinanceBreakeven(
+  config: BinanceExecutionSystemConfig<any, any, any>,
+  position: OpenPosition & { stopLoss: string; openedAt: string },
+  logger: ReturnType<typeof createLogger>,
+): Promise<void> {
+  if (!config.fetchPriceStatsSinceOpen || !config.applyBinanceBreakevenStopLoss) return;
+
+  const symbol = position.binanceSymbol as string;
+  const entry = Number(position.entry);
+  const stopLoss = Number(position.stopLoss);
+  if (!Number.isFinite(entry) || !Number.isFinite(stopLoss)) return;
+
+  const alreadyAtBreakeven = Math.abs(entry - stopLoss) < 1e-9;
+  if (alreadyAtBreakeven) return;
+
+  const statsResult = await config.fetchPriceStatsSinceOpen(position);
+  if (statsResult instanceof Error) {
+    logger.warn("Khong lay duoc gia de kiem tra 1R breakeven", {
+      pair: position.pair,
+      id: position.id,
+      error: statsResult,
+    });
+    return;
+  }
+
+  const oneRLevel = 2 * entry - stopLoss;
+  const reached1R =
+    position.direction === "LONG" ? statsResult.high >= oneRLevel : statsResult.low <= oneRLevel;
+  if (!reached1R) return;
+
+  const filters = await getExchangeInfoFilters(symbol);
+  if (filters instanceof Error) {
+    logger.warn("Khong lay tick size de dat SL breakeven", { pair: position.pair, error: filters });
+    return;
+  }
+  const newSlPrice = roundToTickSize(entry, filters.tickSize);
+  const closeSide: "BUY" | "SELL" = position.direction === "LONG" ? "SELL" : "BUY";
+  const workingType = getConfiguredBinanceWorkingType();
+
+  if (position.binanceSlOrderId) {
+    const cancelResult = await cancelOrder(symbol, position.binanceSlOrderId);
+    if (cancelResult instanceof Error) {
+      logger.error("Khong huy duoc SL order cu de doi breakeven", {
+        pair: position.pair,
+        id: position.id,
+        error: cancelResult,
+      });
+      await sendMessage(
+        `🚨 ${config.silentFailureWarnPrefix} — ${symbol}: giá đã cán 1R nhưng KHÔNG hủy được SL cũ để dời về entry (orderId ${position.binanceSlOrderId}). SL cũ vẫn còn hiệu lực, kiểm tra tay trên Binance app nếu muốn dời breakeven.\nLỗi: ${cancelResult.message}`,
+      );
+      return;
+    }
+  }
+
+  const newSlOrder = await placeStopMarketOrderRetryOn4509(
+    symbol,
+    closeSide,
+    newSlPrice,
+    workingType ? { workingType } : {},
+    logger,
+  );
+  if (newSlOrder instanceof Error) {
+    logger.error("Da huy SL cu nhung dat SL moi (breakeven) that bai — vi the dang mo KHONG CO SL", {
+      pair: position.pair,
+      id: position.id,
+      error: newSlOrder,
+    });
+    await sendMessage(
+      `🚨🚨 ${config.failSafeEmergencyMessagePrefix} — ${symbol}: giá đã cán 1R, đã hủy SL cũ nhưng đặt SL mới tại entry THẤT BẠI. VỊ THẾ ĐANG MỞ KHÔNG CÓ SL — mở Binance app và đặt SL tay NGAY (giá đề xuất: ${newSlPrice}).\nLỗi: ${newSlOrder.message}`,
+    );
+    return;
+  }
+
+  try {
+    await config.applyBinanceBreakevenStopLoss(position.id, String(newSlPrice), newSlOrder.orderId);
+  } catch (dbError) {
+    logger.error("Da dat SL breakeven that tren san nhung khong ghi duoc DB", {
+      pair: position.pair,
+      id: position.id,
+      error: dbError,
+    });
+    await sendMessage(
+      `⚠️ ${config.dbErrorPrefix} — ${symbol}: SL đã dời về entry (${newSlPrice}) THẬT trên sàn (orderId ${newSlOrder.orderId}) nhưng KHÔNG ghi được vào DB. Bot có thể không theo dõi đúng orderId SL mới — kiểm tra tay position #${position.id}.\nLỗi DB: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+    );
+    return;
+  }
+
+  const message = config.buildBreakevenNotifyMessage
+    ? config.buildBreakevenNotifyMessage(position, newSlPrice)
+    : `🎯 ${config.systemLabel} — Vị thế #${position.id} ${position.pair} đã cán 1R, đã dời SL về entry (${newSlPrice}) trên sàn.`;
+  await sendMessage(message);
+}
+
 export function createReconcileBinancePosition<TOpenPosition extends OpenPosition>(
   config: BinanceExecutionSystemConfig<any, TOpenPosition, any>,
 ) {
@@ -772,6 +984,9 @@ export function createReconcileBinancePosition<TOpenPosition extends OpenPositio
         return close("TP da khop tren Binance Futures", "TAKE_PROFIT_CLOSE");
       }
     }
+
+    // Check and apply 1R breakeven if price has reached 1R level
+    await checkAndApplyBinanceBreakeven(config, position as any, logger);
 
     const hasProtectionOrder =
       Boolean(position.binanceSlOrderId) || Boolean(position.binanceTp1OrderId);

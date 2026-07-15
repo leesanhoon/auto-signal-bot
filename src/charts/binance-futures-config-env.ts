@@ -61,6 +61,13 @@ export function isBinanceHonorOrderTypeEnabledVolman(): boolean {
   return readBooleanEnv("BINANCE_HONOR_ORDER_TYPE_VOLMAN", false);
 }
 
+export function getConfiguredBinanceMaxConcurrentPositionsVolman(): number {
+  const raw = process.env.BINANCE_MAX_CONCURRENT_POSITIONS_VOLMAN?.trim();
+  if (!raw) return 3;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 3;
+}
+
 export function getConfiguredBinanceEntryOrderExpiryMinutes(): number {
   const raw = process.env.BINANCE_ENTRY_ORDER_EXPIRY_MINUTES?.trim();
   if (!raw) return 60;

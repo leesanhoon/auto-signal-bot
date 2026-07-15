@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   computeOrderQuantity,
   roundToTickSize,
+  computeRequiredLeverage,
   type PositionSizingInput,
-  type BinanceSymbolFilters,
+  type LeverageComputationInput,
 } from "../../src/charts/binance-position-sizing.js";
 
 describe("charts/binance-position-sizing", () => {
@@ -182,6 +183,115 @@ describe("charts/binance-position-sizing", () => {
       expect(roundToTickSize(1.034, 0.01)).toBe(1.03);
       // 1.036 / 0.01 = 103.6, Math.round(103.6) = 104, 104 * 0.01 = 1.04
       expect(roundToTickSize(1.036, 0.01)).toBe(1.04);
+    });
+  });
+
+  describe("computeRequiredLeverage", () => {
+    it("returns leverage 1 when notional is small relative to margin budget", () => {
+      const input: LeverageComputationInput = {
+        notional: 100,
+        marginBudgetUsdt: 500,
+        maxLeverageForSymbol: 20,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).not.toBeInstanceOf(Error);
+      if (!(result instanceof Error)) {
+        // ceil(100 / 500) = ceil(0.2) = 1, max(1, 1) = 1
+        expect(result.leverage).toBe(1);
+      }
+    });
+
+    it("calculates correct leverage when notional > margin budget", () => {
+      const input: LeverageComputationInput = {
+        notional: 1000,
+        marginBudgetUsdt: 200,
+        maxLeverageForSymbol: 20,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).not.toBeInstanceOf(Error);
+      if (!(result instanceof Error)) {
+        // ceil(1000 / 200) = ceil(5) = 5
+        expect(result.leverage).toBe(5);
+      }
+    });
+
+    it("calculates correct leverage with non-integer result", () => {
+      const input: LeverageComputationInput = {
+        notional: 1000,
+        marginBudgetUsdt: 210,
+        maxLeverageForSymbol: 20,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).not.toBeInstanceOf(Error);
+      if (!(result instanceof Error)) {
+        // ceil(1000 / 210) = ceil(4.76) = 5
+        expect(result.leverage).toBe(5);
+      }
+    });
+
+    it("returns error when leverage exceeds maxLeverage", () => {
+      const input: LeverageComputationInput = {
+        notional: 10000,
+        marginBudgetUsdt: 100,
+        maxLeverageForSymbol: 5,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).toBeInstanceOf(Error);
+      expect((result as Error).message).toContain("100x");
+    });
+
+    it("returns error when notional is invalid", () => {
+      const input: LeverageComputationInput = {
+        notional: -100,
+        marginBudgetUsdt: 200,
+        maxLeverageForSymbol: 20,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).toBeInstanceOf(Error);
+      expect((result as Error).message).toContain("Notional khong hop le");
+    });
+
+    it("returns error when margin budget is invalid", () => {
+      const input: LeverageComputationInput = {
+        notional: 1000,
+        marginBudgetUsdt: 0,
+        maxLeverageForSymbol: 20,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).toBeInstanceOf(Error);
+      expect((result as Error).message).toContain("Margin budget khong hop le");
+    });
+
+    it("returns error when maxLeverage is invalid", () => {
+      const input: LeverageComputationInput = {
+        notional: 1000,
+        marginBudgetUsdt: 200,
+        maxLeverageForSymbol: 0.5,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).toBeInstanceOf(Error);
+      expect((result as Error).message).toContain("Max leverage cua symbol khong hop le");
+    });
+
+    it("accepts maxLeverage = 1 as valid", () => {
+      const input: LeverageComputationInput = {
+        notional: 100,
+        marginBudgetUsdt: 100,
+        maxLeverageForSymbol: 1,
+      };
+
+      const result = computeRequiredLeverage(input);
+      expect(result).not.toBeInstanceOf(Error);
+      if (!(result instanceof Error)) {
+        expect(result.leverage).toBe(1);
+      }
     });
   });
 

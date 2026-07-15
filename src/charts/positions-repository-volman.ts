@@ -450,6 +450,32 @@ export async function applyBreakevenStopLoss(id: number, entry: string): Promise
   if (error) throw new Error(`applyBreakevenStopLoss failed: ${error.message}`);
 }
 
+export async function applyBinanceBreakevenStopLoss(
+  id: number,
+  entry: string,
+  newSlOrderId: number,
+): Promise<void> {
+  const { error } = await (getDb().from("open_positions_volman") as any)
+    .update({ stop_loss: entry, binance_sl_order_id: newSlOrderId })
+    .eq("id", id);
+
+  if (error) throw new Error(`applyBinanceBreakevenStopLoss failed: ${error.message}`);
+}
+
+export async function countLiveBinancePositionsVolman(): Promise<number> {
+  const { data, error } = await (getDb().from("open_positions_volman") as any)
+    .select("id, binance_execution_status, binance_entry_order_status")
+    .eq("status", "open");
+
+  if (error) throw new Error(`countLiveBinancePositionsVolman failed: ${error.message}`);
+
+  return (data ?? []).filter(
+    (row: { binance_execution_status: string | null; binance_entry_order_status: string | null }) =>
+      row.binance_execution_status === "placed" ||
+      row.binance_entry_order_status === "working",
+  ).length;
+}
+
 export type BinanceExecutionDetails = {
   binanceSymbol: string;
   binanceLeverage: number;
