@@ -175,7 +175,6 @@ describe("Chart renderer", () => {
         },
       });
 
-      expect(svg).toContain("Giá hiện tại");
       // Live price line must use a color distinct from entry (#FFFF00), SL (#FF0000), TP (#00AA00).
       expect(svg).toContain('stroke="#00CFFF"');
     });

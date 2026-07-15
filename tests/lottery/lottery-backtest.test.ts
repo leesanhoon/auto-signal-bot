@@ -102,11 +102,12 @@ describe("lottery/lottery-backtest", () => {
 
   test("does not leak future-only patterns into earlier predictions", async () => {
     const records = buildFixtureRecords();
-    const summary = await runBacktest(records, "mien-bac", 3, "regression", 3, 10);
+    const topN = 10;
+    const summary = await runBacktest(records, "mien-bac", 3, "regression", topN, 10);
     const firstEvaluatedPeriod = summary.periods[0];
     const trainingSlice = records.filter((record) => record.date < "2026-01-11");
-    const trainingOnlyPredictions = predictTopNumbersRegression(trainingSlice, 3).map((item) => item.number);
-    const fullDatasetPredictions = predictTopNumbersRegression(records, 3).map((item) => item.number);
+    const trainingOnlyPredictions = predictTopNumbersRegression(trainingSlice, topN).map((item) => item.number);
+    const fullDatasetPredictions = predictTopNumbersRegression(records, topN).map((item) => item.number);
 
     expect(firstEvaluatedPeriod).toBeDefined();
     expect(firstEvaluatedPeriod!.date).toBe("2026-01-11");

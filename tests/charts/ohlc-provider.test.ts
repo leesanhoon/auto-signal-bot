@@ -315,7 +315,7 @@ describe("fetchOhlcHistory", () => {
 
     expect(result).not.toBeInstanceOf(Error);
     const candles = result as Candle[];
-    expect(capturedUrl).toContain("api.binance.com/api/v3/klines");
+    expect(capturedUrl).toContain("fapi.binance.com/fapi/v1/klines");
     expect(capturedUrl).toContain("symbol=BTCUSDT");
     expect(capturedUrl).toContain("interval=4h");
     expect(candles).toHaveLength(2);
@@ -388,7 +388,7 @@ describe("fetchLastPrice", () => {
     expect(result).toBe(42500);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const url = fetchSpy.mock.calls[0][0];
-    expect(String(url)).toContain("api.binance.com/api/v3/ticker/price");
+    expect(String(url)).toContain("fapi.binance.com/fapi/v1/ticker/price");
     expect(String(url)).toContain("symbol=BTCUSDT");
   });
 
