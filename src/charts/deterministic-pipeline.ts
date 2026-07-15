@@ -104,7 +104,8 @@ export async function analyzeAllChartsDeterministic(
       // ---- Run all 7 Volman setup detectors on the single most recently closed candle ----
       const startDetectIndex = lastIndex;
       const allSignals: DetectedSignal[] = [];
-      const detectors = [detectDdb, detectFb, detectSb, detectBb, detectRb, detectArb, detectIrb];
+      // Tam thoi off ARB/IRB/RB/FB, chi giu BB/SB/DDB theo yeu cau.
+      const detectors = [detectDdb, detectSb, detectBb];
 
       for (let i = startDetectIndex; i <= lastIndex; i++) {
         for (const detector of detectors) {
