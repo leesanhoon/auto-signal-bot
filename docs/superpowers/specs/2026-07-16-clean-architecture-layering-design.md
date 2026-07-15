@@ -95,8 +95,12 @@ Sửa mọi import trong toàn repo trỏ `shared/db.js` → `shared/infra/db.js
 
 ### Tests
 
-`tests/betting/*`, `tests/charts/*`, `tests/lottery/*`, `tests/shared/*` di chuyển theo cùng cấu
-trúc layer để mirror `src/`. Chỉ sửa import path, không đổi test logic.
+Giữ nguyên vị trí file test hiện tại (`tests/betting/*`, `tests/charts/*`, `tests/lottery/*`,
+`tests/shared/*`) — không move theo layer. Nhiều test file không match 1:1 tên với src file sau
+khi tách layer (v.d. `tests/charts/position-decision.test.ts` test cho
+`src/charts/service/position-decision-volman.ts`), nên move thêm sẽ tốn công phân loại thủ công
+mà không đổi hành vi. Chỉ sửa `vi.mock(...)` path và import path trỏ tới vị trí mới của file
+nguồn trong `src/`.
 
 ### `src/scripts/`
 
