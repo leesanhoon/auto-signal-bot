@@ -9,7 +9,7 @@ import { detectBb } from "./setups/bb.js";
 import { detectRb } from "./setups/rb.js";
 import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
-import { runSbDetection } from "../setup-sb-runner.js";
+import { runSbDetection } from "../controller/setup-sb-runner.js";
 import { buildTradeSetupFromSignal, buildPairSummaryFromContext } from "./signal-assembly.js";
 import type { DetectedSignal } from "../model/setup-types.js";
 import { createLogger } from "../../shared/infra/logger.js";
