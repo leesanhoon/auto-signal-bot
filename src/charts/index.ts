@@ -6,11 +6,12 @@ import {
 } from "./positions-repository-volman.js";
 import { runCheckOpenTrades } from "./check-open-trades-runner-volman.js";
 import { sendMessage, notifyError } from "../shared/telegram-client.js";
-import {
-  buildHeartbeatMessage,
-  sendAllAnalysesVolman,
-} from "../shared/telegram-volman.js";
+import { sendAllAnalysesVolman } from "../shared/telegram-volman.js";
 import { createLogger } from "../shared/logger.js";
+import {
+  recordScannerRunOutcome,
+  checkAndMaybeSendErrorStreakAlert,
+} from "./scanner-health-repository-volman.js";
 import { validateTradeSetupForOpen } from "./position-engine-volman.js";
 import {
   getConfiguredChartPrimaryTimeframe,
@@ -292,24 +293,6 @@ async function handleAnalysisResult(
   });
 }
 
-async function maybeSendHeartbeat(
-  runContext: ReturnType<typeof getConfiguredChartRunContext>,
-  candleKey: string,
-  heartbeatReason: "no-cache" | "no-event" | null,
-  latestCacheCandleKey?: string | null,
-): Promise<void> {
-  if (!heartbeatReason) return;
-  await sendMessage(
-    buildHeartbeatMessage({
-      runContext,
-      engineMode: "bob-volman",
-      reason: heartbeatReason,
-      candleKey,
-      latestCacheCandleKey: latestCacheCandleKey ?? null,
-    }),
-  );
-}
-
 export async function main(): Promise<void> {
   const startTime = Date.now();
   const runContext = getConfiguredChartRunContext();
@@ -333,10 +316,8 @@ export async function main(): Promise<void> {
     timeframeMode,
     primaryTimeframe,
   );
-  let latestCacheCandleKey: string | null = null;
   let result: AnalysisResult | null = null;
   let origin: AnalysisOrigin | null = null;
-  let heartbeatReason: "no-cache" | "no-event" | null = null;
 
   const analysisState = await loadAnalysisForRun(
     candleBaseKey,
@@ -347,8 +328,6 @@ export async function main(): Promise<void> {
   );
   result = analysisState.result;
   origin = analysisState.origin;
-  heartbeatReason = analysisState.heartbeatReason;
-  if (origin?.source === "cached") latestCacheCandleKey = origin.candleKey;
 
   // Checks every timeframe's open positions in one pass (not just this process's own
   // primaryTimeframe) — M15/H1/H4 each run as a separate scheduled process (see
@@ -373,15 +352,6 @@ export async function main(): Promise<void> {
     await pollPendingEntryOrders();
   }
 
-  if (!result && openTradeNotifications === 0) {
-    await maybeSendHeartbeat(
-      runContext,
-      candleKey,
-      heartbeatReason,
-      latestCacheCandleKey,
-    );
-  }
-
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   const attemptedPairs =
     result?.analysisStats?.attemptedPairs ?? result?.summaries.length ?? 0;
@@ -389,6 +359,27 @@ export async function main(): Promise<void> {
   const skippedPairs = result?.analysisStats?.skippedPairs ?? 0;
   const setupCount =
     result?.analysisStats?.setupCount ?? result?.setups.length ?? 0;
+
+  const attemptedPairsForHealth = result?.analysisStats?.attemptedPairs ?? 0;
+  const skippedPairsForHealth = result?.analysisStats?.skippedPairs ?? 0;
+  const runFailed =
+    attemptedPairsForHealth > 0 &&
+    attemptedPairsForHealth === skippedPairsForHealth;
+  await recordScannerRunOutcome(
+    runFailed ? "error" : "ok",
+    runFailed
+      ? `All ${attemptedPairsForHealth} attempted pairs were skipped this run`
+      : undefined,
+  );
+  await checkAndMaybeSendErrorStreakAlert(async (streakSinceIso) => {
+    await notifyError(
+      getChartScannerErrorScope(),
+      new Error(
+        `Không có lần chạy scan thành công nào kể từ ${streakSinceIso} (≥2 giờ liên tục lỗi).`,
+      ),
+    );
+  });
+
   logger.info("Run complete", {
     scannedPairs: attemptedPairs,
     attemptedPairs,
@@ -409,6 +400,18 @@ if (!process.env.VITEST) {
   main().catch(async (error) => {
     logger.error("Fatal error", { error });
     await notifyError(getChartScannerErrorScope(), error);
+    await recordScannerRunOutcome(
+      "error",
+      error instanceof Error ? error.message : String(error),
+    );
+    await checkAndMaybeSendErrorStreakAlert(async (streakSinceIso) => {
+      await notifyError(
+        getChartScannerErrorScope(),
+        new Error(
+          `Không có lần chạy scan thành công nào kể từ ${streakSinceIso} (≥2 giờ liên tục lỗi).`,
+        ),
+      );
+    });
     process.exit(1);
   });
 }

@@ -438,14 +438,8 @@ export async function sendAllAnalysesVolman(
   const timeframeTag = timeframe ? ` [${timeframe}]` : "";
 
   if (setups.length === 0) {
-    await notifier.sendMessage(
-      [
-        `⏸ *${scannerLabel}${timeframeTag}* — không có setup đạt ngưỡng (≥${threshold}%)${isCached ? " (cache)" : ""}`,
-        `📅 ${timestamp} | Quét ${attemptedCount} cặp, ${summaries.length}/${result.summaries.length} đạt ngưỡng summary`,
-      ].join("\n"),
-    );
     logger.info(
-      `  → No setups above threshold (${threshold}%). Notification sent with ${summaries.length} eligible summaries (${footerLabel}).`,
+      `  → No setups above threshold (${threshold}%). Telegram notification suppressed (no signal) — ${summaries.length} eligible summaries (${footerLabel}).`,
     );
     return;
   }

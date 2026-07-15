@@ -10,37 +10,6 @@ type SeedSymbol = {
   active: boolean;
 };
 
-const MAIN_ACTIVE_SYMBOLS = new Set<string>([
-  "BINANCE:BTCUSDT",
-  "BINANCE:ETHUSDT",
-  "BINANCE:BNBUSDT",
-  "BINANCE:SOLUSDT",
-  "BINANCE:XRPUSDT",
-  "BINANCE:ADAUSDT",
-  "BINANCE:DOGEUSDT",
-  "BINANCE:AVAXUSDT",
-  "BINANCE:LINKUSDT",
-  "BINANCE:DOTUSDT",
-  "BINANCE:LTCUSDT",
-  "BINANCE:BCHUSDT",
-  "BINANCE:TRXUSDT",
-  "BINANCE:XLMUSDT",
-  "BINANCE:ATOMUSDT",
-  "BINANCE:HBARUSDT",
-  "BINANCE:AAVEUSDT",
-  "BINANCE:UNIUSDT",
-  "BINANCE:NEARUSDT",
-  "BINANCE:SUIUSDT",
-  "OANDA:XAUUSD",
-  "OANDA:EURUSD",
-  "OANDA:GBPUSD",
-  "OANDA:USDJPY",
-  "OANDA:AUDUSD",
-  "OANDA:USDCHF",
-  "OANDA:USDCAD",
-  "OANDA:NZDUSD",
-]);
-
 // Transcribed verbatim from the pre-migration BASE_CHARTS array in
 // src/charts/volman-charts.config.ts (git history has the original file).
 // BINANCE: entries are validated against live Binance Futures exchangeInfo
@@ -262,6 +231,10 @@ const RAW_SEED_DATA: SeedSymbol[] = [
   { name: "AUD/CAD", symbol: "OANDA:AUDCAD", category: "cross", active: false },
   { name: "AUD/NZD", symbol: "OANDA:AUDNZD", category: "cross", active: false },
 ];
+
+const MAIN_ACTIVE_SYMBOLS = new Set<string>(
+  RAW_SEED_DATA.map((entry) => entry.symbol),
+);
 
 const SEED_DATA: SeedSymbol[] = RAW_SEED_DATA.map((entry) => ({
   ...entry,

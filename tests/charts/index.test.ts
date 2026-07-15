@@ -354,7 +354,7 @@ describe("charts/index main() — H4 close guard", () => {
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
-  test("ngoài window + manual run + không có cache → gửi heartbeat", async () => {
+  test("ngoài window + manual run + không có cache → không gửi heartbeat", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("manual");
     mocks.loadLatestChartAnalysisCache.mockResolvedValue(null);
 
@@ -362,31 +362,19 @@ describe("charts/index main() — H4 close guard", () => {
 
     expect(mocks.captureAllCharts).not.toHaveBeenCalled();
     expect(mocks.sendAllAnalyses).not.toHaveBeenCalled();
-    expect(mocks.buildHeartbeatMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        runContext: "manual",
-        reason: "no-cache",
-        candleKey: expect.any(String),
-      }),
-    );
-    expect(mocks.sendMessage).toHaveBeenCalledWith("HEARTBEAT");
+    expect(mocks.buildHeartbeatMessage).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
-  test("ngoài window + auto run + không có event khác → gửi heartbeat no-event", async () => {
+  test("ngoài window + auto run + không có event khác → không gửi heartbeat", async () => {
     mocks.getConfiguredChartRunContext.mockReturnValue("auto");
     mocks.runCheckOpenTrades.mockResolvedValue(0);
 
     await main();
 
     expect(mocks.loadLatestChartAnalysisCache).not.toHaveBeenCalled();
-    expect(mocks.buildHeartbeatMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        runContext: "auto",
-        reason: "no-event",
-        candleKey: expect.any(String),
-      }),
-    );
-    expect(mocks.sendMessage).toHaveBeenCalledWith("HEARTBEAT");
+    expect(mocks.buildHeartbeatMessage).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
   test("ngoài window + auto run + có event trade/pending → không gửi heartbeat", async () => {
