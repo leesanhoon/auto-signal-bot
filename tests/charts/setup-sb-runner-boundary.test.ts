@@ -6,7 +6,7 @@ const { detectSbMock } = vi.hoisted(() => ({
   detectSbMock: vi.fn(),
 }));
 
-vi.mock("../../src/charts/setups/sb.js", () => ({
+vi.mock("../../src/charts/service/setups/sb.js", () => ({
   detectSb: detectSbMock,
 }));
 
