@@ -49,8 +49,16 @@ const buildSampleCandles = (): Candle[] => {
   for (let i = 0; i < 16; i++) {
     const open = price;
     const drift = (i % 2 === 0 ? 1 : -1) * 35;
-    const close = Math.min(blockHigh - 15, Math.max(blockLow + 15, price + drift));
-    push(open, close, Math.min(blockHigh, Math.max(open, close) + 25), Math.max(blockLow, Math.min(open, close) - 25));
+    const close = Math.min(
+      blockHigh - 15,
+      Math.max(blockLow + 15, price + drift),
+    );
+    push(
+      open,
+      close,
+      Math.min(blockHigh, Math.max(open, close) + 25),
+      Math.max(blockLow, Math.min(open, close) - 25),
+    );
     price = close;
   }
 
@@ -76,8 +84,12 @@ const main = async (): Promise<void> => {
   const blockStart = 30;
   const blockEnd = 45;
   const breakoutIndex = 46;
-  const blockHigh = Math.max(...candles.slice(blockStart, blockEnd + 1).map((c) => c.high));
-  const blockLow = Math.min(...candles.slice(blockStart, blockEnd + 1).map((c) => c.low));
+  const blockHigh = Math.max(
+    ...candles.slice(blockStart, blockEnd + 1).map((c) => c.high),
+  );
+  const blockLow = Math.min(
+    ...candles.slice(blockStart, blockEnd + 1).map((c) => c.low),
+  );
 
   const entry = blockHigh + 10;
   const stopLoss = blockLow - 10;
@@ -147,7 +159,7 @@ const main = async (): Promise<void> => {
       "• Nến breakout được khoanh viền cam",
       "• Label *BB* màu xanh chỉ vào điểm breakout",
       "• 3 đường ngang: Entry (vàng), SL (đỏ), TP (xanh lá)",
-      "• Đường *Giá hiện tại* màu xanh cyan",
+      // "• Đường *Giá hiện tại* màu xanh cyan",
     ].join("\n"),
   );
   console.log("Xong — kiểm tra Telegram.");

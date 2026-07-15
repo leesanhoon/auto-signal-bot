@@ -7,7 +7,8 @@ const logger = createLogger("charts:setup-chart-renderer");
 
 export function getPlaywrightDiagnostics(): string {
   const browsersPath =
-    process.env.PLAYWRIGHT_BROWSERS_PATH ?? "(không set — dùng default cache path)";
+    process.env.PLAYWRIGHT_BROWSERS_PATH ??
+    "(không set — dùng default cache path)";
 
   let executablePath: string;
   try {
@@ -101,7 +102,16 @@ function mapYCoord(price: number, coord: CoordMap): number {
 }
 
 export function buildSetupChartSvg(input: SetupChartInput): string {
-  const { pair, setup, direction, entry, stopLoss, takeProfit, livePrice, chartContext } = input;
+  const {
+    pair,
+    setup,
+    direction,
+    entry,
+    stopLoss,
+    takeProfit,
+    livePrice,
+    chartContext,
+  } = input;
   const { candles, ma21, sliceStartIndex, geometry } = chartContext;
 
   const coord = buildCoordMap(candles, stopLoss, takeProfit, livePrice ?? null);
@@ -223,9 +233,24 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
 
   // Draw entry/SL/TP lines
   const lines = [
-    { price: entry, label: `Entry ${entry.toFixed(5)}`, color: "#FFFF00", dash: "5,5" },
-    { price: stopLoss, label: `SL ${stopLoss.toFixed(5)}`, color: "#FF0000", dash: "5,5" },
-    { price: takeProfit, label: `TP ${takeProfit.toFixed(5)}`, color: "#00AA00", dash: "5,5" },
+    {
+      price: entry,
+      label: `Entry ${entry.toFixed(5)}`,
+      color: "#FFFF00",
+      dash: "5,5",
+    },
+    {
+      price: stopLoss,
+      label: `SL ${stopLoss.toFixed(5)}`,
+      color: "#FF0000",
+      dash: "5,5",
+    },
+    {
+      price: takeProfit,
+      label: `TP ${takeProfit.toFixed(5)}`,
+      color: "#00AA00",
+      dash: "5,5",
+    },
   ];
 
   for (const line of lines) {
@@ -241,13 +266,17 @@ export function buildSetupChartSvg(input: SetupChartInput): string {
 
   // Draw live price line — distinct color/style from entry/SL/TP so the gap
   // between the (possibly stale) entry and current price is visually obvious.
-  if (livePrice !== null && livePrice !== undefined && Number.isFinite(livePrice)) {
+  if (
+    livePrice !== null &&
+    livePrice !== undefined &&
+    Number.isFinite(livePrice)
+  ) {
     const y = mapYCoord(livePrice, coord);
     const x1 = coord.marginLeft;
     const x2 = 900 - coord.marginRight;
 
     svg += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#00CFFF" stroke-width="1.5" opacity="0.9"/>`;
-    svg += `<text x="${x1 + 5}" y="${y - 6}" font-size="10" fill="#00CFFF">Giá hiện tại ${livePrice.toFixed(5)}</text>`;
+    // svg += `<text x="${x1 + 5}" y="${y - 6}" font-size="10" fill="#00CFFF">Giá hiện tại ${livePrice.toFixed(5)}</text>`;
   }
 
   // Draw the setup label near its breakout/signal point
@@ -275,8 +304,12 @@ export async function renderSetupChartPng(svg: string): Promise<Buffer> {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   try {
-    const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
-    await page.setContent(`<html><body style="margin:0;padding:0">${svg}</body></html>`);
+    const page = await browser.newPage({
+      viewport: { width: 900, height: 500 },
+    });
+    await page.setContent(
+      `<html><body style="margin:0;padding:0">${svg}</body></html>`,
+    );
     const buffer = await page.screenshot({ type: "png" });
     return Buffer.from(buffer);
   } finally {
@@ -291,7 +324,9 @@ async function renderOneSetupChart(
   const svg = buildSetupChartSvg(input);
   const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
   try {
-    await page.setContent(`<html><body style="margin:0;padding:0">${svg}</body></html>`);
+    await page.setContent(
+      `<html><body style="margin:0;padding:0">${svg}</body></html>`,
+    );
     const buffer = await page.screenshot({ type: "png" });
     return Buffer.from(buffer);
   } finally {
