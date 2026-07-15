@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { createOddsApplication } from "../../../src/betting/application/odds-application.js";
+import { createOddsApplication } from "../../../src/betting/controller/odds-application.js";
 
-describe("betting/application/odds-application", () => {
+describe("betting/controller/odds-application", () => {
   const state = {
     sendMessage: vi.fn(),
     buildOddsPayload: vi.fn(),

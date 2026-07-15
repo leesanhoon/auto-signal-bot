@@ -1,5 +1,5 @@
 import "../../shared/env.js";
-import { createOddsApplication } from "../application/odds-application.js";
+import { createOddsApplication } from "./odds-application.js";
 import { createBettingApiClient } from "../client/betting-api-client.js";
 import * as bettingAiClient from "../client/betting-ai-client.js";
 import { getDb } from "../../shared/db.js";
