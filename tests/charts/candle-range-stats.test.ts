@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const candleRangeStats = await import("../../src/charts/candle-range-stats.js");
+const candleRangeStats = await import("../../src/charts/service/candle-range-stats.js");
 
 describe("charts/candle-range-stats", () => {
   describe("fetchCandleRangeStats — Yahoo Finance fallback (forex/gold)", () => {

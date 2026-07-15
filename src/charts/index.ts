@@ -12,7 +12,7 @@ import {
   recordScannerRunOutcome,
   checkAndMaybeSendErrorStreakAlert,
 } from "./repository/scanner-health-repository-volman.js";
-import { validateTradeSetupForOpen } from "./position-engine-volman.js";
+import { validateTradeSetupForOpen } from "./service/position-engine-volman.js";
 import {
   getConfiguredChartPrimaryTimeframe,
   getConfiguredChartEngineMode,
@@ -25,27 +25,27 @@ import {
 } from "./model/volman-config-env.js";
 import type { AnalysisResult, TradeSetup } from "./model/chart-types-volman.js";
 import type { ChartTimeframe } from "./model/chart-types-common.js";
-import { applySignalFreshnessGuard } from "./signal-freshness.js";
+import { applySignalFreshnessGuard } from "./service/signal-freshness.js";
 import {
   getLastClosedCandleKey,
   isWithinTimeframeCandleCloseWindow,
-} from "./chart-cache.js";
+} from "./service/chart-cache.js";
 import {
   loadChartAnalysisCache,
   loadLatestChartAnalysisCache,
   saveChartAnalysisCache,
 } from "./repository/chart-cache-repository-volman.js";
-import { analyzeAllChartsDeterministic } from "./deterministic-pipeline.js";
-import { getCharts, getChartsForTimeframeMode } from "./volman-charts.config.js";
+import { analyzeAllChartsDeterministic } from "./service/deterministic-pipeline.js";
+import { getCharts, getChartsForTimeframeMode } from "./service/volman-charts.config.js";
 import {
   openBinanceFuturesPosition,
   pollPendingEntryOrders,
-} from "./binance-execution-volman.js";
+} from "./service/binance-execution-volman.js";
 import {
   isBinanceLiveTradingEnabled,
   isBinanceLiveTradingEnabledVolman,
 } from "./model/binance-futures-config-env.js";
-import { buildChartAnalysisCacheKey } from "./analyzer-common.js";
+import { buildChartAnalysisCacheKey } from "./service/analyzer-common.js";
 
 const logger = createLogger("charts:index");
 const CANDLE_CLOSE_WINDOW_MS = 20 * 60 * 1000;

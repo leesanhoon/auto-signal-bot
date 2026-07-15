@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import type { Candle } from "../charts/client/ohlc-provider.js";
 import type { ChartContext } from "../charts/model/chart-types-volman.js";
 import type { SetupChartGeometry } from "../charts/model/setup-types.js";
-import { calculateEma } from "../charts/indicators.js";
+import { calculateEma } from "../charts/service/indicators.js";
 import {
   buildSetupChartSvg,
   renderSetupChartPng,

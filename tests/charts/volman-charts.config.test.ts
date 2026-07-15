@@ -23,7 +23,7 @@ describe("charts/volman-charts.config", () => {
       { name: "BTC/USDT", symbol: "BINANCE:BTCUSDT" },
     ]);
 
-    const { getCharts } = await import("../../src/charts/volman-charts.config.js");
+    const { getCharts } = await import("../../src/charts/service/volman-charts.config.js");
     const charts = await getCharts();
 
     expect(charts).toHaveLength(4);
@@ -39,7 +39,7 @@ describe("charts/volman-charts.config", () => {
       { name: "EUR/USD", symbol: "OANDA:EURUSD" },
     ]);
 
-    const { getCharts } = await import("../../src/charts/volman-charts.config.js");
+    const { getCharts } = await import("../../src/charts/service/volman-charts.config.js");
     const charts = await getCharts();
 
     expect(charts.every((c) => c.symbol !== "OANDA:EURUSD")).toBe(true);
@@ -52,7 +52,7 @@ describe("charts/volman-charts.config", () => {
       { name: "EUR/USD", symbol: "OANDA:EURUSD" },
     ]);
 
-    const { getCharts } = await import("../../src/charts/volman-charts.config.js");
+    const { getCharts } = await import("../../src/charts/service/volman-charts.config.js");
     const charts = await getCharts();
 
     expect(charts.some((c) => c.symbol === "OANDA:EURUSD")).toBe(true);
@@ -64,7 +64,7 @@ describe("charts/volman-charts.config", () => {
       { name: "BTC/USDT", symbol: "BINANCE:BTCUSDT" },
     ]);
 
-    const { getCharts } = await import("../../src/charts/volman-charts.config.js");
+    const { getCharts } = await import("../../src/charts/service/volman-charts.config.js");
     await getCharts();
     await getCharts();
 
@@ -77,7 +77,7 @@ describe("charts/volman-charts.config", () => {
       { name: "BTC/USDT", symbol: "BINANCE:BTCUSDT" },
     ]);
 
-    const { getCharts } = await import("../../src/charts/volman-charts.config.js");
+    const { getCharts } = await import("../../src/charts/service/volman-charts.config.js");
     await getCharts();
     expect(repoState.loadActiveChartSymbols).toHaveBeenCalledTimes(1);
 
@@ -95,7 +95,7 @@ describe("charts/volman-charts.config", () => {
     ]);
 
     const { getChartsForTimeframeMode } = await import(
-      "../../src/charts/volman-charts.config.js"
+      "../../src/charts/service/volman-charts.config.js"
     );
     const charts = await getChartsForTimeframeMode("single", "H4");
 
@@ -110,7 +110,7 @@ describe("charts/volman-charts.config", () => {
     ]);
 
     const { getChartsForTimeframeMode } = await import(
-      "../../src/charts/volman-charts.config.js"
+      "../../src/charts/service/volman-charts.config.js"
     );
     const charts = await getChartsForTimeframeMode("multi", "H4");
 

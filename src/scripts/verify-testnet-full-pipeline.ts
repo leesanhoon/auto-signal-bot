@@ -27,7 +27,7 @@ import type {
   BinanceEntryOrderDetails,
   PendingEntryOrderPosition,
   BinanceExecutionDetails,
-} from "../charts/binance-execution-shared.js";
+} from "../charts/service/binance-execution-shared.js";
 
 function loadEnvFile(path: string): void {
   if (!existsSync(path)) return;
@@ -72,11 +72,11 @@ async function main(): Promise<void> {
   console.log(`Symbol: ${symbol}\n`);
 
   const { createOpenBinanceFuturesPosition, createPollPendingEntryOrder } = await import(
-    "../charts/binance-execution-shared.js"
+    "../charts/service/binance-execution-shared.js"
   );
   const { getExchangeInfoFilters, getPositionAmount, placeMarketOrder, cancelOrder } =
     await import("../charts/client/binance-futures-client.js");
-  const { roundToTickSize } = await import("../charts/binance-position-sizing.js");
+  const { roundToTickSize } = await import("../charts/service/binance-position-sizing.js");
 
   // --- in-memory "DB" (no Supabase writes) ---
   const pendingEntryOrders = new Map<number, PendingEntryOrderPosition>();

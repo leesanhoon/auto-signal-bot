@@ -4,7 +4,7 @@ import {
   calculateRiskRewardPlan,
   deriveManagementPatch,
   validateTradeSetupForOpen,
-} from "../../src/charts/position-engine-volman.js";
+} from "../../src/charts/service/position-engine-volman.js";
 
 const setup = {
   pair: "EUR/USD",

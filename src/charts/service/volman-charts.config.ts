@@ -1,6 +1,6 @@
-import type { ChartConfig, ChartTimeframe } from "./model/chart-types-common.js";
-import type { ChartTimeframeMode } from "./model/volman-config-env.js";
-import { loadActiveChartSymbols } from "./repository/chart-symbols-repository-volman.js";
+import type { ChartConfig, ChartTimeframe } from "../model/chart-types-common.js";
+import type { ChartTimeframeMode } from "../model/volman-config-env.js";
+import { loadActiveChartSymbols } from "../repository/chart-symbols-repository-volman.js";
 
 const TIMEFRAME_CONFIGS: Array<{
   timeframe: ChartTimeframe;

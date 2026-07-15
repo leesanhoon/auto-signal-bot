@@ -1,5 +1,5 @@
-import type { TradeSetup, PairSummary } from "./model/chart-types-volman.js";
-import type { PendingOrder, ChartOrderType } from "./model/chart-types-common.js";
+import type { TradeSetup, PairSummary } from "../model/chart-types-volman.js";
+import type { PendingOrder, ChartOrderType } from "../model/chart-types-common.js";
 import {
   cleanResponse,
   extractJsonObject,

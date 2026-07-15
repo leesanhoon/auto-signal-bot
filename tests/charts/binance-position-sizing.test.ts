@@ -6,7 +6,7 @@ import {
   computeEquityCurveMultiplier,
   type PositionSizingInput,
   type LeverageComputationInput,
-} from "../../src/charts/binance-position-sizing.js";
+} from "../../src/charts/service/binance-position-sizing.js";
 
 describe("charts/binance-position-sizing", () => {
   describe("computeOrderQuantity", () => {

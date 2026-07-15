@@ -1,11 +1,11 @@
 ﻿import { describe, expect, test } from "vitest";
 import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 import type { DetectedSignal, SetupKind } from "../../src/charts/model/setup-types.js";
-import { calculateEma, calculateAtr } from "../../src/charts/indicators.js";
-import { detectArb } from "../../src/charts/setups/arb.js";
-import { detectBb } from "../../src/charts/setups/bb.js";
-import { detectDdb } from "../../src/charts/setups/ddb.js";
-import { buildTradeSetupFromSignal } from "../../src/charts/signal-assembly.js";
+import { calculateEma, calculateAtr } from "../../src/charts/service/indicators.js";
+import { detectArb } from "../../src/charts/service/setups/arb.js";
+import { detectBb } from "../../src/charts/service/setups/bb.js";
+import { detectDdb } from "../../src/charts/service/setups/ddb.js";
+import { buildTradeSetupFromSignal } from "../../src/charts/service/signal-assembly.js";
 
 describe("Signal assembly — chartContext threading", () => {
   test("buildTradeSetupFromSignal threads chartContext when candles and ma21 provided", () => {

@@ -65,7 +65,7 @@ const mocks = vi.hoisted(() => ({
 // ============================================================
 // Hoisted vi.mock calls — these are hoisted to top of file
 // ============================================================
-vi.mock("../../src/charts/analyzer-common.js", () => ({
+vi.mock("../../src/charts/service/analyzer-common.js", () => ({
   buildChartAnalysisCacheKey: mocks.buildChartAnalysisCacheKey,
 }));
 
@@ -75,9 +75,9 @@ vi.mock("../../src/charts/repository/chart-cache-repository-volman.js", () => ({
   saveChartAnalysisCache: mocks.saveChartAnalysisCache,
 }));
 
-vi.mock("../../src/charts/chart-cache.js", async (importOriginal) => {
+vi.mock("../../src/charts/service/chart-cache.js", async (importOriginal) => {
   const original =
-    await importOriginal<typeof import("../../src/charts/chart-cache.js")>();
+    await importOriginal<typeof import("../../src/charts/service/chart-cache.js")>();
   return {
     ...original,
     isWithinCandleCloseWindow: mocks.isWithinCandleCloseWindow,
@@ -118,24 +118,24 @@ vi.mock("../../src/charts/repository/positions-repository-volman.js", () => ({
   getPendingEntryOrderPositions: mocks.getPendingEntryOrderPositions,
 }));
 
-vi.mock("../../src/charts/position-engine-volman.js", () => ({
+vi.mock("../../src/charts/service/position-engine-volman.js", () => ({
   validateTradeSetupForOpen: mocks.validateTradeSetupForOpen,
 }));
 
-vi.mock("../../src/charts/signal-freshness.js", () => ({
+vi.mock("../../src/charts/service/signal-freshness.js", () => ({
   applySignalFreshnessGuard: mocks.applySignalFreshnessGuard,
 }));
 
-vi.mock("../../src/charts/deterministic-pipeline.js", () => ({
+vi.mock("../../src/charts/service/deterministic-pipeline.js", () => ({
   analyzeAllChartsDeterministic: mocks.analyzeAllChartsDeterministic,
 }));
 
-vi.mock("../../src/charts/volman-charts.config.js", () => ({
+vi.mock("../../src/charts/service/volman-charts.config.js", () => ({
   getCharts: mocks.getCharts,
   getChartsForTimeframeMode: mocks.getChartsForTimeframeMode,
 }));
 
-vi.mock("../../src/charts/binance-execution-volman.js", () => ({
+vi.mock("../../src/charts/service/binance-execution-volman.js", () => ({
   openBinanceFuturesPosition: mocks.openBinanceFuturesPosition,
   pollPendingEntryOrders: mocks.pollPendingEntryOrders,
 }));

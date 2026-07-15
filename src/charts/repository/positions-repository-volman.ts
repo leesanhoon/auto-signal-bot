@@ -8,8 +8,8 @@ import {
   deriveManagementPatch,
   type OpenPositionManagementPatch,
   type PositionDecisionOutcome,
-} from "../position-engine-volman.js";
-import { buildClosedPositionSnapshot, type ClosedPositionRecord, type ClosedPositionSnapshot } from "../performance-tracking-volman.js";
+} from "../service/position-engine-volman.js";
+import { buildClosedPositionSnapshot, type ClosedPositionRecord, type ClosedPositionSnapshot } from "../service/performance-tracking-volman.js";
 import {
   createSaveBinancePendingEntryOrder,
   createUpdateBinanceEntryOrderStatus,

@@ -1,11 +1,11 @@
 import "../shared/infra/env.js";
 import { createLogger } from "../shared/infra/logger.js";
-import { getCharts } from "./volman-charts.config.js";
+import { getCharts } from "./service/volman-charts.config.js";
 import { fetchOhlcHistory } from "./client/ohlc-provider.js";
-import { runSetupBacktest } from "./setup-backtest.js";
+import { runSetupBacktest } from "./service/setup-backtest.js";
 import type { Candle } from "./client/ohlc-provider.js";
 import type { ChartTimeframe } from "./model/chart-types-common.js";
-import type { ExitMode, SetupBacktestReport } from "./setup-backtest.js";
+import type { ExitMode, SetupBacktestReport } from "./service/setup-backtest.js";
 
 const logger = createLogger("charts:setup-backtest-compare");
 const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H1", "H4", "D1"];

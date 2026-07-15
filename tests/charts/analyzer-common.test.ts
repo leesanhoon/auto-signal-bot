@@ -4,7 +4,7 @@ import {
   clampConfidence,
   cleanResponse,
   extractJsonObject,
-} from "../../src/charts/analyzer-common.js";
+} from "../../src/charts/service/analyzer-common.js";
 
 describe("charts/analyzer-common utilities", () => {
   test("buildChartAnalysisCacheKey preserves timeframe-specific cache keys", () => {

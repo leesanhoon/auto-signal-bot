@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { TradeSetup } from "../../src/charts/model/chart-types-volman.js";
-import { applySignalFreshnessGuard } from "../../src/charts/signal-freshness.js";
+import { applySignalFreshnessGuard } from "../../src/charts/service/signal-freshness.js";
 import * as ohlcProvider from "../../src/charts/client/ohlc-provider.js";
 
 // Only mock fetchLastPrice, call everything else for real

@@ -23,29 +23,29 @@ vi.mock("../../src/charts/client/ohlc-provider.js", () => ({
   fetchOhlcHistory: mocks.fetchOhlcHistory,
 }));
 
-vi.mock("../../src/charts/indicators.js", () => ({
+vi.mock("../../src/charts/service/indicators.js", () => ({
   calculateEma: mocks.calculateEma,
   calculateAtr: mocks.calculateAtr,
   averageAtr: mocks.averageAtr,
   classifyTrend: mocks.classifyTrend,
 }));
 
-vi.mock("../../src/charts/setups/dd.js", () => ({ detectDd: mocks.detectDd }));
-vi.mock("../../src/charts/setups/fb.js", () => ({ detectFb: mocks.detectFb }));
-vi.mock("../../src/charts/setups/bb.js", () => ({ detectBb: mocks.detectBb }));
-vi.mock("../../src/charts/setups/rb.js", () => ({ detectRb: mocks.detectRb }));
-vi.mock("../../src/charts/setups/arb.js", () => ({ detectArb: mocks.detectArb }));
-vi.mock("../../src/charts/setups/irb.js", () => ({ detectIrb: mocks.detectIrb }));
+vi.mock("../../src/charts/service/setups/dd.js", () => ({ detectDd: mocks.detectDd }));
+vi.mock("../../src/charts/service/setups/fb.js", () => ({ detectFb: mocks.detectFb }));
+vi.mock("../../src/charts/service/setups/bb.js", () => ({ detectBb: mocks.detectBb }));
+vi.mock("../../src/charts/service/setups/rb.js", () => ({ detectRb: mocks.detectRb }));
+vi.mock("../../src/charts/service/setups/arb.js", () => ({ detectArb: mocks.detectArb }));
+vi.mock("../../src/charts/service/setups/irb.js", () => ({ detectIrb: mocks.detectIrb }));
 vi.mock("../../src/charts/setup-sb-runner.js", () => ({ runSbDetection: mocks.runSbDetection }));
-vi.mock("../../src/charts/signal-assembly.js", () => ({
+vi.mock("../../src/charts/service/signal-assembly.js", () => ({
   buildTradeSetupFromSignal: mocks.buildTradeSetupFromSignal,
   buildPairSummaryFromContext: mocks.buildPairSummaryFromContext,
 }));
-vi.mock("../../src/charts/setup-resolver.js", () => ({
+vi.mock("../../src/charts/service/setup-resolver.js", () => ({
   resolveSetupConflicts: mocks.resolveSetupConflicts,
 }));
 
-const { analyzeAllChartsDeterministic } = await import("../../src/charts/deterministic-pipeline.js");
+const { analyzeAllChartsDeterministic } = await import("../../src/charts/service/deterministic-pipeline.js");
 
 describe("deterministic pipeline", () => {
   beforeEach(() => {

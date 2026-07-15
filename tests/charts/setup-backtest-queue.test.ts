@@ -12,9 +12,9 @@ const {
   nullDetectorMock: vi.fn(() => null),
 }));
 
-vi.mock("../../src/charts/indicators.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/charts/indicators.js")>(
-    "../../src/charts/indicators.js",
+vi.mock("../../src/charts/service/indicators.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/charts/service/indicators.js")>(
+    "../../src/charts/service/indicators.js",
   );
   return {
     ...actual,
@@ -22,23 +22,23 @@ vi.mock("../../src/charts/indicators.js", async () => {
   };
 });
 
-vi.mock("../../src/charts/setups/bb.js", () => ({
+vi.mock("../../src/charts/service/setups/bb.js", () => ({
   detectBb: detectBbMock,
 }));
 
-vi.mock("../../src/charts/setups/rb.js", () => ({
+vi.mock("../../src/charts/service/setups/rb.js", () => ({
   detectRb: detectRbMock,
 }));
 
-vi.mock("../../src/charts/setups/arb.js", () => ({
+vi.mock("../../src/charts/service/setups/arb.js", () => ({
   detectArb: nullDetectorMock,
 }));
 
-vi.mock("../../src/charts/setups/irb.js", () => ({
+vi.mock("../../src/charts/service/setups/irb.js", () => ({
   detectIrb: nullDetectorMock,
 }));
 
-const { runSetupBacktest } = await import("../../src/charts/setup-backtest.js");
+const { runSetupBacktest } = await import("../../src/charts/service/setup-backtest.js");
 
 function makeCandles(count: number) {
   return Array.from({ length: count }, (_, i) => ({

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   resolveOpenPositionDecision,
   resolvePendingOrderDecision,
-} from "../../src/charts/position-decision-volman.js";
+} from "../../src/charts/service/position-decision-volman.js";
 
 const position = {
   direction: "LONG" as const,

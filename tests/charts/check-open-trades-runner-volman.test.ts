@@ -23,12 +23,12 @@ const candles = vi.hoisted(() => ({
 vi.mock("../../src/charts/repository/positions-repository-volman.js", () => repository);
 vi.mock("../../src/shared/telegram-volman.js", () => telegram);
 vi.mock("../../src/shared/notification/telegram-client.js", () => telegramClient);
-vi.mock("../../src/charts/candle-range-stats.js", () => candles);
-vi.mock("../../src/charts/volman-charts.config.js", () => ({
+vi.mock("../../src/charts/service/candle-range-stats.js", () => candles);
+vi.mock("../../src/charts/service/volman-charts.config.js", () => ({
   getCharts: vi.fn().mockResolvedValue([]),
 }));
-vi.mock("../../src/charts/position-decision-volman.js", () => decisions);
-vi.mock("../../src/charts/binance-execution-volman.js", () => binance);
+vi.mock("../../src/charts/service/position-decision-volman.js", () => decisions);
+vi.mock("../../src/charts/service/binance-execution-volman.js", () => binance);
 
 import {
   processPosition,

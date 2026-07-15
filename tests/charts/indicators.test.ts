@@ -8,7 +8,7 @@ import {
   detectCompression,
   isFalseBreak,
   averageAtr,
-} from "../../src/charts/indicators.js";
+} from "../../src/charts/service/indicators.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures

@@ -7,12 +7,12 @@ const candles = vi.hoisted(() => ({
 const telegramClient = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 const decisions = vi.hoisted(() => ({ resolvePendingOrderDecision: vi.fn() }));
 
-vi.mock("../../src/charts/candle-range-stats.js", () => candles);
+vi.mock("../../src/charts/service/candle-range-stats.js", () => candles);
 vi.mock("../../src/shared/notification/telegram-client.js", () => telegramClient);
-vi.mock("../../src/charts/volman-charts.config.js", () => ({
+vi.mock("../../src/charts/service/volman-charts.config.js", () => ({
   getCharts: vi.fn().mockResolvedValue([]),
 }));
-vi.mock("../../src/charts/position-decision-volman.js", () => decisions);
+vi.mock("../../src/charts/service/position-decision-volman.js", () => decisions);
 
 import { reviewPendingOrder } from "../../src/charts/check-pending-orders-runner-volman.js";
 

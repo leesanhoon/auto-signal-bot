@@ -1,5 +1,5 @@
-import type { Candle } from "../client/ohlc-provider.js";
-import { getConfiguredTpRMultiple } from "../model/volman-config-env.js";
+import type { Candle } from "../../client/ohlc-provider.js";
+import { getConfiguredTpRMultiple } from "../../model/volman-config-env.js";
 
 /**
  * Base confidence (0-100) cho mọi setup.

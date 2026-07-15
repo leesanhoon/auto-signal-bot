@@ -1,6 +1,6 @@
-import type { Candle } from "./client/ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind } from "./model/setup-types.js";
-import type { ChartTimeframe } from "./model/chart-types-common.js";
+import type { Candle } from "../client/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext, SetupKind } from "../model/setup-types.js";
+import type { ChartTimeframe } from "../model/chart-types-common.js";
 import { calculateEma, calculateAtr, isFalseBreak, averageAtr } from "./indicators.js";
 import { detectDdb } from "./setups/ddb.js";
 import { detectFb } from "./setups/fb.js";
@@ -11,7 +11,7 @@ import { detectArb } from "./setups/arb.js";
 import { detectIrb } from "./setups/irb.js";
 import { resolveSetupConflicts } from "./setup-resolver.js";
 import { passesDeterministicWindowFilter } from "./deterministic-pipeline.js";
-import { createLogger } from "../shared/infra/logger.js";
+import { createLogger } from "../../shared/infra/logger.js";
 
 const logger = createLogger("charts:setup-backtest");
 

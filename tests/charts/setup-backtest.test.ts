@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Candle } from "../../src/charts/client/ohlc-provider.js";
-import { runSetupBacktest } from "../../src/charts/setup-backtest.js";
+import { runSetupBacktest } from "../../src/charts/service/setup-backtest.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures

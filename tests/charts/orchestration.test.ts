@@ -62,7 +62,7 @@ describe("analyzeAllChartsDeterministic", () => {
   });
 
   test("D1 uses ATR floor but skips intraday session gate", async () => {
-    const mod = await import("../../src/charts/deterministic-pipeline.js");
+    const mod = await import("../../src/charts/service/deterministic-pipeline.js");
     const ok = mod.passesDeterministicWindowFilter("D1", Date.UTC(2024, 0, 1, 0, 0, 0), 0.0015, 0.005);
     const low = mod.passesDeterministicWindowFilter("D1", Date.UTC(2024, 0, 1, 0, 0, 0), 0.001, 0.005);
 
@@ -71,7 +71,7 @@ describe("analyzeAllChartsDeterministic", () => {
   });
 
   test("returns AnalysisResult shape even with no pairs", async () => {
-    const mod = await import("../../src/charts/deterministic-pipeline.js");
+    const mod = await import("../../src/charts/service/deterministic-pipeline.js");
     const result = await mod.analyzeAllChartsDeterministic([]);
     expect(result).toHaveProperty("summaries");
     expect(result).toHaveProperty("setups");
@@ -87,7 +87,7 @@ describe("analyzeAllChartsDeterministic", () => {
       new Error("API error"),
     );
 
-    const detMod = await import("../../src/charts/deterministic-pipeline.js");
+    const detMod = await import("../../src/charts/service/deterministic-pipeline.js");
     const result = await detMod.analyzeAllChartsDeterministic([
       { pair: "EUR/USD", symbol: "OANDA:EURUSD" },
     ]);
@@ -118,7 +118,7 @@ describe("analyzeAllChartsDeterministic", () => {
     const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
-    const detMod = await import("../../src/charts/deterministic-pipeline.js");
+    const detMod = await import("../../src/charts/service/deterministic-pipeline.js");
     const result = await detMod.analyzeAllChartsDeterministic([
       { pair: "EUR/USD", symbol: "OANDA:EURUSD" },
     ]);
@@ -146,7 +146,7 @@ describe("analyzeAllChartsDeterministic", () => {
     const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     const fetchSpy = vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
-    const detMod = await import("../../src/charts/deterministic-pipeline.js");
+    const detMod = await import("../../src/charts/service/deterministic-pipeline.js");
     await detMod.analyzeAllChartsDeterministic(
       [{ pair: "EUR/USD", symbol: "OANDA:EURUSD" }],
       { timeframeMode: "single", primaryTimeframe: "D1" },
@@ -183,7 +183,7 @@ describe("analyzeAllChartsDeterministic", () => {
     const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     const fetchSpy = vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
-    const detMod = await import("../../src/charts/deterministic-pipeline.js");
+    const detMod = await import("../../src/charts/service/deterministic-pipeline.js");
     const result = await detMod.analyzeAllChartsDeterministic(
       [{ pair: "EUR/USD", symbol: "OANDA:EURUSD" }],
       { timeframeMode: "single", primaryTimeframe: "D1" },
@@ -221,7 +221,7 @@ describe("analyzeAllChartsDeterministic", () => {
     const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
-    const detMod = await import("../../src/charts/deterministic-pipeline.js");
+    const detMod = await import("../../src/charts/service/deterministic-pipeline.js");
     const result = await detMod.analyzeAllChartsDeterministic(
       [{ pair: "EUR/USD", symbol: "OANDA:EURUSD" }],
       { timeframeMode: "single", primaryTimeframe: "D1" },
@@ -249,7 +249,7 @@ describe("analyzeAllChartsDeterministic", () => {
     const ohlcMod = await import("../../src/charts/client/ohlc-provider.js");
     const fetchSpy = vi.spyOn(ohlcMod, "fetchOhlcHistory").mockResolvedValue(candles);
 
-    const detMod = await import("../../src/charts/deterministic-pipeline.js");
+    const detMod = await import("../../src/charts/service/deterministic-pipeline.js");
     await detMod.analyzeAllChartsDeterministic(
       [{ pair: "EUR/USD", symbol: "OANDA:EURUSD" }],
       { timeframeMode: "multi", primaryTimeframe: "D1" },

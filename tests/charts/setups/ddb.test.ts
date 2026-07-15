@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Candle } from "../../../src/charts/client/ohlc-provider.js";
 import type { DetectionContext } from "../../../src/charts/model/setup-types.js";
-import { detectDdb } from "../../../src/charts/setups/ddb.js";
+import { detectDdb } from "../../../src/charts/service/setups/ddb.js";
 
 function candle(index: number, open: number, high: number, low: number, close: number): Candle {
   return {

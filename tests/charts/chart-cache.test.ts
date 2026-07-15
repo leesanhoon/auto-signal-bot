@@ -5,7 +5,7 @@ import {
   getLastClosedH4CandleKey,
   isWithinCandleCloseWindow,
   isWithinTimeframeCandleCloseWindow,
-} from "../../src/charts/chart-cache.js";
+} from "../../src/charts/service/chart-cache.js";
 
 describe("charts/chart-cache", () => {
   describe("getCurrentH4CandleCloseKey", () => {

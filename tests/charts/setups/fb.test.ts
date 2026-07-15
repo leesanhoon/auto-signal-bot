@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import type { Candle } from "../../../src/charts/client/ohlc-provider.js";
 import type { DetectionContext } from "../../../src/charts/model/setup-types.js";
-import { calculateEma, calculateAtr } from "../../../src/charts/indicators.js";
-import { detectFb } from "../../../src/charts/setups/fb.js";
+import { calculateEma, calculateAtr } from "../../../src/charts/service/indicators.js";
+import { detectFb } from "../../../src/charts/service/setups/fb.js";
 
 function makeCandles(
   prices: Array<{ o: number; h: number; l: number; c: number; v?: number }>,

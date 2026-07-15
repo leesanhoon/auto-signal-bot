@@ -30,14 +30,14 @@ vi.mock("../../src/charts/client/ohlc-provider.js", () => ({
   toBinanceSymbol: (value: string) => value.replace("BINANCE:", ""),
   fetchOhlcHistory: vi.fn(),
 }));
-vi.mock("../../src/charts/candle-range-stats.js", () => candleStats);
+vi.mock("../../src/charts/service/candle-range-stats.js", () => candleStats);
 
 import {
   createPollPendingEntryOrder,
   checkAndApplyBinanceBreakeven,
   type BinanceExecutionSystemConfig,
   type PendingEntryOrderPosition,
-} from "../../src/charts/binance-execution-shared.js";
+} from "../../src/charts/service/binance-execution-shared.js";
 import { createLogger } from "../../src/shared/infra/logger.js";
 
 const pending: PendingEntryOrderPosition = {

@@ -1,7 +1,7 @@
-import type { TradeSetup } from "./model/chart-types-volman.js";
-import { fetchLastPrice } from "./client/ohlc-provider.js";
-import { getConfiguredSignalMaxEntryDistancePercent } from "./model/volman-config-env.js";
-import { createLogger } from "../shared/infra/logger.js";
+import type { TradeSetup } from "../model/chart-types-volman.js";
+import { fetchLastPrice } from "../client/ohlc-provider.js";
+import { getConfiguredSignalMaxEntryDistancePercent } from "../model/volman-config-env.js";
+import { createLogger } from "../../shared/infra/logger.js";
 
 const logger = createLogger("charts:signal-freshness");
 

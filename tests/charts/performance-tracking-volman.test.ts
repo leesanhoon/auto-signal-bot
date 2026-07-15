@@ -3,7 +3,7 @@ import {
   buildClosedPositionSnapshot,
   summarizeClosedPositionsPerformance,
   type ClosedPositionRecord,
-} from "../../src/charts/performance-tracking-volman.js";
+} from "../../src/charts/service/performance-tracking-volman.js";
 
 const base: ClosedPositionRecord = {
   id: 1,

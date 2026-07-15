@@ -1,5 +1,5 @@
-import type { Candle } from "../client/ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../model/setup-types.js";
+import type { Candle } from "../../client/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext, SetupKind, SetupChartGeometry } from "../../model/setup-types.js";
 import { classifyTrend } from "../indicators.js";
 import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, isHarmonicPullback, applyPriorConsolidationPenalty } from "./shared.js";
 

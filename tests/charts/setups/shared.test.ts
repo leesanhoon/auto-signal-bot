@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from "vitest";
 import type { Candle } from "../../../src/charts/client/ohlc-provider.js";
-import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyPriorConsolidationPenalty } from "../../../src/charts/setups/shared.js";
+import { baseConfidence, computeSlope, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyPriorConsolidationPenalty } from "../../../src/charts/service/setups/shared.js";
 
 const originalTpRMultiple = process.env.TP_R_MULTIPLE;
 

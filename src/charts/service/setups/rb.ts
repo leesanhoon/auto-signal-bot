@@ -1,5 +1,5 @@
-import type { Candle } from "../client/ohlc-provider.js";
-import type { DetectedSignal, DetectionContext, SetupKind, ChartMarker } from "../model/setup-types.js";
+import type { Candle } from "../../client/ohlc-provider.js";
+import type { DetectedSignal, DetectionContext, SetupKind, ChartMarker } from "../../model/setup-types.js";
 import { detectCompression, classifyCompressionTightness } from "../indicators.js";
 import { baseConfidence, computeBodyRatio, computeTakeProfit, applyStandardConfidenceAdjustments, applyCompressionTightnessBonus, applyPriorConsolidationPenalty } from "./shared.js";
 import { COMPRESSION_PARAMS } from "./compression-params.js";

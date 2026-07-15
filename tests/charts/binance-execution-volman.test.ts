@@ -40,7 +40,7 @@ vi.mock("../../src/charts/client/ohlc-provider.js", () => ({
   toBinanceSymbol: (value: string) => value.replace("BINANCE:", ""),
   fetchOhlcHistory,
 }));
-vi.mock("../../src/charts/candle-range-stats.js", () => ({
+vi.mock("../../src/charts/service/candle-range-stats.js", () => ({
   fetchCandleRangeStats,
 }));
 vi.mock("../../src/shared/telegram-volman.js", async (importOriginal) => {
@@ -66,8 +66,8 @@ vi.mock("../../src/charts/model/binance-futures-config-env.js", () => ({
   getConfiguredEquityCurveWinMultiplier: () => 2,
   getConfiguredEquityCurveLossMultiplier: () => 0.25,
 }));
-vi.mock("../../src/charts/position-engine-volman.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/charts/position-engine-volman.js")>();
+vi.mock("../../src/charts/service/position-engine-volman.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/charts/service/position-engine-volman.js")>();
   return {
     ...actual,
     calculateRiskRewardPlan: () => ({
@@ -79,10 +79,10 @@ vi.mock("../../src/charts/position-engine-volman.js", async (importOriginal) => 
 });
 
 const { openBinanceFuturesPosition, reconcileBinancePosition } = await import(
-  "../../src/charts/binance-execution-volman.js"
+  "../../src/charts/service/binance-execution-volman.js"
 );
 const { createOpenBinanceFuturesPosition } = await import(
-  "../../src/charts/binance-execution-shared.js"
+  "../../src/charts/service/binance-execution-shared.js"
 );
 
 const position = {
@@ -405,7 +405,7 @@ describe("charts/binance-execution-volman", () => {
 
   test("wires breakeven config fields for 1R support", async () => {
     const { buildBreakevenReminderMessage } = await import("../../src/shared/telegram-volman.js");
-    const volmanModule = await import("../../src/charts/binance-execution-volman.js");
+    const volmanModule = await import("../../src/charts/service/binance-execution-volman.js");
     const config = (volmanModule as any).config || volmanModule;
 
     // The exported config from binance-execution-volman should have the breakeven fields

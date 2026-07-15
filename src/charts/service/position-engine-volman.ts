@@ -1,5 +1,5 @@
-import type { TradeSetup } from "./model/chart-types-volman.js";
-import { createLogger } from "../shared/infra/logger.js";
+import type { TradeSetup } from "../model/chart-types-volman.js";
+import { createLogger } from "../../shared/infra/logger.js";
 
 const logger = createLogger("charts:position-engine");
 

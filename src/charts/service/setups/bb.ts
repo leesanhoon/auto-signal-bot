@@ -1,9 +1,9 @@
-import type { Candle } from "../client/ohlc-provider.js";
+import type { Candle } from "../../client/ohlc-provider.js";
 import type {
   DetectedSignal,
   DetectionContext,
   SetupKind,
-} from "../model/setup-types.js";
+} from "../../model/setup-types.js";
 import {
   classifyTrend,
   detectCompression,

@@ -1,4 +1,4 @@
-import type { BinanceSymbolFilters } from "./client/binance-futures-client.js";
+import type { BinanceSymbolFilters } from "../client/binance-futures-client.js";
 
 export type PositionSizingInput = {
   balanceUsdt: number;

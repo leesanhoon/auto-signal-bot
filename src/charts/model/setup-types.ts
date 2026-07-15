@@ -1,5 +1,5 @@
 import type { ChartTimeframe } from "./chart-types-common.js";
-import type { CompressionWindow } from "../indicators.js";
+import type { CompressionWindow } from "../service/indicators.js";
 
 export type SetupKind = "DDB" | "FB" | "BB" | "RB" | "ARB" | "IRB" | "SB";
 

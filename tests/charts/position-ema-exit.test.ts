@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Candle } from "../../src/charts/client/ohlc-provider.js";
-import { calculateLatestEma, resolveEmaExitDecision } from "../../src/charts/position-ema-exit.js";
-import { calculateEma } from "../../src/charts/indicators.js";
+import { calculateLatestEma, resolveEmaExitDecision } from "../../src/charts/service/position-ema-exit.js";
+import { calculateEma } from "../../src/charts/service/indicators.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Candle } from "../../src/charts/client/ohlc-provider.js";
-import { calculateEma } from "../../src/charts/indicators.js";
+import { calculateEma } from "../../src/charts/service/indicators.js";
 import {
   buildSetupChartSvg,
   renderSetupChartPng,

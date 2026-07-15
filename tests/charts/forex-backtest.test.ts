@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { runForexBacktest } from "../../src/charts/forex-backtest.js";
+import { runForexBacktest } from "../../src/charts/service/forex-backtest.js";
 
 describe("charts/forex-backtest", () => {
   test("summarizes direction and entry accuracy from closed positions", () => {

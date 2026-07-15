@@ -1,4 +1,4 @@
-import type { Candle } from "./client/ohlc-provider.js";
+import type { Candle } from "../client/ohlc-provider.js";
 
 // ---------------------------------------------------------------------------
 // Types

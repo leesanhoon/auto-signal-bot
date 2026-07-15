@@ -5,7 +5,7 @@ import {
   buildPendingOrderCheckPrompt,
   formatPrice,
   parseAnalysisResponse,
-} from "../../src/charts/analyzer-volman.js";
+} from "../../src/charts/service/analyzer-volman.js";
 
 describe("charts/analyzer-volman utilities", () => {
   test("formatPrice adapts precision based on value magnitude", () => {

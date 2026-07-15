@@ -1,17 +1,17 @@
 import { describe, expect, test } from "vitest";
 import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 import type { DetectedSignal, DetectionContext } from "../../src/charts/model/setup-types.js";
-import { calculateEma, calculateAtr, isTradableWindow, averageAtr } from "../../src/charts/indicators.js";
-import { resolveSetupConflicts } from "../../src/charts/setup-resolver.js";
+import { calculateEma, calculateAtr, isTradableWindow, averageAtr } from "../../src/charts/service/indicators.js";
+import { resolveSetupConflicts } from "../../src/charts/service/setup-resolver.js";
 
 // Import all detectors
-import { detectDdb } from "../../src/charts/setups/ddb.js";
-import { detectFb, findPullbackStartIndex } from "../../src/charts/setups/fb.js";
-import { detectBb } from "../../src/charts/setups/bb.js";
-import { detectRb } from "../../src/charts/setups/rb.js";
-import { detectArb } from "../../src/charts/setups/arb.js";
-import { detectIrb } from "../../src/charts/setups/irb.js";
-import { detectSb } from "../../src/charts/setups/sb.js";
+import { detectDdb } from "../../src/charts/service/setups/ddb.js";
+import { detectFb, findPullbackStartIndex } from "../../src/charts/service/setups/fb.js";
+import { detectBb } from "../../src/charts/service/setups/bb.js";
+import { detectRb } from "../../src/charts/service/setups/rb.js";
+import { detectArb } from "../../src/charts/service/setups/arb.js";
+import { detectIrb } from "../../src/charts/service/setups/irb.js";
+import { detectSb } from "../../src/charts/service/setups/sb.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

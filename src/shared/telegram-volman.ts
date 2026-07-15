@@ -6,7 +6,7 @@ import type {
 import type { ChartTimeframe } from "../charts/model/chart-types-common.js";
 import type { Notifier } from "./notifier.js";
 import { createLogger } from "./infra/logger.js";
-import type { PerformanceReport, ClosedPositionSnapshot } from "../charts/performance-tracking-volman.js";
+import type { PerformanceReport, ClosedPositionSnapshot } from "../charts/service/performance-tracking-volman.js";
 import {
   getConfiguredChartSignalConfidenceThreshold,
   getConfiguredTpRMultiple,
