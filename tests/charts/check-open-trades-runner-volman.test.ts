@@ -33,7 +33,7 @@ vi.mock("../../src/charts/service/binance-execution-volman.js", () => binance);
 import {
   processPosition,
   runCheckOpenTrades,
-} from "../../src/charts/check-open-trades-runner-volman.js";
+} from "../../src/charts/controller/check-open-trades-runner-volman.js";
 
 const position = {
   id: 1,

@@ -36,7 +36,7 @@ vi.mock("../../src/charts/service/setups/bb.js", () => ({ detectBb: mocks.detect
 vi.mock("../../src/charts/service/setups/rb.js", () => ({ detectRb: mocks.detectRb }));
 vi.mock("../../src/charts/service/setups/arb.js", () => ({ detectArb: mocks.detectArb }));
 vi.mock("../../src/charts/service/setups/irb.js", () => ({ detectIrb: mocks.detectIrb }));
-vi.mock("../../src/charts/setup-sb-runner.js", () => ({ runSbDetection: mocks.runSbDetection }));
+vi.mock("../../src/charts/controller/setup-sb-runner.js", () => ({ runSbDetection: mocks.runSbDetection }));
 vi.mock("../../src/charts/service/signal-assembly.js", () => ({
   buildTradeSetupFromSignal: mocks.buildTradeSetupFromSignal,
   buildPairSummaryFromContext: mocks.buildPairSummaryFromContext,

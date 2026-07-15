@@ -14,7 +14,7 @@ vi.mock("../../src/charts/service/volman-charts.config.js", () => ({
 }));
 vi.mock("../../src/charts/service/position-decision-volman.js", () => decisions);
 
-import { reviewPendingOrder } from "../../src/charts/check-pending-orders-runner-volman.js";
+import { reviewPendingOrder } from "../../src/charts/controller/check-pending-orders-runner-volman.js";
 
 const order = {
   id: 5,

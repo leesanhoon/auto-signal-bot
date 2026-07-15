@@ -1,27 +1,27 @@
 import {
   fetchCandleRangeStats,
   findChartForPair,
-} from "./service/candle-range-stats.js";
-import { getCharts } from "./service/volman-charts.config.js";
+} from "../service/candle-range-stats.js";
+import { getCharts } from "../service/volman-charts.config.js";
 import {
   buildPositionManagementPatch,
   closePosition,
   loadOpenPositions,
   updatePositionDecision,
   applyBreakevenStopLoss,
-} from "./repository/positions-repository-volman.js";
+} from "../repository/positions-repository-volman.js";
 import {
   buildPositionClosedMessage,
   buildBreakevenReminderMessage,
-} from "../shared/telegram-volman.js";
-import { sendMessage } from "../shared/notification/telegram-client.js";
-import { createLogger } from "../shared/infra/logger.js";
-import type { PositionDecisionOutcome } from "./service/position-engine-volman.js";
-import { resolveOpenPositionDecision } from "./service/position-decision-volman.js";
-import { reconcileBinancePosition } from "./service/binance-execution-volman.js";
-import { isEmaExitEnabled, getEmaExitPeriod } from "./model/volman-config-env.js";
-import { calculateLatestEma } from "./service/position-ema-exit.js";
-import { fetchOhlcHistory } from "./client/ohlc-provider.js";
+} from "../../shared/telegram-volman.js";
+import { sendMessage } from "../../shared/notification/telegram-client.js";
+import { createLogger } from "../../shared/infra/logger.js";
+import type { PositionDecisionOutcome } from "../service/position-engine-volman.js";
+import { resolveOpenPositionDecision } from "../service/position-decision-volman.js";
+import { reconcileBinancePosition } from "../service/binance-execution-volman.js";
+import { isEmaExitEnabled, getEmaExitPeriod } from "../model/volman-config-env.js";
+import { calculateLatestEma } from "../service/position-ema-exit.js";
+import { fetchOhlcHistory } from "../client/ohlc-provider.js";
 
 const logger = createLogger("charts:check-open-trades-volman");
 

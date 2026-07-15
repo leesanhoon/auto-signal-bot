@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { getChartScannerErrorScope } from "../../src/charts/index.js";
+import { getChartScannerErrorScope } from "../../src/charts/controller/index.js";
 
 // ============================================================
 // Mock state (vi.hoisted — runs before factory functions)
@@ -86,11 +86,11 @@ vi.mock("../../src/charts/service/chart-cache.js", async (importOriginal) => {
   };
 });
 
-vi.mock("../../src/charts/check-open-trades-runner-volman.js", () => ({
+vi.mock("../../src/charts/controller/check-open-trades-runner-volman.js", () => ({
   runCheckOpenTrades: mocks.runCheckOpenTrades,
 }));
 
-// vi.mock("../../src/charts/check-pending-orders-runner-volman.js", () => ({
+// vi.mock("../../src/charts/controller/check-pending-orders-runner-volman.js", () => ({
 //   runCheckPendingOrders: mocks.runCheckPendingOrders,
 // }));
 
@@ -241,7 +241,7 @@ describe("charts/index main() — H4 close guard", () => {
     mocks.logger.child.mockReturnValue(mocks.logger);
 
     // Dynamic import to get fresh module instance each test
-    const mod = await import("../../src/charts/index.js");
+    const mod = await import("../../src/charts/controller/index.js");
     main = mod.main;
   });
 

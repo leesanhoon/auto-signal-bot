@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Candle } from "../../src/charts/client/ohlc-provider.js";
 import type { DetectedSignal, DetectionContext } from "../../src/charts/model/setup-types.js";
-import { runSbDetection } from "../../src/charts/setup-sb-runner.js";
+import { runSbDetection } from "../../src/charts/controller/setup-sb-runner.js";
 
 describe("setup-sb-runner: runSbDetection", () => {
   let ctx: DetectionContext;

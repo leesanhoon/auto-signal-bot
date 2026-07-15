@@ -10,7 +10,7 @@ vi.mock("../../src/charts/service/setups/sb.js", () => ({
   detectSb: detectSbMock,
 }));
 
-const { runSbDetection } = await import("../../src/charts/setup-sb-runner.js");
+const { runSbDetection } = await import("../../src/charts/controller/setup-sb-runner.js");
 
 describe("setup-sb-runner: boundary guard", () => {
   let ctx: DetectionContext;

@@ -1,11 +1,11 @@
-import "../shared/infra/env.js";
-import { createLogger } from "../shared/infra/logger.js";
-import { getCharts } from "./service/volman-charts.config.js";
-import { fetchOhlcHistory } from "./client/ohlc-provider.js";
-import { runSetupBacktest, DEFAULT_FEE_SLIPPAGE_CONFIG, ZERO_FEE_SLIPPAGE_CONFIG } from "./service/setup-backtest.js";
-import type { Candle } from "./client/ohlc-provider.js";
-import type { ChartTimeframe } from "./model/chart-types-common.js";
-import type { ExitMode, FillMode, FeeSlippageConfig } from "./service/setup-backtest.js";
+import "../../shared/infra/env.js";
+import { createLogger } from "../../shared/infra/logger.js";
+import { getCharts } from "../service/volman-charts.config.js";
+import { fetchOhlcHistory } from "../client/ohlc-provider.js";
+import { runSetupBacktest, DEFAULT_FEE_SLIPPAGE_CONFIG, ZERO_FEE_SLIPPAGE_CONFIG } from "../service/setup-backtest.js";
+import type { Candle } from "../client/ohlc-provider.js";
+import type { ChartTimeframe } from "../model/chart-types-common.js";
+import type { ExitMode, FillMode, FeeSlippageConfig } from "../service/setup-backtest.js";
 
 const logger = createLogger("charts:setup-backtest");
 const VALID_TIMEFRAMES: ChartTimeframe[] = ["M15", "H1", "H4", "D1"];
