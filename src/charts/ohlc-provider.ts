@@ -373,10 +373,11 @@ async function fetchFromTwelveData(
 }
 
 // ---------------------------------------------------------------------------
-// Binance provider (crypto spot, public API — no key required)
+// Binance provider (crypto USDT-M Futures — bot trades Futures, chart data
+// must use the same market so symbol format/availability stay in sync).
 // ---------------------------------------------------------------------------
 
-const BINANCE_BASE_URL = "https://api.binance.com/api/v3/klines";
+const BINANCE_BASE_URL = "https://fapi.binance.com/fapi/v1/klines";
 const BINANCE_MAX_LIMIT = 1000;
 
 export function toBinanceSymbol(symbol: string): string | null {
@@ -533,7 +534,7 @@ async function fetchFromBinance(
 // Fetch last price (ticker)
 // ---------------------------------------------------------------------------
 
-const BINANCE_TICKER_URL = "https://api.binance.com/api/v3/ticker/price";
+const BINANCE_TICKER_URL = "https://fapi.binance.com/fapi/v1/ticker/price";
 const TWELVEDATA_PRICE_URL = "https://api.twelvedata.com/price";
 
 export async function fetchLastPrice(symbol: string): Promise<number | Error> {

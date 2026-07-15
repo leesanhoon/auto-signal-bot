@@ -78,7 +78,7 @@ async function fetchFallbackLastPrice(symbol: string): Promise<number | null> {
   return typeof lastClose === "number" ? lastClose : null;
 }
 
-const BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines";
+const BINANCE_KLINES_URL = "https://fapi.binance.com/fapi/v1/klines";
 const BINANCE_RATE_LIMIT_CONFIG = {
   key: "binance",
   envVar: "BINANCE_RATE_LIMIT_RPM",
