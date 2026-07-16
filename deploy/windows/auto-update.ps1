@@ -5,8 +5,13 @@
 # Không throw ra ngoài (chạy unattended) — lỗi được ghi vào log để xem sau.
 
 $ErrorActionPreference = "Stop"
-$repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..") -ErrorAction Stop).Path
 Set-Location $repo
+
+# Continue thay vì Stop: git/npm ghi thông tin (không phải lỗi) ra stderr là chuyện bình thường,
+# PS5.1 sẽ biến nó thành NativeCommandError chặn script nếu để "Stop" — lỗi THẬT vẫn được bắt
+# đúng qua các check "if ($LASTEXITCODE -ne 0) { throw ... }" bên dưới, không phụ thuộc dòng này.
+$ErrorActionPreference = "Continue"
 
 $logDir = Join-Path $repo "logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
