@@ -39,7 +39,7 @@ export function passesDeterministicWindowFilter(
  * 1. Fetch OHLC history for the runtime timeframe (200 bars)
  * 2. Session/volatility filter (ATR floor only; crypto trades 24/7)
  * 3. Calculate indicators (EMA21, ATR14)
- * 4. Run active Volman setup detectors (DDB, SB, BB — FB/RB/ARB/IRB temporarily disabled)
+ * 4. Run all active Volman setup detectors (DDB, FB, SB, BB, RB, ARB, IRB)
  *    on the single most recently closed candle only (no retroactive lookback — a missed
  *    run drops that candle's trigger rather than reporting it late)
  * 5. Drop signals invalidated by a false break
@@ -104,8 +104,15 @@ export async function analyzeAllChartsDeterministic(
       // ---- Run all 7 Volman setup detectors on the single most recently closed candle ----
       const startDetectIndex = lastIndex;
       const allSignals: DetectedSignal[] = [];
-      // Tam thoi off ARB/IRB/RB/FB, chi giu BB/SB/DDB theo yeu cau.
-      const detectors = [detectDdb, detectSb, detectBb];
+      const detectors = [
+        detectDdb,
+        detectFb,
+        detectSb,
+        detectBb,
+        detectRb,
+        detectArb,
+        detectIrb,
+      ];
 
       for (let i = startDetectIndex; i <= lastIndex; i++) {
         for (const detector of detectors) {

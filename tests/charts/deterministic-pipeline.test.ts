@@ -7,8 +7,9 @@ const mocks = vi.hoisted(() => ({
   calculateAtr: vi.fn(),
   averageAtr: vi.fn(),
   classifyTrend: vi.fn(),
-  detectDd: vi.fn(),
+  detectDdb: vi.fn(),
   detectFb: vi.fn(),
+  detectSb: vi.fn(),
   detectBb: vi.fn(),
   detectRb: vi.fn(),
   detectArb: vi.fn(),
@@ -30,8 +31,9 @@ vi.mock("../../src/charts/service/indicators.js", () => ({
   classifyTrend: mocks.classifyTrend,
 }));
 
-vi.mock("../../src/charts/service/setups/dd.js", () => ({ detectDd: mocks.detectDd }));
+vi.mock("../../src/charts/service/setups/ddb.js", () => ({ detectDdb: mocks.detectDdb }));
 vi.mock("../../src/charts/service/setups/fb.js", () => ({ detectFb: mocks.detectFb }));
+vi.mock("../../src/charts/service/setups/sb.js", () => ({ detectSb: mocks.detectSb }));
 vi.mock("../../src/charts/service/setups/bb.js", () => ({ detectBb: mocks.detectBb }));
 vi.mock("../../src/charts/service/setups/rb.js", () => ({ detectRb: mocks.detectRb }));
 vi.mock("../../src/charts/service/setups/arb.js", () => ({ detectArb: mocks.detectArb }));
@@ -108,8 +110,9 @@ describe("deterministic pipeline", () => {
           }
         : null,
     );
-    mocks.detectDd.mockReturnValue(null);
+    mocks.detectDdb.mockReturnValue(null);
     mocks.detectFb.mockReturnValue(null);
+    mocks.detectSb.mockReturnValue(null);
     mocks.detectBb.mockImplementation(detectedAtLastIndex);
     mocks.detectRb.mockReturnValue(null);
     mocks.detectArb.mockReturnValue(null);
@@ -152,8 +155,9 @@ describe("deterministic pipeline", () => {
       scannedIndices.push(i);
       return null;
     });
-    mocks.detectDd.mockImplementation(recordIndex);
+    mocks.detectDdb.mockImplementation(recordIndex);
     mocks.detectFb.mockImplementation(recordIndex);
+    mocks.detectSb.mockImplementation(recordIndex);
     mocks.detectBb.mockImplementation(recordIndex);
     mocks.detectRb.mockImplementation(recordIndex);
     mocks.detectArb.mockImplementation(recordIndex);
@@ -168,6 +172,13 @@ describe("deterministic pipeline", () => {
     // This distinguishes from the old formula Math.max(30, lastIndex - 5) = Math.max(30, 35) = 35,
     // which would have scanned indices 35-40 (6 candles total).
     expect(new Set(scannedIndices)).toEqual(new Set([40]));
+    expect(mocks.detectDdb).toHaveBeenCalledTimes(1);
+    expect(mocks.detectFb).toHaveBeenCalledTimes(1);
+    expect(mocks.detectSb).toHaveBeenCalledTimes(1);
+    expect(mocks.detectBb).toHaveBeenCalledTimes(1);
+    expect(mocks.detectRb).toHaveBeenCalledTimes(1);
+    expect(mocks.detectArb).toHaveBeenCalledTimes(1);
+    expect(mocks.detectIrb).toHaveBeenCalledTimes(1);
   });
 
   test("records skippedPairs when runtime filter rejects a pair", async () => {
@@ -183,8 +194,9 @@ describe("deterministic pipeline", () => {
     mocks.calculateEma.mockReturnValue(candles.map(() => 1));
     mocks.calculateAtr.mockReturnValue(candles.map(() => 0.1));
     mocks.averageAtr.mockReturnValue(1); // ATR floor = 0.3 * 1 = 0.3 > atrLast (0.1) -> reject
-    mocks.detectDd.mockReturnValue(null);
+    mocks.detectDdb.mockReturnValue(null);
     mocks.detectFb.mockReturnValue(null);
+    mocks.detectSb.mockReturnValue(null);
     mocks.detectBb.mockReturnValue(null);
     mocks.detectRb.mockReturnValue(null);
     mocks.detectArb.mockReturnValue(null);
