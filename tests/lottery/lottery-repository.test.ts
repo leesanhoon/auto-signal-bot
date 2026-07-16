@@ -175,15 +175,15 @@ describe("lottery-repository", () => {
       expect(rangeCalls[1]).toEqual([1000, 1999]); // Page 2
     });
 
-    test("gọi .order('date', { ascending: true }) cho loadWeekdayHistory", async () => {
+    test("gọi .order('date'|'region'|'province', { ascending: true }) theo đúng thứ tự cho loadWeekdayHistory", async () => {
       repoState.results = [{ data: [], error: null }];
 
       await lotteryRepo.loadWeekdayHistory(3);
 
-      expect(repoState.from().select().eq().order).toHaveBeenCalledWith(
-        "date",
-        { ascending: true },
-      );
+      const orderCalls = repoState.from().select().eq().order.mock.calls;
+      expect(orderCalls[0]).toEqual(["date", { ascending: true }]);
+      expect(orderCalls[1]).toEqual(["region", { ascending: true }]);
+      expect(orderCalls[2]).toEqual(["province", { ascending: true }]);
     });
   });
 
@@ -336,15 +336,15 @@ describe("lottery-repository", () => {
       expect(rangeCalls[2]).toEqual([2000, 2999]); // Page 3
     });
 
-    test("gọi .order('date', { ascending: true }) cho loadRegionHistory", async () => {
+    test("gọi .order('date'|'region'|'province', { ascending: true }) theo đúng thứ tự cho loadRegionHistory", async () => {
       repoState.results = [{ data: [], error: null }];
 
       await lotteryRepo.loadRegionHistory("mien-bac");
 
-      expect(repoState.from().select().eq().order).toHaveBeenCalledWith(
-        "date",
-        { ascending: true },
-      );
+      const orderCalls = repoState.from().select().eq().order.mock.calls;
+      expect(orderCalls[0]).toEqual(["date", { ascending: true }]);
+      expect(orderCalls[1]).toEqual(["region", { ascending: true }]);
+      expect(orderCalls[2]).toEqual(["province", { ascending: true }]);
     });
   });
 });

@@ -16,6 +16,8 @@ export async function loadWeekdayHistory(weekday: number): Promise<LotteryDrawRe
       .select("date, weekday, region, province, prizes")
       .eq("weekday", weekday)
       .order("date", { ascending: true })
+      .order("region", { ascending: true })
+      .order("province", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) throw new Error(`loadWeekdayHistory failed for weekday ${weekday}: ${error.message}`);
@@ -44,6 +46,8 @@ export async function loadRegionHistory(region: LotteryRegion): Promise<LotteryD
       .select("date, weekday, region, province, prizes")
       .eq("region", region)
       .order("date", { ascending: true })
+      .order("region", { ascending: true })
+      .order("province", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) throw new Error(`loadRegionHistory failed for region ${region}: ${error.message}`);
