@@ -21,7 +21,6 @@
     "setup:telegram-menu": "tsx src/scripts/setup-telegram-menu-v2.ts",
     "match-odds": "tsx src/betting/controller/betting-index.ts",
     "fetch-matches-list": "tsx src/betting/controller/fetch-matches-list-index.ts",
-    "lottery": "tsx src/lottery/controller/lottery-index.ts",
     "lottery-backfill": "tsx src/lottery/controller/lottery-backfill-index.ts",
     "lottery-predict": "tsx src/lottery/controller/lottery-predict-index.ts",
     "lottery-predict-resync": "tsx src/lottery/controller/lottery-predict-resync-index.ts",

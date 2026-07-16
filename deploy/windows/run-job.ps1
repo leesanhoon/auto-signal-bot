@@ -19,10 +19,7 @@ $jobs = @{
     "performance-report-weekly"   = @{ Script = "performance-report"; Env = @{ PERFORMANCE_REPORT_PERIOD = "weekly" } }
     # Task Scheduler PS5.1 không tạo được trigger monthly -> trigger daily + guard ngày 1
     "performance-report-monthly"  = @{ Script = "performance-report"; Env = @{ PERFORMANCE_REPORT_PERIOD = "monthly" }; OnlyDayOfMonth = 1 }
-    "lottery"                     = @{ Script = "lottery" }
-    "lottery-predict-mien-nam"    = @{ Script = "lottery-predict"; Env = @{ LOTTERY_PREDICT_REGION = "mien-nam" } }
-    "lottery-predict-mien-trung"  = @{ Script = "lottery-predict"; Env = @{ LOTTERY_PREDICT_REGION = "mien-trung" } }
-    "lottery-predict-mien-bac"    = @{ Script = "lottery-predict"; Env = @{ LOTTERY_PREDICT_REGION = "mien-bac" } }
+    "lottery-predict"             = @{ Script = "lottery-predict" }
     "lottery-verify-mien-nam"     = @{ Script = "lottery-verify"; Args = "-- mien-nam" }
     "lottery-verify-mien-trung"   = @{ Script = "lottery-verify"; Args = "-- mien-trung" }
     "lottery-verify-mien-bac"     = @{ Script = "lottery-verify"; Args = "-- mien-bac" }

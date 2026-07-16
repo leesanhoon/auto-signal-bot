@@ -37,7 +37,7 @@ notepad .env   # điền giá trị thật (chép từ GitHub -> Settings -> Sec
 ## Kiểm tra
 
 ```powershell
-# Danh sách task đã đăng ký (14 task trong folder \AutoSignalBot\, gồm cả auto-update)
+# Danh sách task đã đăng ký (10 task trong folder \AutoSignalBot\, gồm cả auto-update)
 Get-ScheduledTask -TaskPath "\AutoSignalBot\"
 
 # Chạy thử ngay một job, không chờ lịch
@@ -88,9 +88,8 @@ cd C:\bots\auto-signal-bot
 | match-odds | 12:00 hằng ngày | 05:00 |
 | performance-report-weekly | T2 08:15 | T2 01:15 |
 | performance-report-monthly | 08:20 ngày 1 (trigger daily + guard trong script) | ngày 1, 01:20 |
-| lottery | 19:00 hằng ngày | 12:00 |
-| lottery-predict (MN/MT/MB) | 16:45 / 17:45 / 18:45 | 09:45/10:45/11:45 |
-| lottery-verify (MN/MT/MB) | 16:45 / 17:45 / 18:50 | 09:45/10:45/11:50 |
+| lottery-verify (MN/MT/MB) | 16:40 / 17:40 / 18:40 | 09:40/10:40/11:40 |
+| lottery-predict (cả 3 miền, 1 lần, sau khi verify xong) | 19:00 | 12:00 |
 
 Ghi chú kỹ thuật:
 

@@ -107,20 +107,13 @@ Register-BotTask "match-odds" @(
 
 # === Lottery ===
 
-# lottery history scanner — 12:00 UTC = 19:00 VN hằng ngày
-Register-BotTask "lottery" @(
-    (New-ScheduledTaskTrigger -Daily -At "18:50")
-)
+# lottery-verify — crawl kết quả thật + so khớp dự đoán + lưu DB, mỗi miền 1 giờ riêng (16:40/17:40/18:40 VN)
+Register-BotTask "lottery-verify-mien-nam"    @((New-ScheduledTaskTrigger -Daily -At "16:40"))
+Register-BotTask "lottery-verify-mien-trung"  @((New-ScheduledTaskTrigger -Daily -At "17:40"))
+Register-BotTask "lottery-verify-mien-bac"    @((New-ScheduledTaskTrigger -Daily -At "18:40"))
 
-# lottery-predict — 09:45/10:45/11:45 UTC = 16:45/17:45/18:45 VN
-Register-BotTask "lottery-predict-mien-nam"   @((New-ScheduledTaskTrigger -Daily -At "16:45"))
-Register-BotTask "lottery-predict-mien-trung" @((New-ScheduledTaskTrigger -Daily -At "17:45"))
-Register-BotTask "lottery-predict-mien-bac"   @((New-ScheduledTaskTrigger -Daily -At "18:45"))
-
-# lottery-verify — 09:45/10:45/11:50 UTC = 16:45/17:45/18:50 VN
-Register-BotTask "lottery-verify-mien-nam"    @((New-ScheduledTaskTrigger -Daily -At "16:45"))
-Register-BotTask "lottery-verify-mien-trung"  @((New-ScheduledTaskTrigger -Daily -At "17:45"))
-Register-BotTask "lottery-verify-mien-bac"    @((New-ScheduledTaskTrigger -Daily -At "18:50"))
+# lottery-predict — chạy 1 lần cho cả 3 miền, sau khi cả 3 verify ở trên đã xong (19:00 VN)
+Register-BotTask "lottery-predict" @((New-ScheduledTaskTrigger -Daily -At "19:00"))
 
 # === Auto-update ===
 
