@@ -14,4 +14,4 @@ jobs:
       - name: Pull latest code + sync dependencies
         shell: powershell
         run: |
-          & "C:\bots\auto-signal-bot\deploy\windows\auto-update.ps1"
+          & "C:\project\auto-signal-bot\deploy\windows\auto-update.ps1"
