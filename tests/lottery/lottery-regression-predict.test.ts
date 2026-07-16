@@ -3,7 +3,7 @@ import {
   computeRegressionDigitDetails,
   computeRegressionDigitPositionProbabilities,
   predictTopNumbersRegression,
-} from "../../src/lottery/lottery-regression-predict.js";
+} from "../../src/lottery/service/lottery-regression-predict.js";
 import type { LotteryDrawRecord } from "../../src/lottery/lottery-types.js";
 
 describe("lottery/lottery-regression-predict", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { compareBacktestSummaries, runBacktest } from "../../src/lottery/lottery-backtest.js";
-import { predictTopNumbersRegression } from "../../src/lottery/lottery-regression-predict.js";
-import { predictTopNumbersStats } from "../../src/lottery/lottery-stats-predict.js";
+import { compareBacktestSummaries, runBacktest } from "../../src/lottery/service/lottery-backtest.js";
+import { predictTopNumbersRegression } from "../../src/lottery/service/lottery-regression-predict.js";
+import { predictTopNumbersStats } from "../../src/lottery/service/lottery-stats-predict.js";
 import type { CompactPrizes, LotteryDrawRecord } from "../../src/lottery/lottery-types.js";
 
 function makePrizes(primaryNumber: string, fillerSeed: number): CompactPrizes {

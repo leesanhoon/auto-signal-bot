@@ -1,8 +1,8 @@
 import { fetchActualRecords } from "./client/lottery-scraper.js";
 import { appendWeekdayHistory } from "./repository/lottery-repository.js";
-import { matchPrizeLabel, matchPrizeLabelLast2 } from "./lottery-format.js";
+import { matchPrizeLabel, matchPrizeLabelLast2 } from "./service/lottery-format.js";
 import { loadUnverifiedPredictions, markPredictionVerified } from "./repository/lottery-predictions-repository.js";
-import { WEEKDAY_LABELS } from "./lottery-schedule.js";
+import { WEEKDAY_LABELS } from "./service/lottery-schedule.js";
 import { sendMessage } from "../shared/notification/telegram-client.js";
 import type { LotteryRegion } from "./model/lottery-types.js";
 import { createLogger } from "../shared/infra/logger.js";

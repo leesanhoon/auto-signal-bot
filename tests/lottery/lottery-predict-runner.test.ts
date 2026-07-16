@@ -15,7 +15,7 @@ vi.mock("../../src/lottery/client/lottery-scraper.js", () => ({
 vi.mock("../../src/lottery/repository/lottery-repository.js", () => ({
   loadWeekdayHistory: state.loadWeekdayHistory,
 }));
-vi.mock("../../src/lottery/lottery-ensemble-predict.js", () => ({
+vi.mock("../../src/lottery/service/lottery-ensemble-predict.js", () => ({
   predictTopNumbersEnsemble: state.predictTopNumbersEnsemble,
 }));
 vi.mock("../../src/lottery/repository/lottery-predictions-repository.js", () => ({

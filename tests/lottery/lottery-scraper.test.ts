@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseWeekdayPage } from "../../src/lottery/client/lottery-scraper.js";
 
-vi.mock("../../src/lottery/lottery-schedule.js");
+vi.mock("../../src/lottery/service/lottery-schedule.js");
 
 describe("lottery-scraper.ts", () => {
   describe("parseWeekdayPage - Miền Bắc", () => {

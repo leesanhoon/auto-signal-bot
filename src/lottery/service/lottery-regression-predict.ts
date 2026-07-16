@@ -1,5 +1,5 @@
 import { extractNums } from "./lottery-format.js";
-import type { LotteryDrawRecord } from "./model/lottery-types.js";
+import type { LotteryDrawRecord } from "../model/lottery-types.js";
 import { linearRegression, linearRegressionLine, rSquared } from "simple-statistics";
 
 export type DigitPositionProbabilities = {

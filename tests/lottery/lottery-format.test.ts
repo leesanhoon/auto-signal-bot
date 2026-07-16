@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractNums, extractNums2, matchPrizeLabel, matchPrizeLabelLast2 } from "../../src/lottery/lottery-format.js";
+import { extractNums, extractNums2, matchPrizeLabel, matchPrizeLabelLast2 } from "../../src/lottery/service/lottery-format.js";
 import type { CompactPrizes } from "../../src/lottery/lottery-types.js";
 
 describe("lottery-format.ts", () => {

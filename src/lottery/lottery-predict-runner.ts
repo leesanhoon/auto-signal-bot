@@ -1,15 +1,15 @@
 import { fetchActualRecords } from "./client/lottery-scraper.js";
 import { loadWeekdayHistory } from "./repository/lottery-repository.js";
-import { predictTopNumbersEnsemble } from "./lottery-ensemble-predict.js";
+import { predictTopNumbersEnsemble } from "./service/lottery-ensemble-predict.js";
 import {
   loadCachedPredictions,
   savePredictions,
 } from "./repository/lottery-predictions-repository.js";
-import { WEEKDAY_LABELS } from "./lottery-schedule.js";
+import { WEEKDAY_LABELS } from "./service/lottery-schedule.js";
 import { sendMessage } from "../shared/notification/telegram-client.js";
 import type { LotteryRegion } from "./model/lottery-types.js";
 import { createLogger } from "../shared/infra/logger.js";
-import type { EnsembleNumberPrediction } from "./lottery-ensemble-predict.js";
+import type { EnsembleNumberPrediction } from "./service/lottery-ensemble-predict.js";
 import {
   loadDrawStatus,
   saveDrawStatus,

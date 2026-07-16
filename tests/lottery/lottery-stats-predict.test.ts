@@ -4,7 +4,7 @@ import {
   computeStatDigitPositionProbabilities,
   predictTopNumbersStats,
   EXPECTED_GAP,
-} from "../../src/lottery/lottery-stats-predict.js";
+} from "../../src/lottery/service/lottery-stats-predict.js";
 import type { LotteryDrawRecord } from "../../src/lottery/lottery-types.js";
 
 describe("lottery/lottery-stats-predict", () => {

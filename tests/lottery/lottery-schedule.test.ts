@@ -4,7 +4,7 @@ import {
   WEEKDAY_LABELS,
   weekdaySlug,
   weekdayPageUrl,
-} from "../../src/lottery/lottery-schedule.js";
+} from "../../src/lottery/service/lottery-schedule.js";
 import type { LotteryRegion } from "../../src/lottery/lottery-types.js";
 
 describe("lottery/lottery-schedule", () => {

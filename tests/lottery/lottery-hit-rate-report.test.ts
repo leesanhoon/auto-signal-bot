@@ -16,10 +16,10 @@ vi.mock("../../src/shared/infra/db.js", () => ({
   getDb: () => ({ from: state.from }),
 }));
 
-let reportModule: typeof import("../../src/lottery/lottery-hit-rate-report.js");
+let reportModule: typeof import("../../src/lottery/service/lottery-hit-rate-report.js");
 
 beforeAll(async () => {
-  reportModule = await import("../../src/lottery/lottery-hit-rate-report.js");
+  reportModule = await import("../../src/lottery/service/lottery-hit-rate-report.js");
 });
 
 describe("lottery-hit-rate-report", () => {

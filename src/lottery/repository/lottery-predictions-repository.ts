@@ -1,6 +1,6 @@
 import { getDb } from "../../shared/infra/db.js";
-import { ENSEMBLE_METHOD_VERSION } from "../lottery-ensemble-predict.js";
-import type { EnsembleNumberPrediction, MethodBreakdown } from "../lottery-ensemble-predict.js";
+import { ENSEMBLE_METHOD_VERSION } from "../service/lottery-ensemble-predict.js";
+import type { EnsembleNumberPrediction, MethodBreakdown } from "../service/lottery-ensemble-predict.js";
 import type { LotteryRegion } from "../model/lottery-types.js";
 
 export type PredictionRow = {

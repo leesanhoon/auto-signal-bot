@@ -5,17 +5,17 @@ const state = vi.hoisted(() => ({
   predictRegression: vi.fn(),
 }));
 
-vi.mock("../../src/lottery/lottery-stats-predict.js", () => ({
+vi.mock("../../src/lottery/service/lottery-stats-predict.js", () => ({
   predictTopNumbersStats: state.predictStats,
 }));
-vi.mock("../../src/lottery/lottery-regression-predict.js", () => ({
+vi.mock("../../src/lottery/service/lottery-regression-predict.js", () => ({
   predictTopNumbersRegression: state.predictRegression,
 }));
 
-let ensemble: typeof import("../../src/lottery/lottery-ensemble-predict.js");
+let ensemble: typeof import("../../src/lottery/service/lottery-ensemble-predict.js");
 
 beforeAll(async () => {
-  ensemble = await import("../../src/lottery/lottery-ensemble-predict.js");
+  ensemble = await import("../../src/lottery/service/lottery-ensemble-predict.js");
 });
 
 import type { LotteryDrawRecord } from "../../src/lottery/lottery-types.js";

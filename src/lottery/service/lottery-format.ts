@@ -1,4 +1,4 @@
-import type { CompactPrizes, LotteryDrawRecord, LotteryRegion } from "./model/lottery-types.js";
+import type { CompactPrizes, LotteryDrawRecord, LotteryRegion } from "../model/lottery-types.js";
 
 /** Mã viết tắt cho các đài đã biết — ưu tiên tra map này trước khi fallback sang thuật toán. */
 const PROVINCE_CODE: Record<string, string> = {
