@@ -1,4 +1,9 @@
-import { withRetry, isRetryableError, getErrorField, getStatusCode } from "../../shared/retry.js";
+import {
+  withRetry,
+  isRetryableError,
+  getErrorField,
+  getStatusCode,
+} from "../../shared/retry.js";
 import type {
   CombinedAnalysisPlan,
   CombinedAnalysisPlanMatch,
@@ -25,7 +30,7 @@ const COMBINED_TIMEOUT_MS = parsePositiveEnv(
   240_000,
 );
 const COMBINED_TOKENS = 5_000;
-
+//test
 function parsePositiveEnv(name: string, fallback: number): number {
   const configured = Number(process.env[name]);
   return Number.isFinite(configured) && configured > 0 ? configured : fallback;
@@ -69,19 +74,27 @@ function isProFallbackTrigger(error: unknown): boolean {
 
 function isAnalyzeRetryableError(error: unknown): boolean {
   const statusCode = getStatusCode(error);
-  if (statusCode !== undefined && [429, 500, 502, 503, 504].includes(statusCode)) {
+  if (
+    statusCode !== undefined &&
+    [429, 500, 502, 503, 504].includes(statusCode)
+  ) {
     return true;
   }
 
   const status = getErrorField(error, "status");
-  if (typeof status === "string" && /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)) {
+  if (
+    typeof status === "string" &&
+    /UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(status)
+  ) {
     return true;
   }
 
   const message = error instanceof Error ? error.message : String(error);
-  if (/OpenRouter request failed \((429|500|502|503|504)\):/i.test(message)) return true;
+  if (/OpenRouter request failed \((429|500|502|503|504)\):/i.test(message))
+    return true;
   if (/"code"\s*:\s*(429|500|502|503|504)/.test(message)) return true;
-  if (/UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(message)) return true;
+  if (/UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(message))
+    return true;
 
   return false;
 }
@@ -222,14 +235,16 @@ export function buildCombinedUserPrompt(payloads: MatchOddsPayload[]): string {
                 selection: "H+0.5",
                 odds: 1.92,
                 confidence: 75,
-                reason: "Đội nhà thắng 5 trận liên tiếp, phòng ngự mạnh, odds hợp lý",
+                reason:
+                  "Đội nhà thắng 5 trận liên tiếp, phòng ngự mạnh, odds hợp lý",
               },
               {
                 market: "eu_totals",
                 selection: "Over 2.5",
                 odds: 1.85,
                 confidence: 65,
-                reason: "Cả 2 đội ghi bàn trung bình cao, lịch sử đối đầu >2.5 bàn 80%",
+                reason:
+                  "Cả 2 đội ghi bàn trung bình cao, lịch sử đối đầu >2.5 bàn 80%",
               },
             ],
             predictedScore: { score: "2-1", confidence: 55 },
@@ -265,7 +280,12 @@ function normalizeCombinedMatch(
         const selection = toText(pick.selection);
         const odds = Number(pick.odds);
         const confidence = clampConfidence(pick.confidence);
-        if (market && selection && Number.isFinite(odds) && odds > MIN_PICK_ODDS) {
+        if (
+          market &&
+          selection &&
+          Number.isFinite(odds) &&
+          odds > MIN_PICK_ODDS
+        ) {
           return {
             market,
             selection,
@@ -345,7 +365,9 @@ function parseCombinedAnalysisResponse(
     const parsed = JSON.parse(cleaned) as Partial<CombinedAnalysisPlan>;
 
     if (!Array.isArray(parsed.matches) || parsed.matches.length === 0) {
-      logger.warn("  ! Combined analysis parse failed: matches array missing or empty");
+      logger.warn(
+        "  ! Combined analysis parse failed: matches array missing or empty",
+      );
       return null;
     }
 
@@ -366,7 +388,10 @@ function parseCombinedAnalysisResponse(
       normalizeCombinedMatch(match, "Trận " + match.matchIndex),
     );
 
-    const missingIndexes = findMissingMatchIndexes(normalizedMatches, payloads.length);
+    const missingIndexes = findMissingMatchIndexes(
+      normalizedMatches,
+      payloads.length,
+    );
     if (missingIndexes.length > 0) {
       logger.warn(
         `  ! Combined analysis parse failed: missing match indexes: ${missingIndexes.join(", ")}`,
@@ -454,7 +479,8 @@ export async function generateCombinedAnalysis(
     return plan;
   } catch (primaryError) {
     const forcedFallback =
-      (primaryError as Error & { forceFallback?: boolean }).forceFallback === true;
+      (primaryError as Error & { forceFallback?: boolean }).forceFallback ===
+      true;
     if (!forcedFallback && !isProFallbackTrigger(primaryError)) {
       logger.warn(
         `  ! Combined analysis primary model failed (non-retryable): ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`,
