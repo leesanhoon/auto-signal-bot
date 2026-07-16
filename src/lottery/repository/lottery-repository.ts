@@ -6,20 +6,56 @@ const HISTORY_RETENTION_DAYS = 1095;
 
 /** Đọc toàn bộ lịch sử (cả 3 miền) của đúng 1 thứ trong tuần. */
 export async function loadWeekdayHistory(weekday: number): Promise<LotteryDrawRecord[]> {
-  const { data, error } = await (getDb().from("lottery_draws") as any).select("date, weekday, region, province, prizes").eq("weekday", weekday);
-  if (error) throw new Error(`loadWeekdayHistory failed for weekday ${weekday}: ${error.message}`);
-  if (!data) return [];
-  return data as LotteryDrawRecord[];
+  const allRecords: LotteryDrawRecord[] = [];
+  let offset = 0;
+  const pageSize = 1000;
+
+  // Paginate through results using .range() to handle Supabase's 1000-row cap
+  while (true) {
+    const { data, error } = await (getDb().from("lottery_draws") as any)
+      .select("date, weekday, region, province, prizes")
+      .eq("weekday", weekday)
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(`loadWeekdayHistory failed for weekday ${weekday}: ${error.message}`);
+    if (!data || data.length === 0) break;
+
+    allRecords.push(...data);
+
+    // If we got fewer rows than requested, we've reached the end
+    if (data.length < pageSize) break;
+
+    offset += pageSize;
+  }
+
+  return allRecords as LotteryDrawRecord[];
 }
 
 /** Đọc toàn bộ lịch sử của 1 miền (mọi weekday) — dùng cho backtest, không giới hạn theo thứ. */
 export async function loadRegionHistory(region: LotteryRegion): Promise<LotteryDrawRecord[]> {
-  const { data, error } = await (getDb().from("lottery_draws") as any)
-    .select("date, weekday, region, province, prizes")
-    .eq("region", region);
-  if (error) throw new Error(`loadRegionHistory failed for region ${region}: ${error.message}`);
-  if (!data) return [];
-  return data as LotteryDrawRecord[];
+  const allRecords: LotteryDrawRecord[] = [];
+  let offset = 0;
+  const pageSize = 1000;
+
+  // Paginate through results using .range() to handle Supabase's 1000-row cap
+  while (true) {
+    const { data, error } = await (getDb().from("lottery_draws") as any)
+      .select("date, weekday, region, province, prizes")
+      .eq("region", region)
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(`loadRegionHistory failed for region ${region}: ${error.message}`);
+    if (!data || data.length === 0) break;
+
+    allRecords.push(...data);
+
+    // If we got fewer rows than requested, we've reached the end
+    if (data.length < pageSize) break;
+
+    offset += pageSize;
+  }
+
+  return allRecords as LotteryDrawRecord[];
 }
 
 /**
