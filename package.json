@@ -21,13 +21,13 @@
     "setup:telegram-menu": "tsx src/scripts/setup-telegram-menu-v2.ts",
     "match-odds": "tsx src/betting/controller/betting-index.ts",
     "fetch-matches-list": "tsx src/betting/controller/fetch-matches-list-index.ts",
-    "lottery": "tsx src/lottery/lottery-index.ts",
-    "lottery-backfill": "tsx src/lottery/lottery-backfill-index.ts",
-    "lottery-predict": "tsx src/lottery/lottery-predict-index.ts",
-    "lottery-predict-resync": "tsx src/lottery/lottery-predict-resync-index.ts",
-    "lottery-verify": "tsx src/lottery/lottery-verify-index.ts",
-    "lottery-backtest": "tsx src/lottery/lottery-backtest-index.ts",
-    "lottery-hit-rate-report": "tsx src/lottery/lottery-hit-rate-report-index.ts"
+    "lottery": "tsx src/lottery/controller/lottery-index.ts",
+    "lottery-backfill": "tsx src/lottery/controller/lottery-backfill-index.ts",
+    "lottery-predict": "tsx src/lottery/controller/lottery-predict-index.ts",
+    "lottery-predict-resync": "tsx src/lottery/controller/lottery-predict-resync-index.ts",
+    "lottery-verify": "tsx src/lottery/controller/lottery-verify-index.ts",
+    "lottery-backtest": "tsx src/lottery/controller/lottery-backtest-index.ts",
+    "lottery-hit-rate-report": "tsx src/lottery/controller/lottery-hit-rate-report-index.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

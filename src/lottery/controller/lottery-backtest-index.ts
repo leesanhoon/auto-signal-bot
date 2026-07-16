@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import "../shared/infra/env.js";
-import { createLogger } from "../shared/infra/logger.js";
-import { compareBacktestSummaries, runBacktest, type BacktestMethod, type BacktestSummary } from "./service/lottery-backtest.js";
-import { loadRegionHistory } from "./repository/lottery-repository.js";
-import type { LotteryRegion } from "./model/lottery-types.js";
+import "../../shared/infra/env.js";
+import { createLogger } from "../../shared/infra/logger.js";
+import { compareBacktestSummaries, runBacktest, type BacktestMethod, type BacktestSummary } from "../service/lottery-backtest.js";
+import { loadRegionHistory } from "../repository/lottery-repository.js";
+import type { LotteryRegion } from "../model/lottery-types.js";
 
 const logger = createLogger("lottery:lottery-backtest-index");
 const VALID_REGIONS: LotteryRegion[] = ["mien-bac", "mien-trung", "mien-nam"];

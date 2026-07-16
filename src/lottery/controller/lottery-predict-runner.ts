@@ -1,19 +1,19 @@
-import { fetchActualRecords } from "./client/lottery-scraper.js";
-import { loadWeekdayHistory } from "./repository/lottery-repository.js";
-import { predictTopNumbersEnsemble } from "./service/lottery-ensemble-predict.js";
+import { fetchActualRecords } from "../client/lottery-scraper.js";
+import { loadWeekdayHistory } from "../repository/lottery-repository.js";
+import { predictTopNumbersEnsemble } from "../service/lottery-ensemble-predict.js";
 import {
   loadCachedPredictions,
   savePredictions,
-} from "./repository/lottery-predictions-repository.js";
-import { WEEKDAY_LABELS } from "./service/lottery-schedule.js";
-import { sendMessage } from "../shared/notification/telegram-client.js";
-import type { LotteryRegion } from "./model/lottery-types.js";
-import { createLogger } from "../shared/infra/logger.js";
-import type { EnsembleNumberPrediction } from "./service/lottery-ensemble-predict.js";
+} from "../repository/lottery-predictions-repository.js";
+import { WEEKDAY_LABELS } from "../service/lottery-schedule.js";
+import { sendMessage } from "../../shared/notification/telegram-client.js";
+import type { LotteryRegion } from "../model/lottery-types.js";
+import { createLogger } from "../../shared/infra/logger.js";
+import type { EnsembleNumberPrediction } from "../service/lottery-ensemble-predict.js";
 import {
   loadDrawStatus,
   saveDrawStatus,
-} from "./repository/lottery-draw-status-repository.js";
+} from "../repository/lottery-draw-status-repository.js";
 
 const logger = createLogger("lottery:lottery-predict-runner");
 const REGIONS: LotteryRegion[] = ["mien-nam", "mien-trung", "mien-bac"];

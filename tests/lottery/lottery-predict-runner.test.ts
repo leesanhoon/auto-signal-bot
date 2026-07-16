@@ -26,10 +26,10 @@ vi.mock("../../src/shared/notification/telegram-client.js", () => ({
   sendMessage: state.sendMessage,
 }));
 
-let runner: typeof import("../../src/lottery/lottery-predict-runner.js");
+let runner: typeof import("../../src/lottery/controller/lottery-predict-runner.js");
 
 beforeAll(async () => {
-  runner = await import("../../src/lottery/lottery-predict-runner.js");
+  runner = await import("../../src/lottery/controller/lottery-predict-runner.js");
 });
 
 describe("lottery/lottery-predict-runner", () => {

@@ -1,7 +1,7 @@
-import "../shared/infra/env.js";
+import "../../shared/infra/env.js";
 import { runLotteryCheck } from "./lottery-runner.js";
-import { notifyError } from "../shared/notification/telegram-client.js";
-import { createLogger } from "../shared/infra/logger.js";
+import { notifyError } from "../../shared/notification/telegram-client.js";
+import { createLogger } from "../../shared/infra/logger.js";
 
 const logger = createLogger("lottery:lottery-index");
 runLotteryCheck().catch(async (error) => {
