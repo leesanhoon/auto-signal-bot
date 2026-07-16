@@ -1,0 +1,17 @@
+name: Deploy (self-hosted mini PC)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, x64, auto-signal-bot]
+    timeout-minutes: 15
+
+    steps:
+      - name: Pull latest code + sync dependencies
+        shell: powershell
+        run: |
+          & "C:\bots\auto-signal-bot\deploy\windows\auto-update.ps1"

@@ -115,24 +115,6 @@ Register-BotTask "lottery-verify-mien-bac"    @((New-ScheduledTaskTrigger -Daily
 # lottery-predict — chạy 1 lần cho cả 3 miền, sau khi cả 3 verify ở trên đã xong (19:00 VN)
 Register-BotTask "lottery-predict" @((New-ScheduledTaskTrigger -Daily -At "19:00"))
 
-# === Auto-update ===
-
-# Tự pull code mới mỗi 15 phút.
-# Chỉ git pull + (nếu package-lock.json đổi) npm ci — xem auto-update.ps1.
-$autoUpdate = (Resolve-Path (Join-Path $PSScriptRoot "auto-update.ps1")).Path
-$autoUpdateAction = New-ScheduledTaskAction `
-    -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$autoUpdate`""
-Register-ScheduledTask `
-    -TaskName "auto-update" `
-    -TaskPath $taskPath `
-    -Action $autoUpdateAction `
-    -Trigger (Add-Repetition (New-ScheduledTaskTrigger -Daily -At "00:00") 15 (New-TimeSpan -Days 1)) `
-    -Settings $settings `
-    -Principal $principal `
-    -Force | Out-Null
-Write-Host "Registered: ${taskPath}auto-update"
-
 Write-Host ""
 Write-Host "Xong. Kiểm tra: Get-ScheduledTask -TaskPath '$taskPath'"
 Write-Host "Chạy thử ngay:  Start-ScheduledTask -TaskPath '$taskPath' -TaskName 'analyze'"

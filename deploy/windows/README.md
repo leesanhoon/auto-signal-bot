@@ -37,7 +37,7 @@ notepad .env   # điền giá trị thật (chép từ GitHub -> Settings -> Sec
 ## Kiểm tra
 
 ```powershell
-# Danh sách task đã đăng ký (10 task trong folder \AutoSignalBot\, gồm cả auto-update)
+# Danh sách task đã đăng ký (9 task trong folder \AutoSignalBot\)
 Get-ScheduledTask -TaskPath "\AutoSignalBot\"
 
 # Chạy thử ngay một job, không chờ lịch
@@ -55,15 +55,19 @@ Hoặc chạy tay không qua Task Scheduler: `.\deploy\windows\run-job.ps1 -Job 
 
 ## Cập nhật code — tự động
 
-`register-tasks.ps1` đăng ký thêm task **`auto-update`** chạy mỗi đêm lúc **02:00 VN** (giờ ít job trùng lịch nhất). Task này ([auto-update.ps1](auto-update.ps1)):
+Cập nhật được thực hiện qua **đường chính duy nhất**:
+
+Push vào `main` → GitHub Actions workflow `deploy-selfhosted.yml` chạy trên self-hosted runner (đã cài tại mini PC) → gọi `auto-update.ps1` ngay lập tức (độ trễ chỉ vài giây tới vài chục giây, tuỳ thời gian runner nhận job).
+
+Script [auto-update.ps1](auto-update.ps1) thực hiện:
 
 1. `git fetch` — nếu không có commit mới thì thoát, không làm gì cả.
 2. Nếu có: `git pull --ff-only`.
-3. Chỉ chạy `npm ci` + cài lại Chromium **nếu `package-lock.json` thực sự thay đổi** giữa 2 commit — tránh đụng `node_modules` không cần thiết mỗi đêm.
+3. Chỉ chạy `npm ci` + cài lại Chromium **nếu `package-lock.json` thực sự thay đổi** giữa 2 commit — tránh đụng `node_modules` không cần thiết.
 
-Nghĩa là: push code lên `main` xong, chậm nhất 02:00 đêm đó mini PC tự cập nhật, không cần bạn làm gì. Log ghi vào `logs\auto-update-YYYY-MM-DD.log`.
+Log ghi vào `logs\auto-update-YYYY-MM-DD.log`.
 
-Lưu ý: 02:00 rơi vào khung các job `analyze-volman-*` đang chạy lặp (M15 mỗi 15 phút), nên về lý thuyết có xác suất rất nhỏ `git pull` trùng đúng lúc một job khác đang đọc file nguồn. Rủi ro thấp và tự phục hồi (job kế tiếp chạy bình thường với code mới); nếu cần chắc chắn 100% không chồng lấn, đổi giờ trigger `auto-update` trong `register-tasks.ps1`.
+**Lưu ý:** Không còn lưới an toàn dạng poll. Nếu runner tự dưng offline (máy restart, service dừng, mất mạng), code sẽ KHÔNG tự cập nhật cho tới khi runner online lại và có push mới. Kiểm tra trạng thái runner bằng `Get-Service "actions.runner.*"` trên mini PC.
 
 ## Cập nhật code — chạy tay (bắt buộc npm ci)
 
@@ -103,6 +107,16 @@ Ghi chú kỹ thuật:
 ```powershell
 .\deploy\windows\unregister-tasks.ps1
 ```
+
+## Gỡ task `auto-update` đã đăng ký trước (chỉ cần chạy 1 lần)
+
+Vì task `auto-update` có thể đã được đăng ký trên mini PC từ lần chạy `register-tasks.ps1` trước (khi còn là poll 4 giờ), nếu muốn gỡ riêng task này mà giữ các job khác, chạy:
+
+```powershell
+Unregister-ScheduledTask -TaskName "auto-update" -TaskPath "\AutoSignalBot\" -Confirm:$false
+```
+
+Ghi chú: chỉ cần chạy 1 lần trên mini PC nếu task đó đã tồn tại; không bắt buộc chạy lại toàn bộ `register-tasks.ps1`.
 
 ## Tắt lịch trên GitHub Actions
 
