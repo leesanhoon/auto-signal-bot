@@ -16,14 +16,14 @@ Mở **PowerShell với quyền Administrator**:
 # 1. Đặt timezone giờ VN (lịch trong register-tasks.ps1 tính theo UTC+7)
 Set-TimeZone -Id "SE Asia Standard Time"
 
-# 2. Clone repo (chọn thư mục cố định, ví dụ C:\bots)
-mkdir C:\bots; cd C:\bots
+# 2. Clone repo (thư mục cố định — production dùng C:\project, đổi lại nếu máy bạn khác)
+mkdir C:\project; cd C:\project
 git clone https://github.com/<owner>/auto-signal-bot.git
 cd auto-signal-bot
 
 # 3. Cài dependencies + Chromium cho Playwright (job "analyze" cần)
 npm ci
-$env:PLAYWRIGHT_BROWSERS_PATH = "C:\bots\auto-signal-bot\.playwright-browsers"
+$env:PLAYWRIGHT_BROWSERS_PATH = "C:\project\auto-signal-bot\.playwright-browsers"
 npx playwright install chromium
 
 # 4. Tạo file secrets
@@ -74,7 +74,7 @@ Log ghi vào `logs\auto-update-YYYY-MM-DD.log`.
 Muốn ép cập nhật ngay, hoặc khi cần chắc chắn `npm ci` + Chromium chạy lại dù `package-lock.json` không đổi:
 
 ```powershell
-cd C:\bots\auto-signal-bot
+cd C:\project\auto-signal-bot
 .\deploy\windows\update.ps1
 ```
 
